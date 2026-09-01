@@ -1,3 +1,21 @@
+> **CORRECTION — verified by compiling, 2026-09-01.**
+> This document's *conclusion* is correct: the Terragrunt library cannot be used from an
+> external module. Its stated *mechanism* is not.
+>
+> `pkg/config` imports `internal/*` packages, but that is legal — internal packages are
+> importable within their own module, and `import "github.com/gruntwork-io/terragrunt/pkg/config"`
+> from a foreign module compiles fine. `ParseConfigFile` and `PartialParseConfigFile` are
+> genuinely reachable.
+>
+> The real blocker is narrower: the only `*ParsingContext` constructor is
+> `NewParsingContext(ctx, log.Logger, v *venv.Venv, ...)`, where `venv` is
+> `internal/venv`. An external module cannot import that package
+> (`use of internal package ... not allowed`), no exported function anywhere in `pkg/`
+> returns a `*venv.Venv`, and passing `nil` hits an explicit `panic(ErrParsingContextVenvNil)`.
+>
+> Also measured: importing pulls **672** modules including full AWS/Azure/GCP SDKs, and
+> `go.mod` declares `go 1.27`.
+
 # Stack Research: Terragrunt-as-a-library feasibility
 
 **Domain:** Go CLI, static analysis of Terragrunt repositories
