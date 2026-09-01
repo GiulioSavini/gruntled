@@ -1,4 +1,6 @@
-# tfwire — Design
+# gruntled — Design
+
+> *Terragrunt, but gruntled.*
 
 Data: 2026-09-01
 Stato: approvato, pronto per roadmap
@@ -24,7 +26,7 @@ Riferimenti: [Terragrunt Performance](https://terragrunt.gruntwork.io/docs/troub
 
 ## 2. Posizionamento
 
-> **tfwire tiene il tuo repository Terragrunt indicizzato a caldo e ti dice,
+> **gruntled tiene il tuo repository Terragrunt indicizzato a caldo e ti dice,
 > nell'istante in cui salvi, chi hai rotto e chi hai impattato.**
 
 I check non sono il prodotto: l'**indice caldo** è il prodotto. Il costo di parsing
@@ -57,7 +59,7 @@ di attributi o risorse, niente valutazione di espressioni, nessuna delega a `tof
 validate` o `tflint`.
 
 **Conseguenza architetturale che vale la pena rendere esplicita:** cadono tutte le
-dipendenze da binari esterni. tfwire è un singolo binario Go che non lancia processi
+dipendenze da binari esterni. gruntled è un singolo binario Go che non lancia processi
 e non apre connessioni di rete. Le garanzie di idempotenza e air-gap diventano
 dimostrabili invece che dichiarate.
 
@@ -70,7 +72,7 @@ Due query distinte sullo stesso grafo. **È la distinzione a essere il prodotto:
 - **Broken** — nodi che hanno una diagnostica di severità error: non funzionano.
 - **Impacted** — chiusura transitiva a valle di un cambiamento: funzionano, ma vanno riapplicati.
 
-Terramate dice quali stack sono cambiati *secondo git*. tfwire dice che cancellando
+Terramate dice quali stack sono cambiati *secondo git*. gruntled dice che cancellando
 `output "subnet_id"` rompi dodici unit a valle, quali sono, e le separa da quelle che
 devono solo essere riapplicate — nell'istante in cui salvi.
 
@@ -80,15 +82,15 @@ Tutti gli analyzer sono funzioni pure sul modello di dominio:
 
 | Codice | Cosa rileva |
 |---|---|
-| `TFW001` | `dependency.X.outputs.Y` dove `Y` non è un output del modulo target |
-| `TFW002` | `config_path` che non punta a una unit esistente |
-| `TFW003` | ciclo di dipendenze fra unit |
-| `TFW004` | output rimosso da un modulo ma ancora referenziato a valle |
-| `TFW005` | chiave in `inputs` che non corrisponde a nessuna `variable` del modulo |
-| `TFW006` | `variable` senza default che nessuna unit valorizza |
-| `TFW100` | errore di sintassi HCL |
+| `GRT001` | `dependency.X.outputs.Y` dove `Y` non è un output del modulo target |
+| `GRT002` | `config_path` che non punta a una unit esistente |
+| `GRT003` | ciclo di dipendenze fra unit |
+| `GRT004` | output rimosso da un modulo ma ancora referenziato a valle |
+| `GRT005` | chiave in `inputs` che non corrisponde a nessuna `variable` del modulo |
+| `GRT006` | `variable` senza default che nessuna unit valorizza |
+| `GRT100` | errore di sintassi HCL |
 
-`TFW005` e `TFW006` duplicano `terragrunt hcl validate --inputs --strict`. Sono inclusi
+`GRT005` e `GRT006` duplicano `terragrunt hcl validate --inputs --strict`. Sono inclusi
 perché i dati sono già in memoria e il costo marginale è nullo: il valore aggiunto è
 che arrivano in millisecondi anziché a fine scansione.
 
@@ -96,12 +98,12 @@ che arrivano in millisecondi anziché a fine scansione.
 
 | Comando | Descrizione |
 |---|---|
-| `tfwire check` | one-shot, senza daemon. Pre-commit e CI gratis. |
-| `tfwire watch` | avvia il daemon |
-| `tfwire report` | interroga il daemon (`--json`, `--sarif`) |
-| `tfwire blast <path>` | blast radius a richiesta |
-| `tfwire graph --json` | esporta il grafo come dato riusabile |
-| `tfwire stop` | ferma il daemon |
+| `gruntled check` | one-shot, senza daemon. Pre-commit e CI gratis. |
+| `gruntled watch` | avvia il daemon |
+| `gruntled report` | interroga il daemon (`--json`, `--sarif`) |
+| `gruntled blast <path>` | blast radius a richiesta |
+| `gruntled graph --json` | esporta il grafo come dato riusabile |
+| `gruntled stop` | ferma il daemon |
 
 `graph --json` non è un accessorio: è il dato su cui altri costruiscono (output e
 variabili morte, unit orfane, generazione di config Atlantis o di job CI). Un tool che
@@ -122,7 +124,7 @@ compare mai nel dominio, nemmeno come import.
 ### 5.2 Layout
 
 ```
-cmd/tfwire/                    composition root: l'unico punto che collega gli adapter
+cmd/gruntled/                    composition root: l'unico punto che collega gli adapter
 internal/
   domain/                      zero dipendenze esterne
     repograph/                 Unit, Module, Surface (VO), Reference (VO)
@@ -161,11 +163,11 @@ Fissato ora perché poi non si cambia più.
 
 ### 5.4 Il nucleo tecnico: include parsati una volta
 
-Terragrunt rivaluta la root config nel contesto di ogni unit che la include. tfwire
+Terragrunt rivaluta la root config nel contesto di ogni unit che la include. gruntled
 parsa ogni file di `include` **una sola volta** e ne condivide il risultato fra tutte
 le unit che lo includono, risolvendo per costruzione l'O(n²) documentato.
 
-È ciò che rende il daemon possibile, e rende `tfwire check` più veloce di
+È ciò che rende il daemon possibile, e rende `gruntled check` più veloce di
 `terragrunt hcl validate` anche in modalità one-shot. Il benchmark riproducibile che
 lo dimostra è insieme test di regressione e argomento di adozione.
 
@@ -209,9 +211,9 @@ quello esistente tramite lock file e socket. Fermarlo due volte non è un errore
 Riavviarlo ricostruisce lo stesso stato dalla cache.
 *Verifica:* test end-to-end su start/start/stop/stop.
 
-**⑥ Zero effetti collaterali sul repository.** tfwire non scrive mai dentro il repository
+**⑥ Zero effetti collaterali sul repository.** gruntled non scrive mai dentro il repository
 analizzato: niente `.terraform/`, niente lock file, nessun `init`. Tutto lo stato risiede
-in `$XDG_CACHE_HOME/tfwire/<hash-repo>/`.
+in `$XDG_CACHE_HOME/gruntled/<hash-repo>/`.
 *Verifica:* test che confronta l'hash dell'albero prima e dopo un run completo.
 
 ## 7. Robustezza
@@ -233,7 +235,7 @@ processo esterno lanciato. Non è una feature aggiunta: il tool non ha ragione d
 con nessuno. Lo rende deployabile in ambienti chiusi dove la maggior parte degli
 strumenti DevOps non entra.
 
-- configurazione a livelli con precedenza documentata (default → `.tfwire.hcl` del repo
+- configurazione a livelli con precedenza documentata (default → `.gruntled.hcl` del repo
   → variabili d'ambiente → flag), ma **nessuna configurazione obbligatoria**
 - logging strutturato `slog` su stderr, separato dall'output utente su stdout
 - exit code stabili e documentati
@@ -250,7 +252,7 @@ Oltre a questi:
 - unit test per analyzer: HCL minimale in ingresso, diagnostiche attese in uscita
 - property-based test sull'incrementalizzatore (garanzia ②) — il test più importante
 - test end-to-end sul daemon con notifier fake
-- benchmark riproducibile: repository generato con N unit, `tfwire check` confrontato con
+- benchmark riproducibile: repository generato con N unit, `gruntled check` confrontato con
   `terragrunt hcl validate`
 
 **Nessun test richiede rete o credenziali cloud.**
@@ -269,8 +271,11 @@ Oltre a questi:
 Go 1.24. Dipendenze: `hashicorp/hcl/v2`, `fsnotify/fsnotify`, `spf13/cobra`.
 Nessuna dipendenza cloud, nessun binario esterno.
 
-## 12. Decisioni aperte
+## 12. Nome
 
-- **Nome.** `tfwire` è libero su GitHub alla data di stesura. `tgwire` sarebbe più
-  onesto rispetto allo scope Terragrunt-only. Decisione da chiudere prima del rilascio
-  di M1, perché dopo cambia il module path e il nome del binario.
+**gruntled** — il contrario di *disgruntled*: lo strumento che toglie il nervoso da
+Terragrunt. Verificato libero il 2026-09-01: nessun progetto omonimo rilevante
+(solo repository abbandonate in ambiti non correlati). Binario: `gruntled`.
+Prefisso dei codici diagnostici: `GRT`.
+
+Tagline per il README: *"Terragrunt, but gruntled."*
