@@ -31,6 +31,14 @@ is built on top of that one answer being correct and trustworthy.
 
 **v0.1 — the falsifiable experiment**
 
+- [ ] Own structural HCL decoder: `include`, `terraform.source`, `dependency` blocks only
+- [ ] The six pure path functions (`find_in_parent_folders`, `path_relative_to_include`,
+      `path_relative_from_include`, `get_terragrunt_dir`, `get_parent_terragrunt_dir`,
+      `get_original_terragrunt_dir`) plus `include` merge resolution
+- [ ] Parse each `include` file once and share it across every unit that includes it
+- [ ] Resolve a unit to its module both via `terraform.source` and via the unit's own
+      directory when `source` is absent
+- [ ] Mark a unit `unknown` on any construct that cannot be resolved offline
 - [ ] Parse a Terragrunt repository and build the unit graph
 - [ ] Extract module surface (`variable` and `output` names) from `.tf` files
 - [ ] `GRT001`: report `dependency.X.outputs.Y` where `Y` is not an output of the target module
@@ -40,9 +48,10 @@ is built on top of that one answer being correct and trustworthy.
 - [ ] Golden tests over generated and hand-written fixtures
 - [ ] Proven on at least one real public Terragrunt repository
 
+- [ ] Beat `terragrunt hcl validate` on the corpus, measured
+
 **Later**
 
-- [ ] Own HCL parser: parse each include once and share it (the speed claim)
 - [ ] `gruntled watch` — daemon with in-memory incremental reindexing
 - [ ] Status file + `gruntled report`
 - [ ] `gruntled blast` — Broken vs Impacted
@@ -65,6 +74,10 @@ is built on top of that one answer being correct and trustworthy.
   should take under a second. Add it only if startup ever becomes slow.
 - **LSP / editor integration** — the status file is readable from a shell prompt,
   tmux or an editor status bar without implementing a protocol.
+- **`terragrunt.stack.hcl` (Terragrunt Stacks)** — `terragrunt stack generate` materialises
+  ordinary `terragrunt.hcl` files on disk, which gruntled's tree walk then finds for free.
+  Only ungenerated stack definitions are invisible. That is a documented absence, not a
+  misreport, so it is acceptable for v0.1.
 - **Planning or applying infrastructure** — gruntled is strictly read-only.
 
 ## Context
@@ -80,8 +93,10 @@ units runs a hundred times. Documented consequence: `run-all plan` at 8+ minutes
 
 - `terragrunt hcl validate --inputs --strict` already covers missing required inputs
   and undeclared inputs — one-shot, from scratch every time.
-- Terragrunt's module-output probe targets the same check as `GRT001` but is currently
-  broken ([#5811](https://github.com/gruntwork-io/terragrunt/issues/5811)).
+- Terragrunt's own probe: [#5811](https://github.com/gruntwork-io/terragrunt/issues/5811)
+  was closed on 2026-04-10, but the fix makes `dependency.X.outputs.Y` evaluate to an
+  opaque unknown during validation rather than checking that the output exists. The gap
+  `GRT001` targets is therefore still open — and now deliberately so.
 - Terramate does git-based change detection, Terragrunt-aware — it reports what
   *changed*, not what *breaks*.
 - tflint and `tofu validate` cover correctness inside a module, per directory,
@@ -93,9 +108,30 @@ units runs a hundred times. Documented consequence: `run-all plan` at 8+ minutes
 stateless CLI by design; upstream can absorb individual checks but will not become a
 daemon.
 
-**No local test corpus.** The largest Terragrunt repository on the developer's machine
-has one unit. A synthetic generator plus real public repositories is a v0.1
-requirement, not an afterthought.
+**Test corpus — identified and verified.** The largest Terragrunt repository on the
+developer's machine has one unit, so the corpus is external. The obvious candidates are
+traps: `gruntwork-io/terragrunt-infrastructure-live-example` has zero `dependency` blocks
+in its entire history, and its official replacement uses Terragrunt Stacks, which
+materialise units into a gitignored directory only after `terragrunt stack generate` —
+invisible to a static walk.
+
+Verified corpus:
+
+| Repository | Licence | Role |
+|---|---|---|
+| `aws-solutions-library-samples/guidance-for-iso20022-messaging-workflows-on-aws` | MIT-0 | Primary. 65 units, 62 with `dependency` blocks, all modules local. Confirmed by hand that `GRT001` resolves correctly and reports nothing. |
+| `cds-snc/secret` | MIT | Secondary, smaller cross-check |
+| `denis256/terragrunt-tests` | MIT | Hand-written golden fixtures and robustness cases |
+
+**Structural fact discovered in the corpus:** all 65 units omit `terraform { source }`
+entirely — Terragrunt then runs against the `.tf` files in the unit's own directory. The
+design had assumed unit→module always goes through `source`. Resolving a unit to its
+module must handle both forms.
+
+**`mock_outputs` is the main false-positive risk.** It appears in 11 files of the primary
+corpus and exists precisely to let a plan proceed when an output is unavailable. Its
+presence must not make a missing output acceptable, and its absence must not make one an
+error — this needs an explicit, tested decision.
 
 ## Constraints
 
@@ -110,7 +146,9 @@ requirement, not an afterthought.
 - **Zero false positives**: when an analyzer is not certain, it stays silent. Ten
   false negatives are better than one false positive.
 - **Deterministic output**: same input, same diagnostics, same order, same exit code.
-  Go randomises map iteration — every collection must be sorted explicitly.
+  Go randomises map iteration — every collection must be sorted explicitly. All paths in
+  output must be repository-relative: an absolute path leaking out breaks reproducibility
+  across machines and CI.
 - **Licence**: Apache-2.0, matching OpenTofu and Terragrunt.
 - **Architecture**: DDD / hexagonal. The domain layer must not import HCL.
 
@@ -120,7 +158,8 @@ requirement, not an afterthought.
 |----------|-----------|---------|
 | Terragrunt-only scope | Removes every external binary dependency; makes the idempotency and air-gap guarantees demonstrable instead of declared | — Pending |
 | Warm index as the differentiator, not the checks | Terragrunt is stateless by design; upstream can absorb checks but not this | — Pending |
-| Import `gruntwork-io/terragrunt` as a library in M1 | Correct HCL function semantics for free, works on real repos from day one. Consequence: inherits its parsing cost, so the speed claim moves to a later milestone | — Pending |
+| Own HCL parser from M1 — do NOT import Terragrunt as a library | Verified by compiling: `ParseConfigFile`/`PartialParseConfigFile` are exported, but the only `*ParsingContext` constructor requires `*venv.Venv` from `internal/venv`, which Go refuses to import from an external module, and no exported function anywhere returns one. Importing also pulls 672 modules including full AWS/Azure/GCP SDKs and requires Go 1.27. Reversed on 2026-09-01 | ✓ Good |
+| Structural decode only — never evaluate expression values | `GRT001` compares names read off the HCL AST; it never needs a value. This removes state, `mock_outputs` and most functions from scope by construction rather than by suppression | — Pending |
 | v0.1 ships `GRT001` + syntax only | One diagnostic justifies the tool. More checks before the idea is validated means more bug surface and more false-positive risk | — Pending |
 | v0.1 ships `check` only, no daemon | A daemon on top of an unverified engine is wasted work. `check` is itself the experiment, and is already useful in pre-commit and CI | — Pending |
 | No on-disk index cache in v1 | Premature optimisation: versioning, invalidation and corruption traded against a sub-second startup | — Pending |
@@ -131,15 +170,29 @@ requirement, not an afterthought.
 
 ## Success Criteria for v0.1
 
-The milestone is a **falsifiable experiment**, not a feature list. It succeeds only if,
-on a real public Terragrunt repository, `gruntled check` reports at least one genuine
-wiring error that `terragrunt hcl validate` does not report — with zero false positives.
+The milestone is a **falsifiable experiment**, not a feature list.
+
+Research established that maintained public repositories do not contain naturally
+occurring wiring bugs — `apply` catches them long before they are committed. Hunting for
+an organic bug would fail. The criterion is therefore mutation-based, which is stricter
+and reproducible:
+
+1. **Zero false positives.** On the unmutated corpus, `gruntled check` reports nothing.
+   This is the harder and more valuable half: a single false positive ends adoption.
+2. **Catches every injected mutation.** Rename or delete an output in a target module;
+   gruntled must report every reference that no longer resolves. Verified by hand that
+   the mechanism holds on the corpus: `dependency.s3.outputs.role_name` resolves to
+   `output "role_name"` in `iac.src/s3_runtime`.
+3. **Faster than `terragrunt hcl validate`** on the same corpus.
+4. **`terragrunt hcl validate` does not report the injected mutations** — confirming the
+   gap is real rather than assumed.
 
 If it fails, the idea is wrong and that was learned in one milestone rather than three.
 
-Speed is explicitly *not* part of the v0.1 criterion: importing the Terragrunt library
-inherits its parsing cost. The speed claim belongs to the milestone that replaces it
-with an own parser that parses each include once.
+Speed returns to the v0.1 criterion. Writing the parser from the start means `include`
+files are parsed once and shared from day one, so `gruntled check` should already beat
+`terragrunt hcl validate` on the corpus. This was not true under the abandoned
+import-the-library plan.
 
 ---
-*Last updated: 2026-09-01 after initialization*
+*Last updated: 2026-09-01 after research — parser decision reversed, corpus identified, success criterion made mutation-based*
