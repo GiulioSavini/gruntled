@@ -102,16 +102,41 @@ Deferred. Tracked, not in the current roadmap.
 
 ## Traceability
 
-Populated during roadmap creation.
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (pending roadmap) | | |
+| PARSE-01 | Phase 2 | Pending |
+| PARSE-02 | Phase 2 | Pending |
+| PARSE-03 | Phase 2 | Pending |
+| PARSE-04 | Phase 2 | Pending |
+| PARSE-05 | Phase 2 | Pending |
+| PARSE-06 | Phase 2 | Pending |
+| GRAPH-01 | Phase 2 | Pending |
+| GRAPH-02 | Phase 2 | Pending |
+| GRAPH-03 | Phase 2 | Pending |
+| GRAPH-04 | Phase 2 | Pending |
+| GRAPH-05 | Phase 2 | Pending |
+| DIAG-01 | Phase 3 | Pending |
+| DIAG-02 | Phase 3 | Pending |
+| DIAG-03 | Phase 3 | Pending |
+| DIAG-04 | Phase 3 | Pending |
+| CLI-01 | Phase 3 | Pending |
+| CLI-02 | Phase 3 | Pending |
+| CLI-03 | Phase 3 | Pending |
+| CLI-04 | Phase 3 | Pending |
+| CLI-05 | Phase 3 | Pending |
+| VALID-01 | Phase 1 | Pending |
+| VALID-02 | Phase 4 | Pending |
+| VALID-03 | Phase 4 | Pending |
+| VALID-04 | Phase 4 | Pending |
+| VALID-05 | Phase 4 | Pending |
+| VALID-06 | Phase 4 | Pending |
+| ARCH-01 | Phase 1 | Pending |
+| ARCH-02 | Phase 1 | Pending |
 
 **Coverage:**
-- v1 requirements: 27 total
-- Mapped to phases: 0
-- Unmapped: 27 ⚠️
+- v1 requirements: 28 total (corrected from initial count of 27 — 28 unique requirement IDs are listed above)
+- Mapped to phases: 28
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-09-01*
