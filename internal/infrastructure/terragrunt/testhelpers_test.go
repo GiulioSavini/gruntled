@@ -1,10 +1,16 @@
 package terragrunt
 
 import (
+	"context"
 	"io/fs"
+	"strconv"
+	"strings"
 	"sync"
+	"testing"
 	"testing/fstest"
 
+	"github.com/GiulioSavini/gruntled/internal/application/indexing"
+	"github.com/GiulioSavini/gruntled/internal/infrastructure/tfsurface"
 	"github.com/GiulioSavini/gruntled/internal/testsupport/synthrepo"
 )
 
@@ -94,4 +100,100 @@ func (c *countingFS) count(name string) int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.reads[name]
+}
+
+// build runs indexing.Build with the real Terragrunt loader and the real
+// tfsurface reader, both over fsys, and fails the test on a Go-level
+// error: every fixture used with this helper is expected to be a
+// per-unit/per-file problem (surfaced as an unknown reason or a
+// diagnostic), never a load-stage failure.
+func build(t *testing.T, fsys fs.FS) indexing.Result {
+	t.Helper()
+	res, err := indexing.Build(context.Background(), NewLoader(fsys), tfsurface.NewReader(fsys))
+	if err != nil {
+		t.Fatalf("indexing.Build: %v", err)
+	}
+	return res
+}
+
+// dump renders a Result as a canonical, deterministic string for
+// determinism assertions: two Results built from differently-ordered or
+// differently-named input must render identically. Mirrors
+// internal/application/indexing's own build_test.go dump, so a reader
+// familiar with one recognizes the other.
+func dump(r indexing.Result) string {
+	var b strings.Builder
+
+	b.WriteString("units:\n")
+	for _, u := range r.Graph.Units() {
+		b.WriteString("  ")
+		b.WriteString(u.Path().String())
+		b.WriteString(" status=")
+		b.WriteString(u.Status().String())
+		b.WriteString(" reason=")
+		b.WriteString(strconv.Quote(u.UnknownReason()))
+		if mod, ok := u.Module(); ok {
+			b.WriteString(" module=")
+			b.WriteString(mod.String())
+		}
+		b.WriteString(" deps=[")
+		for i, d := range u.Dependencies() {
+			if i > 0 {
+				b.WriteString(",")
+			}
+			b.WriteString(d.Name())
+			b.WriteString("=")
+			if target, ok := d.Target(); ok {
+				b.WriteString(target.String())
+			} else {
+				b.WriteString("unresolved:" + d.UnresolvedReason())
+			}
+		}
+		b.WriteString("] refs=[")
+		for i, ref := range u.References() {
+			if i > 0 {
+				b.WriteString(",")
+			}
+			b.WriteString(ref.Dependency())
+			b.WriteString(".")
+			b.WriteString(ref.Output())
+			b.WriteString("@")
+			b.WriteString(ref.Pos().String())
+		}
+		b.WriteString("]\n")
+	}
+
+	b.WriteString("modules:\n")
+	for _, m := range r.Graph.Modules() {
+		b.WriteString("  ")
+		b.WriteString(m.Path().String())
+		if surf, ok := m.Surface(); ok {
+			b.WriteString(" known outputs=")
+			b.WriteString(strings.Join(surf.Outputs(), ","))
+		} else {
+			b.WriteString(" unknown reason=")
+			b.WriteString(strconv.Quote(m.UnknownReason()))
+		}
+		b.WriteString("\n")
+	}
+
+	b.WriteString("diagnostics:\n")
+	for _, d := range r.Diagnostics.All() {
+		k := d.Key()
+		b.WriteString("  ")
+		b.WriteString(string(k.Code))
+		b.WriteString(" unit=")
+		b.WriteString(k.Unit.String())
+		b.WriteString(" ")
+		b.WriteString(k.File)
+		b.WriteString(":")
+		b.WriteString(strconv.Itoa(k.Line))
+		b.WriteString(":")
+		b.WriteString(strconv.Itoa(k.Column))
+		b.WriteString(" ")
+		b.WriteString(k.Message)
+		b.WriteString("\n")
+	}
+
+	return b.String()
 }
