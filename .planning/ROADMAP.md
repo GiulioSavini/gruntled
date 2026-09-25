@@ -58,10 +58,14 @@ Plans:
   3. A unit resolves to its module correctly both when `terraform.source` is present (local path) and when it is absent (the unit's own directory); a unit whose source is remote or dynamically computed is classified as remote/unresolvable without any network access
   4. Given a `dependency` block, gruntled resolves it through both hops — to the target unit, then from that unit to its module — and extracts that module's `variable` and `output` names correctly even when the unit's directory differs from the module's directory
   5. A unit hitting any construct it cannot resolve offline (remote source, unquoted/dynamic constructs it can't evaluate) is marked `unknown` rather than analyzed further; invalid HCL (including a file saved mid-edit) produces a diagnostic instead of a crash; `.terragrunt-cache`, `.terraform`, vendored module directories and symlinks are never walked into
-**Plans**: TBD
+**Plans**: 5 plans (sequential waves 1-5: each wave needs the previous one's API, arch rules must land before any infrastructure package, and only 02-03 touches go.mod)
 
 Plans:
-- [ ] 02-01: TBD
+- [ ] 02-01-PLAN.md — Domain: config-unknown / module-unknown units, unknown-surface modules, unresolved dependencies, DependencyOptions (DIAG-03 facts), diagnostic Key with Unit
+- [ ] 02-02-PLAN.md — Application: UnitLoader/SurfaceReader ports, indexing.Build over fakes, arch rules (application allowlist/deps/platform/guard, hcl-only-in-infrastructure) with self-tests
+- [ ] 02-03-PLAN.md — hcl/v2 + leaf adapters: byte-column positions and GRT100, offline source classifier, six path functions with closed evaluation, module surface reader
+- [ ] 02-04-PLAN.md — Terragrunt structure: unit discovery walk (skip rules, symlinks), whole-body reference extraction, parse-once cache with dependency facts
+- [ ] 02-05-PLAN.md — Terragrunt loader: include merge, path evaluation, source classification, unknown catalogue; end-to-end integration (two-hop, parse-once, determinism, synthrepo oracle, corpus smoke) and fuzz
 
 ### Phase 3: GRT001 Diagnostic & CLI
 **Goal**: `gruntled check` runs end-to-end against a repository on disk and reports `GRT001`/`GRT100` diagnostics that are correct, deterministic, and safe to script against in CI.
@@ -101,7 +105,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Domain Foundation & Test Substrate | 3/3 | Complete   | 2026-09-25 |
-| 2. Parsing & Graph Construction | 0/TBD | Not started | - |
+| 2. Parsing & Graph Construction | 0/5 | Planned | - |
 | 3. GRT001 Diagnostic & CLI | 0/TBD | Not started | - |
 | 4. Real-Repo Validation Experiment | 0/TBD | Not started | - |
 
