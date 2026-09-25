@@ -1,6 +1,7 @@
 package diagnostic_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/GiulioSavini/gruntled/internal/domain/diagnostic"
@@ -91,6 +92,33 @@ func TestNewAccessors(t *testing.T) {
 	if d.Message() != "bad output reference" {
 		t.Errorf("Message() = %q, want %q", d.Message(), "bad output reference")
 	}
+	if unit, ok := d.Unit(); ok || !unit.IsZero() {
+		t.Errorf("New(...).Unit() = (%v, %v), want (zero, false)", unit, ok)
+	}
+	if d.Key().Unit.IsZero() != true {
+		t.Errorf("New(...).Key().Unit.IsZero() = false, want true")
+	}
+}
+
+func TestNewForUnit(t *testing.T) {
+	pos := mustPosition(t, "a.hcl", 1, 1)
+	unit := repograph.MustRepoPath("units/app")
+
+	if _, err := diagnostic.NewForUnit(diagnostic.CodeUnknownOutput, diagnostic.SeverityError, repograph.RepoPath{}, pos, "msg"); err == nil {
+		t.Errorf("NewForUnit with zero unit: expected error, got nil")
+	}
+
+	d, err := diagnostic.NewForUnit(diagnostic.CodeUnknownOutput, diagnostic.SeverityError, unit, pos, "msg")
+	if err != nil {
+		t.Fatalf("NewForUnit: unexpected error: %v", err)
+	}
+	gotUnit, ok := d.Unit()
+	if !ok || gotUnit != unit {
+		t.Errorf("NewForUnit(...).Unit() = (%v, %v), want (%v, true)", gotUnit, ok, unit)
+	}
+	if d.Key().Unit != unit {
+		t.Errorf("NewForUnit(...).Key().Unit = %v, want %v", d.Key().Unit, unit)
+	}
 }
 
 func TestKeyEqualityIgnoresSeverityButNotLine(t *testing.T) {
@@ -143,5 +171,41 @@ func TestCompare(t *testing.T) {
 	}
 	if diagnostic.Compare(d1, d1) != 0 {
 		t.Errorf("Compare(d1, d1) = %d, want 0", diagnostic.Compare(d1, d1))
+	}
+}
+
+func TestCompareOrdersByUnitZeroFirst(t *testing.T) {
+	pos := mustPosition(t, "a.hcl", 1, 1)
+	fileLevel, err := diagnostic.New(diagnostic.CodeUnknownOutput, diagnostic.SeverityError, pos, "msg")
+	if err != nil {
+		t.Fatalf("New: unexpected error: %v", err)
+	}
+	unitA, err := diagnostic.NewForUnit(diagnostic.CodeUnknownOutput, diagnostic.SeverityError, repograph.MustRepoPath("units/a"), pos, "msg")
+	if err != nil {
+		t.Fatalf("NewForUnit: unexpected error: %v", err)
+	}
+	unitB, err := diagnostic.NewForUnit(diagnostic.CodeUnknownOutput, diagnostic.SeverityError, repograph.MustRepoPath("units/b"), pos, "msg")
+	if err != nil {
+		t.Fatalf("NewForUnit: unexpected error: %v", err)
+	}
+
+	if diagnostic.Compare(fileLevel, unitA) >= 0 {
+		t.Errorf("Compare(fileLevel, unitA) = %d, want < 0 (zero Unit sorts first)", diagnostic.Compare(fileLevel, unitA))
+	}
+	if diagnostic.Compare(unitA, unitB) >= 0 {
+		t.Errorf("Compare(unitA, unitB) = %d, want < 0 (unit order)", diagnostic.Compare(unitA, unitB))
+	}
+
+	perms := [][]diagnostic.Diagnostic{
+		{fileLevel, unitA, unitB},
+		{unitB, unitA, fileLevel},
+		{unitA, fileLevel, unitB},
+	}
+	for _, in := range perms {
+		got := append([]diagnostic.Diagnostic(nil), in...)
+		slices.SortFunc(got, diagnostic.Compare)
+		if got[0] != fileLevel || got[1] != unitA || got[2] != unitB {
+			t.Errorf("SortFunc(%v, Compare) = %v, want [fileLevel unitA unitB]", in, got)
+		}
 	}
 }

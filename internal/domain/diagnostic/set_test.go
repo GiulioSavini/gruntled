@@ -21,6 +21,19 @@ func mustDiagnostic(t *testing.T, code diagnostic.Code, severity diagnostic.Seve
 	return d
 }
 
+func mustDiagnosticForUnit(t *testing.T, code diagnostic.Code, severity diagnostic.Severity, unit, file string, line, column int, message string) diagnostic.Diagnostic {
+	t.Helper()
+	pos, err := repograph.NewPosition(repograph.MustRepoPath(file), line, column)
+	if err != nil {
+		t.Fatalf("NewPosition: unexpected error: %v", err)
+	}
+	d, err := diagnostic.NewForUnit(code, severity, repograph.MustRepoPath(unit), pos, message)
+	if err != nil {
+		t.Fatalf("NewForUnit: unexpected error: %v", err)
+	}
+	return d
+}
+
 func TestNewSetOrderIndependentAndCanonicalOrder(t *testing.T) {
 	d1 := mustDiagnostic(t, diagnostic.CodeUnknownOutput, diagnostic.SeverityError, "a.hcl", 1, 1, "m1")
 	d2 := mustDiagnostic(t, diagnostic.CodeUnknownOutput, diagnostic.SeverityError, "a.hcl", 2, 1, "m2")
@@ -82,6 +95,57 @@ func TestNewSetDropsNonAdjacentDuplicateKeys(t *testing.T) {
 		if all[0] != errM2 || all[1] != warnM1 {
 			t.Errorf("All() = %v, want [errM2 warnM1]", all)
 		}
+	}
+}
+
+func TestNewSetKeepsBothUnitsWhenOnlyUnitDiffers(t *testing.T) {
+	dA := mustDiagnosticForUnit(t, diagnostic.CodeUnknownOutput, diagnostic.SeverityError, "live/a", "a.hcl", 1, 1, "m")
+	dB := mustDiagnosticForUnit(t, diagnostic.CodeUnknownOutput, diagnostic.SeverityError, "live/b", "a.hcl", 1, 1, "m")
+
+	for _, in := range [][]diagnostic.Diagnostic{
+		{dA, dB},
+		{dB, dA},
+	} {
+		s := diagnostic.NewSet(in...)
+		if s.Len() != 2 {
+			t.Fatalf("NewSet(%v).Len() = %d, want 2", in, s.Len())
+		}
+		all := s.All()
+		if all[0] != dA || all[1] != dB {
+			t.Errorf("All() = %v, want [dA dB] regardless of input order", all)
+		}
+	}
+}
+
+func TestDiffOnlyUnitChangeIsOneAddedOneRemoved(t *testing.T) {
+	dA := mustDiagnosticForUnit(t, diagnostic.CodeUnknownOutput, diagnostic.SeverityError, "live/a", "a.hcl", 1, 1, "m")
+	dB := mustDiagnosticForUnit(t, diagnostic.CodeUnknownOutput, diagnostic.SeverityError, "live/b", "a.hcl", 1, 1, "m")
+
+	prev := diagnostic.NewSet(dA)
+	next := diagnostic.NewSet(dB)
+
+	added, removed := diagnostic.Diff(prev, next)
+	if added.Len() != 1 || added.All()[0] != dB {
+		t.Errorf("Diff added = %+v, want [dB]", added.All())
+	}
+	if removed.Len() != 1 || removed.All()[0] != dA {
+		t.Errorf("Diff removed = %+v, want [dA]", removed.All())
+	}
+}
+
+func TestDiffIgnoresSeverityOnlyChange(t *testing.T) {
+	errD := mustDiagnostic(t, diagnostic.CodeUnknownOutput, diagnostic.SeverityError, "a.hcl", 1, 1, "m")
+	warnD := mustDiagnostic(t, diagnostic.CodeUnknownOutput, diagnostic.SeverityWarning, "a.hcl", 1, 1, "m")
+
+	prev := diagnostic.NewSet(errD)
+	next := diagnostic.NewSet(warnD)
+
+	added, removed := diagnostic.Diff(prev, next)
+	if added.Len() != 0 {
+		t.Errorf("Diff added = %+v, want empty (severity-only change is not a new finding)", added.All())
+	}
+	if removed.Len() != 0 {
+		t.Errorf("Diff removed = %+v, want empty (severity-only change is not a new finding)", removed.All())
 	}
 }
 

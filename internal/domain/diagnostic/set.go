@@ -11,9 +11,11 @@ type Set struct {
 
 // NewSet builds a Set from ds: it clones, sorts with Compare, and keeps
 // only the first occurrence of each Key, so every Key appears at most once
-// in the result. Diagnostics sharing a Key can differ only in Severity, and
-// Compare orders SeverityError before SeverityWarning at the same position
-// and code, so a collision keeps the error.
+// in the result. Key includes Unit, so two diagnostics that differ only in
+// Unit are distinct and both kept. Diagnostics sharing a Key can differ
+// only in Severity, and Compare orders SeverityError before
+// SeverityWarning at the same position, code and unit, so a collision
+// keeps the error.
 //
 // Deduplication tracks every Key already kept rather than comparing
 // neighbours: Compare orders by Severity before Message, so two diagnostics
@@ -72,7 +74,12 @@ func (s Set) Equal(o Set) bool {
 
 // Diff compares prev and next by Key: added holds the diagnostics present
 // in next but not prev, removed holds those present in prev but not next.
-// Both results keep next's (respectively prev's) canonical order.
+// Both results keep next's (respectively prev's) canonical order. Because
+// Key excludes Severity, a diagnostic whose only change between prev and
+// next is its Severity appears in neither added nor removed: it is the
+// same finding, not a new one. Because Key includes Unit, a diagnostic
+// whose Unit changes between prev and next appears as one addition and one
+// removal.
 func Diff(prev, next Set) (added, removed Set) {
 	prevKeys := make(map[Key]struct{}, len(prev.items))
 	for _, d := range prev.items {
