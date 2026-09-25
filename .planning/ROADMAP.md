@@ -62,7 +62,7 @@ Plans:
 
 Plans:
 - [ ] 02-01-PLAN.md — Domain: config-unknown / module-unknown units, unknown-surface modules, unresolved dependencies, DependencyOptions (DIAG-03 facts), diagnostic Key with Unit
-- [ ] 02-02-PLAN.md — Application: UnitLoader/SurfaceReader ports, indexing.Build over fakes, arch rules (application allowlist/deps/platform/guard, hcl-only-in-infrastructure) with self-tests
+- [x] 02-02-PLAN.md — Application: UnitLoader/SurfaceReader ports, indexing.Build over fakes, arch rules (application allowlist/deps/platform/guard, hcl-only-in-infrastructure) with self-tests
 - [ ] 02-03-PLAN.md — hcl/v2 + leaf adapters: byte-column positions and GRT100, offline source classifier, six path functions with closed evaluation, module surface reader
 - [ ] 02-04-PLAN.md — Terragrunt structure: unit discovery walk (skip rules, symlinks), whole-body reference extraction, parse-once cache with dependency facts
 - [ ] 02-05-PLAN.md — Terragrunt loader: include merge, path evaluation, source classification, unknown catalogue; end-to-end integration (two-hop, parse-once, determinism, synthrepo oracle, corpus smoke) and fuzz
@@ -105,7 +105,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Domain Foundation & Test Substrate | 3/3 | Complete    | 2026-09-25 |
-| 2. Parsing & Graph Construction | 1/5 | In Progress|  |
+| 2. Parsing & Graph Construction | 2/5 | In Progress|  |
 | 3. GRT001 Diagnostic & CLI | 0/TBD | Not started | - |
 | 4. Real-Repo Validation Experiment | 0/TBD | Not started | - |
 
