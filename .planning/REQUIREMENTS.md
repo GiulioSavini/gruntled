@@ -51,7 +51,7 @@ machinery to prove it correct on real code.
 
 ### Architecture
 
-- [ ] **ARCH-01**: the domain layer contains no import of HCL, the filesystem or any infrastructure library, enforced by an automated check
+- [x] **ARCH-01**: the domain layer contains no import of HCL, the filesystem or any infrastructure library, enforced by an automated check
 - [x] **ARCH-02**: analyzers and graph queries are pure functions over domain types, testable without a filesystem
 
 ## v2 Requirements
@@ -130,7 +130,7 @@ Deferred. Tracked, not in the current roadmap.
 | VALID-04 | Phase 4 | Pending |
 | VALID-05 | Phase 4 | Pending |
 | VALID-06 | Phase 4 | Pending |
-| ARCH-01 | Phase 1 | Pending |
+| ARCH-01 | Phase 1 | Complete |
 | ARCH-02 | Phase 1 | Complete |
 
 **Coverage:**

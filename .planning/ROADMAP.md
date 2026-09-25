@@ -44,8 +44,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 3 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Go module bootstrap + pure domain: repograph (value objects, RepositoryGraph aggregate, pure queries) and diagnostic (Diagnostic, Set, Diff)
-- [ ] 01-02-PLAN.md — ARCH-01 enforcement: architecture check script + self-test proving each rule fails + 2-job CI on master
+- [x] 01-01-PLAN.md — Go module bootstrap + pure domain: repograph (value objects, RepositoryGraph aggregate, pure queries) and diagnostic (Diagnostic, Set, Diff)
+- [x] 01-02-PLAN.md — ARCH-01 enforcement: architecture check script + self-test proving each rule fails + 2-job CI on master
 - [ ] 01-03-PLAN.md — synthrepo: deterministic Render/Generate with pinned digest and BadOutputRef injection manifest (exact oracle)
 
 ### Phase 2: Parsing & Graph Construction
@@ -100,7 +100,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Domain Foundation & Test Substrate | 1/3 | In Progress | - |
+| 1. Domain Foundation & Test Substrate | 2/3 | In Progress|  |
 | 2. Parsing & Graph Construction | 0/TBD | Not started | - |
 | 3. GRT001 Diagnostic & CLI | 0/TBD | Not started | - |
 | 4. Real-Repo Validation Experiment | 0/TBD | Not started | - |

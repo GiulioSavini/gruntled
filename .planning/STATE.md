@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-01-PLAN.md (repograph + diagnostic domain packages)
-last_updated: "2026-09-25T10:18:09.767Z"
-last_activity: "2026-09-25 — Plan 01-01 executed: repograph value objects + RepositoryGraph aggregate root, diagnostic Diagnostic + Set/Diff, both stdlib-only and unit-tested"
+stopped_at: Completed 01-02-PLAN.md (architecture enforcement CI)
+last_updated: "2026-09-25T10:24:49.655Z"
+last_activity: "2026-09-25 — Plan 01-02 executed: scripts/check-architecture.sh + self-test + .github/workflows/ci.yml, both CI jobs green on pushed master"
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 3
-  completed_plans: 1
-  percent: 33
+  completed_plans: 2
+  percent: 67
 ---
 
 # Project State
@@ -26,27 +26,28 @@ See: .planning/PROJECT.md (updated 2026-09-01)
 ## Current Position
 
 Phase: 1 of 4 (Domain Foundation & Test Substrate)
-Plan: 2 of 3 in current phase
+Plan: 3 of 3 in current phase
 Status: Ready to execute
-Last activity: 2026-09-25 — Plan 01-01 executed: repograph value objects + RepositoryGraph aggregate root, diagnostic Diagnostic + Set/Diff, both stdlib-only and unit-tested
+Last activity: 2026-09-25 — Plan 01-02 executed: scripts/check-architecture.sh + self-test + .github/workflows/ci.yml, both CI jobs green on pushed master
 
-Progress: [███░░░░░░░] 33%
+Progress: [███████░░░] 67%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
-- Average duration: 35 min
-- Total execution time: 0.6 hours
+- Total plans completed: 2
+- Average duration: 25 min
+- Total execution time: 0.8 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | Phase 1 P1 | 35min | 3 tasks | 14 files |
+| Phase 1 P2 | 15min | 2 tasks | 3 files |
 
 **Recent Trend:**
-- Last 5 plans: 35min
+- Last 5 plans: 35min, 15min
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -64,6 +65,8 @@ Recent decisions affecting current work:
 - REQUIREMENTS.md stated "27 total" but 28 unique requirement IDs are actually listed (PARSE 6 + GRAPH 5 + DIAG 4 + CLI 5 + VALID 6 + ARCH 2 = 28); traceability corrected to 28/28 mapped
 - [Phase 1]: go.mod declares go 1.27; both go1.26.8 and go1.27.0 toolchains were already cached, so GOTOOLCHAIN=auto switched with zero network calls
 - [Phase 1]: RepositoryGraph aggregate root sorts and defensively clones units/modules at construction time so any input order yields an identical graph
+- [Phase 1]: domain-external-deps rule is an allowlist match on `^github.com/GiulioSavini/gruntled/internal/domain/`, not a blacklist of specific libraries, so it also catches future internal-layer leaks a blacklist wouldn't name
+- [Phase 1]: ARCH-01 is enforced by `scripts/check-architecture.sh` (compile gate, non-vacuous guard, domain-direct-io, domain-external-deps, binary-links-testsupport) plus a 7-case self-test proving each rule can genuinely fail; wired into a 2-job GitHub Actions workflow (`check`, `architecture`), both green on master
 
 ### Pending Todos
 
@@ -76,6 +79,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-09-25T10:18:09.765Z
-Stopped at: Completed 01-01-PLAN.md (repograph + diagnostic domain packages)
+Last session: 2026-09-25T10:22:48Z
+Stopped at: Completed 01-02-PLAN.md (architecture enforcement CI)
 Resume file: None
