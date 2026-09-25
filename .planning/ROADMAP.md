@@ -26,7 +26,7 @@ phase fails, the idea is wrong and that is learned in one milestone.
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Domain Foundation & Test Substrate** - Pure domain types (HCL-free, CI-enforced) plus a deterministic synthetic Terragrunt repo generator that every later phase uses for fixtures (completed 2026-09-25)
-- [ ] **Phase 2: Parsing & Graph Construction** - Walk a real Terragrunt repository, resolve units to modules, and build a correctly-resolved `RepositoryGraph` without evaluating any expression value
+- [x] **Phase 2: Parsing & Graph Construction** - Walk a real Terragrunt repository, resolve units to modules, and build a correctly-resolved `RepositoryGraph` without evaluating any expression value (completed 2026-09-25)
 - [ ] **Phase 3: GRT001 Diagnostic & CLI** - `gruntled check` runs end-to-end, reporting correct, deterministic diagnostics with documented exit codes and no side effects
 - [ ] **Phase 4: Real-Repo Validation Experiment** - The falsifiable claim is settled: zero false positives and every injected mutation caught on a real public corpus, faster than `terragrunt hcl validate`
 
@@ -61,11 +61,11 @@ Plans:
 **Plans**: 5 plans (sequential waves 1-5: each wave needs the previous one's API, arch rules must land before any infrastructure package, and only 02-03 touches go.mod)
 
 Plans:
-- [ ] 02-01-PLAN.md — Domain: config-unknown / module-unknown units, unknown-surface modules, unresolved dependencies, DependencyOptions (DIAG-03 facts), diagnostic Key with Unit
+- [x] 02-01-PLAN.md — Domain: config-unknown / module-unknown units, unknown-surface modules, unresolved dependencies, DependencyOptions (DIAG-03 facts), diagnostic Key with Unit
 - [x] 02-02-PLAN.md — Application: UnitLoader/SurfaceReader ports, indexing.Build over fakes, arch rules (application allowlist/deps/platform/guard, hcl-only-in-infrastructure) with self-tests
-- [ ] 02-03-PLAN.md — hcl/v2 + leaf adapters: byte-column positions and GRT100, offline source classifier, six path functions with closed evaluation, module surface reader
-- [ ] 02-04-PLAN.md — Terragrunt structure: unit discovery walk (skip rules, symlinks), whole-body reference extraction, parse-once cache with dependency facts
-- [ ] 02-05-PLAN.md — Terragrunt loader: include merge, path evaluation, source classification, unknown catalogue; end-to-end integration (two-hop, parse-once, determinism, synthrepo oracle, corpus smoke) and fuzz
+- [x] 02-03-PLAN.md — hcl/v2 + leaf adapters: byte-column positions and GRT100, offline source classifier, six path functions with closed evaluation, module surface reader
+- [x] 02-04-PLAN.md — Terragrunt structure: unit discovery walk (skip rules, symlinks), whole-body reference extraction, parse-once cache with dependency facts
+- [x] 02-05-PLAN.md — Terragrunt loader: include merge, path evaluation, source classification, unknown catalogue; end-to-end integration (two-hop, parse-once, determinism, synthrepo oracle, corpus smoke) and fuzz
 
 ### Phase 3: GRT001 Diagnostic & CLI
 **Goal**: `gruntled check` runs end-to-end against a repository on disk and reports `GRT001`/`GRT100` diagnostics that are correct, deterministic, and safe to script against in CI.

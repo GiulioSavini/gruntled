@@ -12,7 +12,7 @@ machinery to prove it correct on real code.
 
 - [x] **PARSE-01**: gruntled decodes `terragrunt.hcl` structurally, reading only `include`, `terraform.source` and `dependency` blocks, without evaluating expression values
 - [x] **PARSE-02**: gruntled evaluates the six pure path functions (`find_in_parent_folders`, `path_relative_to_include`, `path_relative_from_include`, `get_terragrunt_dir`, `get_parent_terragrunt_dir`, `get_original_terragrunt_dir`)
-- [ ] **PARSE-03**: gruntled resolves `include` blocks, including nested includes and merge strategy, parsing each included file exactly once and sharing the result across every unit that includes it
+- [x] **PARSE-03**: gruntled resolves `include` blocks, including nested includes and merge strategy, parsing each included file exactly once and sharing the result across every unit that includes it
 - [x] **PARSE-04**: gruntled marks a unit `unknown` when it encounters any construct it cannot resolve offline, and never reports a diagnostic for an `unknown` unit
 - [x] **PARSE-05**: gruntled reports a diagnostic instead of crashing when a file contains invalid HCL, including a file saved mid-edit
 - [x] **PARSE-06**: gruntled skips `.terragrunt-cache`, `.terraform`, vendored module directories and symlinks when walking a repository
@@ -20,7 +20,7 @@ machinery to prove it correct on real code.
 ### Graph
 
 - [x] **GRAPH-01**: gruntled resolves a unit to its module via `terraform.source` when present
-- [ ] **GRAPH-02**: gruntled resolves a unit to its module as the unit's own directory when `terraform.source` is absent
+- [x] **GRAPH-02**: gruntled resolves a unit to its module as the unit's own directory when `terraform.source` is absent
 - [x] **GRAPH-03**: gruntled classifies a module source as remote without downloading it, and marks the owning unit `unknown`
 - [x] **GRAPH-04**: gruntled resolves a `dependency` block through both hops — from the dependency to the target unit, and from that unit to the module whose outputs it exposes
 - [x] **GRAPH-05**: gruntled extracts the public surface of a module — the names of its `variable` and `output` blocks — from its `.tf` and `.tf.json` files
@@ -106,12 +106,12 @@ Deferred. Tracked, not in the current roadmap.
 |-------------|-------|--------|
 | PARSE-01 | Phase 2 | Complete |
 | PARSE-02 | Phase 2 | Complete |
-| PARSE-03 | Phase 2 | Pending |
+| PARSE-03 | Phase 2 | Complete |
 | PARSE-04 | Phase 2 | Complete |
 | PARSE-05 | Phase 2 | Complete |
 | PARSE-06 | Phase 2 | Complete |
 | GRAPH-01 | Phase 2 | Complete |
-| GRAPH-02 | Phase 2 | Pending |
+| GRAPH-02 | Phase 2 | Complete |
 | GRAPH-03 | Phase 2 | Complete |
 | GRAPH-04 | Phase 2 | Complete |
 | GRAPH-05 | Phase 2 | Complete |

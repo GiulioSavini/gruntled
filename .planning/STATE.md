@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: milestone
-status: executing
-stopped_at: Completed 02-04-PLAN.md (Terragrunt structural parser: walk, references, parse-once cache, dependency facts)
-last_updated: "2026-09-25T13:36:08.739Z"
-last_activity: "2026-09-25 — Plan 02-04 executed: internal/infrastructure/terragrunt discoverUnits (walk), extractRefs (whole-body reference extraction), fileCache/parsedFile (parse-once structural cache), dependencyOptions (DIAG-03 facts); full local suite and CI green"
+status: planning
+stopped_at: Completed 02-05-PLAN.md (Phase 2 complete)
+last_updated: "2026-09-25T14:12:35.414Z"
+last_activity: "2026-09-25 — Plan 02-05 executed: terragrunt.Loader (ports.UnitLoader) with include merge, dependency merge, source classification, the full unknown-reason catalogue; end-to-end indexing.Build integration tests including a synthrepo oracle and a real-corpus smoke run; FuzzLoadUnits native fuzz target; Phase 2 (Parsing & Graph Construction) complete"
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 8
-  completed_plans: 7
-  percent: 88
+  completed_plans: 8
+  percent: 100
 ---
 
 # Project State
@@ -21,23 +21,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-01)
 
 **Core value:** Tell the user, before they run anything slow, that `dependency.X.outputs.Y` does not exist in the module it points to.
-**Current focus:** Phase 2 (Parsing & Graph Construction) — Plan 4 of 5 complete
+**Current focus:** Phase 2 (Parsing & Graph Construction) — complete; Phase 3 (Analysis) not yet planned
 
 ## Current Position
 
-Phase: 2 of 4 (Parsing & Graph Construction) — in progress
-Plan: 4 of 5 in current phase — complete
-Status: Ready to execute Plan 02-05
-Last activity: 2026-09-25 — Plan 02-04 executed: internal/infrastructure/terragrunt discoverUnits (walk), extractRefs (whole-body reference extraction), fileCache/parsedFile (parse-once structural cache), dependencyOptions (DIAG-03 facts); full local suite and CI green
+Phase: 2 of 4 (Parsing & Graph Construction) — complete
+Plan: 5 of 5 in current phase — complete
+Status: Phase 2 complete; ready to plan Phase 3 (Analysis)
+Last activity: 2026-09-25 — Plan 02-05 executed: terragrunt.Loader (ports.UnitLoader) with include merge, dependency merge, source classification, the full unknown-reason catalogue; end-to-end indexing.Build integration tests including a synthrepo oracle and a real-corpus smoke run; FuzzLoadUnits native fuzz target; Phase 2 (Parsing & Graph Construction) complete
 
-Progress: [█████████░] 88%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 7
-- Average duration: ~28 min
-- Total execution time: 3.32 hours
+- Total plans completed: 8
+- Average duration: ~29 min
+- Total execution time: 3.99 hours
 
 **By Phase:**
 
@@ -50,12 +50,14 @@ Progress: [█████████░] 88%
 | Phase 2 P2 | 24min | 3 tasks | 5 files |
 | Phase 2 P3 | 53min | 3 tasks | 13 files |
 | Phase 2 P4 | 27min | 3 tasks | 8 files |
+| Phase 2 P5 | 40min | 3 tasks | 7 files |
 
 **Recent Trend:**
-- Last 5 plans: 20min, 25min, 24min, 53min, 27min
-- Trend: Plan 02-04 returned to the ~25-30min baseline after Plan 02-03's larger three-package leaf-infrastructure plan
+- Last 5 plans: 25min, 24min, 53min, 27min, 40min
+- Trend: Plan 02-05 (loader + integration + fuzz, the phase's largest wiring surface) ran longer than the P4 baseline but in line with P3's similar-scope leaf-infrastructure plan; Phase 2 is now complete
 
 *Updated after each plan completion*
+| Phase 02 P05 | 40 | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -87,6 +89,11 @@ Recent decisions affecting current work:
 - [Phase 02 P4]: mock_outputs_merge_strategy_with_state recognizes exactly three literal values (no_merge/shallow/deep_map_only); any other literal string is Unknown rather than guessed true, following the plan's behavior table over the Phase 1 doc comment's simplified wording
 - [Phase 02 P4]: discoverUnits relies on fs.WalkDir never recursing into a non-directory DirEntry; the fs.ModeSymlink guard exists only to keep a symlinked terragrunt.hcl from matching the unit-file name switch, not to prevent descent
 - [Phase 02 P4]: extractRefs and dependencyOptions never evaluate an expression to decide reference/fact status; they inspect the raw hcl.Traversal/*hclsyntax.ObjectConsExpr/*hclsyntax.TupleConsExpr AST shape so an uncertain construct fails to unknown by construction
+- [Phase 02 P5]: resolveUnit's 12-step fixed check order is the single source of truth for reason precedence (config validity -> include resolution -> dependency merge -> references -> source/generate/overlay); every path-bearing attribute always resolves against the CHILD unit dir regardless of which file (child or a merged include) it is written in
+- [Phase 02 P5]: SRC-08's bare registry-looking source (no scheme, e.g. terraform-aws-modules/vpc/aws) classifies Local per research Pitfall 8, not Remote as 02-TERRAGRUNT-EDGECASES.md's older entry says; it resolves to a nonexistent local path that tfsurface later reports module-dir-not-found
+- [Phase 02 P5]: deep-merge dependency resolution only activates when a label's occurrences span more than one file AND at least one is itself a deep include; a single-occurrence label always keeps its literal facts, never guessed-merged
+- [Phase 02 P5]: TestUnknownReasons parses reasons.go with go/parser and fails if any Reason* constant lacks a fixture row, so the unknown-reason catalogue and its test coverage can never silently drift apart
+- [Phase 02 P5]: the real primary corpus has 3 units (not 0) that are deliberately config-unknown: two same-label `dependency "iam"` blocks in one file, a real shape this project's "never guess which duplicate wins" policy (research Pattern 6) refuses to resolve -- verified once locally against a fresh clone, documented in 02-05-SUMMARY.md, not a defect
 
 ### Pending Todos
 
@@ -98,6 +105,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-09-25T13:36:08.734Z
-Stopped at: Completed 02-04-PLAN.md
+Last session: 2026-09-25T14:16:00.000Z
+Stopped at: Completed 02-05-PLAN.md (Phase 2 complete)
 Resume file: None
