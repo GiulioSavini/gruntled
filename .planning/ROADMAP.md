@@ -25,7 +25,7 @@ phase fails, the idea is wrong and that is learned in one milestone.
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Domain Foundation & Test Substrate** - Pure domain types (HCL-free, CI-enforced) plus a deterministic synthetic Terragrunt repo generator that every later phase uses for fixtures
+- [x] **Phase 1: Domain Foundation & Test Substrate** - Pure domain types (HCL-free, CI-enforced) plus a deterministic synthetic Terragrunt repo generator that every later phase uses for fixtures (completed 2026-09-25)
 - [ ] **Phase 2: Parsing & Graph Construction** - Walk a real Terragrunt repository, resolve units to modules, and build a correctly-resolved `RepositoryGraph` without evaluating any expression value
 - [ ] **Phase 3: GRT001 Diagnostic & CLI** - `gruntled check` runs end-to-end, reporting correct, deterministic diagnostics with documented exit codes and no side effects
 - [ ] **Phase 4: Real-Repo Validation Experiment** - The falsifiable claim is settled: zero false positives and every injected mutation caught on a real public corpus, faster than `terragrunt hcl validate`
@@ -46,7 +46,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 Plans:
 - [x] 01-01-PLAN.md — Go module bootstrap + pure domain: repograph (value objects, RepositoryGraph aggregate, pure queries) and diagnostic (Diagnostic, Set, Diff)
 - [x] 01-02-PLAN.md — ARCH-01 enforcement: architecture check script + self-test proving each rule fails + 2-job CI on master
-- [ ] 01-03-PLAN.md — synthrepo: deterministic Render/Generate with pinned digest and BadOutputRef injection manifest (exact oracle)
+- [x] 01-03-PLAN.md — synthrepo: deterministic Render/Generate with pinned digest and BadOutputRef injection manifest (exact oracle)
 
 ### Phase 2: Parsing & Graph Construction
 **Goal**: gruntled walks a real Terragrunt repository on disk and builds a complete, correctly-resolved `RepositoryGraph` — every unit, the module it resolves to, and that module's public surface — using only structural HCL decoding, never evaluating an expression to a value.
@@ -100,7 +100,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Domain Foundation & Test Substrate | 2/3 | In Progress|  |
+| 1. Domain Foundation & Test Substrate | 3/3 | Complete   | 2026-09-25 |
 | 2. Parsing & Graph Construction | 0/TBD | Not started | - |
 | 3. GRT001 Diagnostic & CLI | 0/TBD | Not started | - |
 | 4. Real-Repo Validation Experiment | 0/TBD | Not started | - |

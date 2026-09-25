@@ -42,7 +42,7 @@ machinery to prove it correct on real code.
 
 ### Validation
 
-- [ ] **VALID-01**: a generator produces synthetic Terragrunt repositories from a spec — N units, nested includes, dependency chains — used for both golden tests and benchmarks
+- [x] **VALID-01**: a generator produces synthetic Terragrunt repositories from a spec — N units, nested includes, dependency chains — used for both golden tests and benchmarks
 - [ ] **VALID-02**: golden tests cover the fixture repositories, asserting the exact expected diagnostic set
 - [ ] **VALID-03**: gruntled reports zero diagnostics on the unmutated primary corpus (`guidance-for-iso20022-messaging-workflows-on-aws`)
 - [ ] **VALID-04**: gruntled reports every reference broken by a deliberate output rename or deletion injected into the corpus
@@ -124,7 +124,7 @@ Deferred. Tracked, not in the current roadmap.
 | CLI-03 | Phase 3 | Pending |
 | CLI-04 | Phase 3 | Pending |
 | CLI-05 | Phase 3 | Pending |
-| VALID-01 | Phase 1 | Pending |
+| VALID-01 | Phase 1 | Complete |
 | VALID-02 | Phase 4 | Pending |
 | VALID-03 | Phase 4 | Pending |
 | VALID-04 | Phase 4 | Pending |
