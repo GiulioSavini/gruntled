@@ -81,9 +81,9 @@ completed: 2026-09-25
 
 Each task was committed atomically:
 
-1. **Task 1: Loader: include resolution, merge, path evaluation, source classification, unit state** - `77fd457` (feat)
-2. **Task 2: End-to-end integration through indexing.Build with the real adapters** - `07fbbd9` (test)
-3. **Task 3: Fuzz target over the loader and edge-case traceability** - `201649d` (test)
+1. **Task 1: Loader: include resolution, merge, path evaluation, source classification, unit state** - `1c37a28` (feat)
+2. **Task 2: End-to-end integration through indexing.Build with the real adapters** - `433f1e6` (test)
+3. **Task 3: Fuzz target over the loader and edge-case traceability** - `03b121b` (test)
 
 **Plan metadata:** (this commit) `docs(02-05): complete Terragrunt unit loader plan`
 
@@ -112,7 +112,7 @@ See `key-decisions` in the frontmatter for the three most consequential ones: SR
 - **Fix:** Updated `TestCorpusSmoke` to assert the correct, verified count (3), asserting each config-unknown unit is one of the three expected paths with reason `invalid-dependency`, and documented the finding inline with a comment explaining why it is a real, deliberate outcome rather than a regression
 - **Files modified:** `internal/infrastructure/terragrunt/integration_test.go`
 - **Verification:** `GRUNTLED_CORPUS=/tmp/iso20022 go test ./internal/infrastructure/terragrunt -run TestCorpusSmoke -count=1 -v` passes
-- **Committed in:** `07fbbd9` (Task 2 commit)
+- **Committed in:** `433f1e6` (Task 2 commit)
 
 ---
 
@@ -235,7 +235,7 @@ Every ID from `02-TERRAGRUNT-EDGECASES.md`'s Quick reference table. "Test" names
 - Phase 2's five ROADMAP success criteria are all demonstrated by named tests: structural decode + six functions (`TestStructuralOnly`, `pathfuncs_test.go`); parse-once (`TestParseOnce`); source present/absent/remote (`TestSourceForms`, `TestUnknownReasons`); two-hop with unit dir != module dir (`TestTwoHop`); unknown-on-unresolvable / GRT100-on-invalid-HCL / skip rules (`TestUnknownReasons`, `TestSyntaxEndToEnd`, `walk_test.go`).
 - `terragrunt.Loader` + `tfsurface.Reader` + `indexing.Build` together form the complete adapter surface Phase 3's GRT001 analyzer needs: `RepositoryGraph.References()`, `DependencyTarget`, and `ModuleOf`/`Surface` are exactly what a static "does `dependency.X.outputs.Y` exist in its target module" check calls.
 - The DIAG-03 facts (`DependencyOptions` on every `Dependency`, resolved or not) are already captured and flow unchanged through merge; Phase 3's mock_outputs rule can read them directly with no further Phase 2 work.
-- No blockers. Full local suite (build, vet, test, gofmt, `go mod tidy -diff`, staticcheck, govulncheck, cross-builds for linux/amd64/darwin/arm64/windows/amd64, `check-architecture.sh`, `test-check-architecture.sh`) green at `201649d`. Push and CI verification are the orchestrator's final step per this plan's `<verification>` section.
+- No blockers. Full local suite (build, vet, test, gofmt, `go mod tidy -diff`, staticcheck, govulncheck, cross-builds for linux/amd64/darwin/arm64/windows/amd64, `check-architecture.sh`, `test-check-architecture.sh`) green at `03b121b`. Push and CI verification are the orchestrator's final step per this plan's `<verification>` section.
 
 ---
 *Phase: 02-parsing-graph-construction*
@@ -243,4 +243,4 @@ Every ID from `02-TERRAGRUNT-EDGECASES.md`'s Quick reference table. "Test" names
 
 ## Self-Check: PASSED
 
-All 7 created/modified files and all three task commit hashes (77fd457, 07fbbd9, 201649d) verified present.
+All 7 created/modified files and all three task commit hashes (1c37a28, 433f1e6, 03b121b) verified present.
