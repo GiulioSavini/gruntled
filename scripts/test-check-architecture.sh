@@ -29,6 +29,24 @@ mkcopy() {
   echo "$d"
 }
 
+addstub() {
+  local copy="$1" org="$2"
+  mkdir -p "$copy/zzstub/${org}"
+  cat >"$copy/zzstub/${org}/go.mod" <<EOF
+module github.com/${org}/zzprobe
+
+go 1.27
+EOF
+  cat >"$copy/zzstub/${org}/p.go" <<EOF
+package zzprobe
+
+const X = 1
+EOF
+  (cd "$copy" && go mod edit \
+    -require="github.com/${org}/zzprobe@v0.0.0" \
+    -replace="github.com/${org}/zzprobe=./zzstub/${org}")
+}
+
 run_case() {
   local name="$1"
   local copy="$2"
@@ -191,5 +209,105 @@ copy=$(mkcopy)
 rm -rf "$copy/internal/domain"
 mkdir -p "$copy/internal/domain"
 run_case "vacuous" "$copy" non-vacuous-guard
+
+# --- app-fmt: application file imports fmt -----------------------------
+copy=$(mkcopy)
+cat >"$copy/internal/application/ports/zz_probe.go" <<'EOF'
+package ports
+
+import "fmt"
+
+func zzProbe() string { return fmt.Sprint("hello") }
+EOF
+run_case "app-fmt" "$copy" application-stdlib-allowlist
+
+# --- app-xtest-os: application external test package imports os --------
+copy=$(mkcopy)
+cat >"$copy/internal/application/ports/zz_probe_test.go" <<'EOF'
+package ports_test
+
+import (
+	_ "os"
+	"testing"
+)
+
+func TestZZProbe(t *testing.T) {}
+EOF
+run_case "app-xtest-os" "$copy" application-stdlib-allowlist
+
+# --- app-external-dep: application imports internal/infrastructure -----
+copy=$(mkcopy)
+mkdir -p "$copy/internal/infrastructure/zzprobe"
+cat >"$copy/internal/infrastructure/zzprobe/p.go" <<'EOF'
+package zzprobe
+
+const X = 1
+EOF
+cat >"$copy/internal/application/ports/zz_probe.go" <<EOF
+package ports
+
+import _ "${MODULE}/internal/infrastructure/zzprobe"
+EOF
+run_case "app-external-dep" "$copy" application-external-deps
+
+# --- app-testsupport-in-test: application test imports internal/testsupport
+copy=$(mkcopy)
+cat >"$copy/internal/application/ports/zz_probe_test.go" <<EOF
+package ports_test
+
+import (
+	_ "${MODULE}/internal/testsupport/synthrepo"
+	"testing"
+)
+
+func TestZZProbe(t *testing.T) {}
+EOF
+run_case "app-testsupport-in-test" "$copy" application-external-deps
+
+# --- app-windows-file: os imported from a file linux never compiles ------
+copy=$(mkcopy)
+cat >"$copy/internal/application/ports/zz_probe_windows.go" <<'EOF'
+package ports
+
+import _ "os"
+EOF
+run_case "app-windows-file" "$copy" application-platform-neutral
+
+# --- app-vacuous: internal/application exists but holds no packages ------
+copy=$(mkcopy)
+rm -rf "$copy/internal/application"
+mkdir -p "$copy/internal/application"
+run_case "app-vacuous" "$copy" application-non-vacuous-guard
+
+# --- hcl-in-cmd: cmd/gruntled imports hashicorp/hcl directly --------------
+copy=$(mkcopy)
+addstub "$copy" hashicorp
+cat >"$copy/cmd/gruntled/zz_probe.go" <<'EOF'
+package main
+
+import _ "github.com/hashicorp/zzprobe"
+EOF
+run_case "hcl-in-cmd" "$copy" hcl-only-in-infrastructure
+
+# --- zclconf-in-testsupport-test: testsupport test imports zclconf/go-cty
+copy=$(mkcopy)
+addstub "$copy" zclconf
+cat >"$copy/internal/testsupport/synthrepo/zz_probe_test.go" <<'EOF'
+package synthrepo_test
+
+import _ "github.com/zclconf/zzprobe"
+EOF
+run_case "zclconf-in-testsupport-test" "$copy" hcl-only-in-infrastructure
+
+# --- hcl-in-infrastructure-allowed: infrastructure importing HCL is fine -
+copy=$(mkcopy)
+addstub "$copy" hashicorp
+mkdir -p "$copy/internal/infrastructure/zzprobe"
+cat >"$copy/internal/infrastructure/zzprobe/p.go" <<'EOF'
+package zzprobe
+
+import _ "github.com/hashicorp/zzprobe"
+EOF
+run_case "hcl-in-infrastructure-allowed" "$copy" zero
 
 echo "all architecture self-tests passed"
