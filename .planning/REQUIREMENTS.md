@@ -10,12 +10,12 @@ machinery to prove it correct on real code.
 
 ### Parsing
 
-- [ ] **PARSE-01**: gruntled decodes `terragrunt.hcl` structurally, reading only `include`, `terraform.source` and `dependency` blocks, without evaluating expression values
+- [x] **PARSE-01**: gruntled decodes `terragrunt.hcl` structurally, reading only `include`, `terraform.source` and `dependency` blocks, without evaluating expression values
 - [x] **PARSE-02**: gruntled evaluates the six pure path functions (`find_in_parent_folders`, `path_relative_to_include`, `path_relative_from_include`, `get_terragrunt_dir`, `get_parent_terragrunt_dir`, `get_original_terragrunt_dir`)
 - [ ] **PARSE-03**: gruntled resolves `include` blocks, including nested includes and merge strategy, parsing each included file exactly once and sharing the result across every unit that includes it
 - [x] **PARSE-04**: gruntled marks a unit `unknown` when it encounters any construct it cannot resolve offline, and never reports a diagnostic for an `unknown` unit
 - [x] **PARSE-05**: gruntled reports a diagnostic instead of crashing when a file contains invalid HCL, including a file saved mid-edit
-- [ ] **PARSE-06**: gruntled skips `.terragrunt-cache`, `.terraform`, vendored module directories and symlinks when walking a repository
+- [x] **PARSE-06**: gruntled skips `.terragrunt-cache`, `.terraform`, vendored module directories and symlinks when walking a repository
 
 ### Graph
 
@@ -104,12 +104,12 @@ Deferred. Tracked, not in the current roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PARSE-01 | Phase 2 | Pending |
+| PARSE-01 | Phase 2 | Complete |
 | PARSE-02 | Phase 2 | Complete |
 | PARSE-03 | Phase 2 | Pending |
 | PARSE-04 | Phase 2 | Complete |
 | PARSE-05 | Phase 2 | Complete |
-| PARSE-06 | Phase 2 | Pending |
+| PARSE-06 | Phase 2 | Complete |
 | GRAPH-01 | Phase 2 | Complete |
 | GRAPH-02 | Phase 2 | Pending |
 | GRAPH-03 | Phase 2 | Complete |

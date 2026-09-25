@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-03-PLAN.md (hclconv, sourceresolve, terragrunt path functions, tfsurface.Reader)
-last_updated: "2026-09-25T15:07:46.000Z"
-last_activity: "2026-09-25 — Plan 02-03 executed: internal/infrastructure/hclconv (byte-accurate positions, GRT100), sourceresolve.Classify (offline source classifier), terragrunt path functions (six functions, closed S0/S1/S2 evaluation), tfsurface.Reader (working ports.SurfaceReader); full local suite green, push/CI pending"
+stopped_at: Completed 02-04-PLAN.md (Terragrunt structural parser: walk, references, parse-once cache, dependency facts)
+last_updated: "2026-09-25T13:36:08.739Z"
+last_activity: "2026-09-25 — Plan 02-04 executed: internal/infrastructure/terragrunt discoverUnits (walk), extractRefs (whole-body reference extraction), fileCache/parsedFile (parse-once structural cache), dependencyOptions (DIAG-03 facts); full local suite and CI green"
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 8
-  completed_plans: 6
-  percent: 75
+  completed_plans: 7
+  percent: 88
 ---
 
 # Project State
@@ -21,23 +21,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-01)
 
 **Core value:** Tell the user, before they run anything slow, that `dependency.X.outputs.Y` does not exist in the module it points to.
-**Current focus:** Phase 2 (Parsing & Graph Construction) — Plan 3 of 5 complete
+**Current focus:** Phase 2 (Parsing & Graph Construction) — Plan 4 of 5 complete
 
 ## Current Position
 
 Phase: 2 of 4 (Parsing & Graph Construction) — in progress
-Plan: 3 of 5 in current phase — complete
-Status: Ready to execute Plan 02-04
-Last activity: 2026-09-25 — Plan 02-03 executed: internal/infrastructure/hclconv (byte-accurate positions, GRT100), sourceresolve.Classify (offline source classifier), terragrunt path functions (six functions, closed S0/S1/S2 evaluation), tfsurface.Reader (working ports.SurfaceReader); full local suite green, push/CI pending
+Plan: 4 of 5 in current phase — complete
+Status: Ready to execute Plan 02-05
+Last activity: 2026-09-25 — Plan 02-04 executed: internal/infrastructure/terragrunt discoverUnits (walk), extractRefs (whole-body reference extraction), fileCache/parsedFile (parse-once structural cache), dependencyOptions (DIAG-03 facts); full local suite and CI green
 
-Progress: [████████░░] 75%
+Progress: [█████████░] 88%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 6
-- Average duration: ~29 min
-- Total execution time: 2.87 hours
+- Total plans completed: 7
+- Average duration: ~28 min
+- Total execution time: 3.32 hours
 
 **By Phase:**
 
@@ -49,10 +49,11 @@ Progress: [████████░░] 75%
 | Phase 2 P1 | 25min | 2 tasks | 9 files |
 | Phase 2 P2 | 24min | 3 tasks | 5 files |
 | Phase 2 P3 | 53min | 3 tasks | 13 files |
+| Phase 2 P4 | 27min | 3 tasks | 8 files |
 
 **Recent Trend:**
-- Last 5 plans: 15min, 20min, 25min, 24min, 53min
-- Trend: Plan 02-03 took longer (3 leaf infrastructure packages plus a new third-party dependency in one plan, by design)
+- Last 5 plans: 20min, 25min, 24min, 53min, 27min
+- Trend: Plan 02-04 returned to the ~25-30min baseline after Plan 02-03's larger three-package leaf-infrastructure plan
 
 *Updated after each plan completion*
 
@@ -83,6 +84,9 @@ Recent decisions affecting current work:
 - [Phase 02 P3]: sourceresolve.Classify hand-rolls Terragrunt's detector chain (not go-getter/v2): the FileDetector catch-all makes any unmatched string local, so a bare `units/chicken` is local like Terragrunt, unlike plain Terraform; misclassification fails safe through the surface reader's existence check either direction
 - [Phase 02 P3]: get_terragrunt_dir/get_original_terragrunt_dir take Params: nil (no VarParam), so hcl/cty itself rejects any argument before Impl ever runs — no manual arity check needed
 - [Phase 02 P3]: tfsurface.Reader always calls fs.Stat on every kept file (not just symlinks), verified against a real os.Root-backed FS to be exactly where an escaping or dangling symlink surfaces as an error, so one code path handles directories, in-repo symlinks and escapes/dangling links uniformly
+- [Phase 02 P4]: mock_outputs_merge_strategy_with_state recognizes exactly three literal values (no_merge/shallow/deep_map_only); any other literal string is Unknown rather than guessed true, following the plan's behavior table over the Phase 1 doc comment's simplified wording
+- [Phase 02 P4]: discoverUnits relies on fs.WalkDir never recursing into a non-directory DirEntry; the fs.ModeSymlink guard exists only to keep a symlinked terragrunt.hcl from matching the unit-file name switch, not to prevent descent
+- [Phase 02 P4]: extractRefs and dependencyOptions never evaluate an expression to decide reference/fact status; they inspect the raw hcl.Traversal/*hclsyntax.ObjectConsExpr/*hclsyntax.TupleConsExpr AST shape so an uncertain construct fails to unknown by construction
 
 ### Pending Todos
 
@@ -94,6 +98,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-09-25T15:07:46.000Z
-Stopped at: Completed 02-03-PLAN.md (hclconv, sourceresolve, terragrunt path functions, tfsurface.Reader)
+Last session: 2026-09-25T13:36:08.734Z
+Stopped at: Completed 02-04-PLAN.md
 Resume file: None
