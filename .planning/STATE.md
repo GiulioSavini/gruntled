@@ -4,12 +4,12 @@ milestone: v0.1
 milestone_name: milestone
 status: planning
 stopped_at: Completed 01-03-PLAN.md (synthetic repo generator, VALID-01, Phase 1 complete)
-last_updated: "2026-09-25T10:36:19.401Z"
+last_updated: "2026-09-25T11:14:38.203Z"
 last_activity: "2026-09-25 — Plan 01-03 executed: internal/testsupport/synthrepo Render/Generate, pinned digest, BadOutputRef injection with exact Manifest oracle; CI green on pushed master"
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 3
+  total_plans: 8
   completed_plans: 3
   percent: 25
 ---
