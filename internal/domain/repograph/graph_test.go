@@ -10,7 +10,7 @@ import (
 
 // buildThreeUnitGraph constructs the reference fixture used across several
 // tests: an "app" unit depending on "vpc" (a resolved unit/module pair) and
-// on "legacy" (an Unknown unit). unitOrder and moduleOrder let callers pass
+// on "legacy" (a config-unknown unit). unitOrder and moduleOrder let callers pass
 // the same objects in different slice orders to prove order-independence.
 func buildThreeUnitGraph(t *testing.T, unitOrder []int, moduleOrder []int) *repograph.RepositoryGraph {
 	t.Helper()
@@ -50,9 +50,9 @@ func buildThreeUnitGraph(t *testing.T, unitOrder []int, moduleOrder []int) *repo
 		t.Fatalf("NewResolvedUnit(vpc): unexpected error: %v", err)
 	}
 
-	legacyUnit, err := repograph.NewUnknownUnit(legacyPath, "remote source not fetched offline")
+	legacyUnit, err := repograph.NewConfigUnknownUnit(legacyPath, "remote source not fetched offline")
 	if err != nil {
-		t.Fatalf("NewUnknownUnit(legacy): unexpected error: %v", err)
+		t.Fatalf("NewConfigUnknownUnit(legacy): unexpected error: %v", err)
 	}
 
 	allUnits := []repograph.Unit{appUnit, vpcUnit, legacyUnit}
@@ -122,9 +122,9 @@ func TestNewRepositoryGraph_OrderIndependent(t *testing.T) {
 
 func TestNewRepositoryGraph_DuplicateUnit(t *testing.T) {
 	p := repograph.MustRepoPath("units/a")
-	u, err := repograph.NewUnknownUnit(p, "reason")
+	u, err := repograph.NewConfigUnknownUnit(p, "reason")
 	if err != nil {
-		t.Fatalf("NewUnknownUnit: unexpected error: %v", err)
+		t.Fatalf("NewConfigUnknownUnit: unexpected error: %v", err)
 	}
 
 	_, err = repograph.NewRepositoryGraph([]repograph.Unit{u, u}, nil)
@@ -170,11 +170,11 @@ func TestNewRepositoryGraph_MissingModule(t *testing.T) {
 	}
 }
 
-func TestNewRepositoryGraph_UnknownUnitNeedsNoModule(t *testing.T) {
+func TestNewRepositoryGraph_ConfigUnknownUnitNeedsNoModule(t *testing.T) {
 	p := repograph.MustRepoPath("units/legacy")
-	u, err := repograph.NewUnknownUnit(p, "reason")
+	u, err := repograph.NewConfigUnknownUnit(p, "reason")
 	if err != nil {
-		t.Fatalf("NewUnknownUnit: unexpected error: %v", err)
+		t.Fatalf("NewConfigUnknownUnit: unexpected error: %v", err)
 	}
 
 	g, err := repograph.NewRepositoryGraph([]repograph.Unit{u}, nil)
@@ -183,6 +183,86 @@ func TestNewRepositoryGraph_UnknownUnitNeedsNoModule(t *testing.T) {
 	}
 	if len(g.Units()) != 1 {
 		t.Errorf("Units() = %+v, want 1 unit", g.Units())
+	}
+}
+
+func TestNewRepositoryGraph_ModuleUnknownUnitNeedsNoModule(t *testing.T) {
+	p := repograph.MustRepoPath("units/app")
+	u, err := repograph.NewModuleUnknownUnit(p, "remote-source", nil, nil)
+	if err != nil {
+		t.Fatalf("NewModuleUnknownUnit: unexpected error: %v", err)
+	}
+
+	g, err := repograph.NewRepositoryGraph([]repograph.Unit{u}, nil)
+	if err != nil {
+		t.Fatalf("NewRepositoryGraph: unexpected error: %v", err)
+	}
+	if len(g.Units()) != 1 {
+		t.Errorf("Units() = %+v, want 1 unit", g.Units())
+	}
+}
+
+func TestNewRepositoryGraph_ResolvedUnitWithUnknownSurfaceModule(t *testing.T) {
+	unitPath := repograph.MustRepoPath("units/app")
+	modulePath := repograph.MustRepoPath("modules/app")
+	u, err := repograph.NewResolvedUnit(unitPath, modulePath, nil, nil)
+	if err != nil {
+		t.Fatalf("NewResolvedUnit: unexpected error: %v", err)
+	}
+	m, err := repograph.NewUnknownModule(modulePath, "no-terraform-files")
+	if err != nil {
+		t.Fatalf("NewUnknownModule: unexpected error: %v", err)
+	}
+
+	g, err := repograph.NewRepositoryGraph([]repograph.Unit{u}, []repograph.Module{m})
+	if err != nil {
+		t.Fatalf("NewRepositoryGraph: unexpected error: %v", err)
+	}
+	mod, ok := g.ModuleOf(unitPath)
+	if !ok {
+		t.Fatalf("ModuleOf(app) ok = false, want true")
+	}
+	if _, surfaceOK := mod.Surface(); surfaceOK {
+		t.Errorf("ModuleOf(app).Surface() ok = true, want false (unknown surface)")
+	}
+}
+
+func TestNewRepositoryGraph_CycleAndSelfDependencyBuildWithoutHang(t *testing.T) {
+	aPath := repograph.MustRepoPath("units/a")
+	bPath := repograph.MustRepoPath("units/b")
+	modPath := repograph.MustRepoPath("modules/m")
+	pos := mustPosition(t, aPath, 1, 1)
+
+	depB := mustDependency(t, "b", bPath, pos)
+	depA := mustDependency(t, "a", aPath, pos)
+	depSelf := mustDependency(t, "self", aPath, pos)
+
+	a, err := repograph.NewResolvedUnit(aPath, modPath, []repograph.Dependency{depB, depSelf}, nil)
+	if err != nil {
+		t.Fatalf("NewResolvedUnit(a): unexpected error: %v", err)
+	}
+	b, err := repograph.NewResolvedUnit(bPath, modPath, []repograph.Dependency{depA}, nil)
+	if err != nil {
+		t.Fatalf("NewResolvedUnit(b): unexpected error: %v", err)
+	}
+	m := mustModule(t, modPath, mustSurface(t, nil, nil))
+
+	g, err := repograph.NewRepositoryGraph([]repograph.Unit{a, b}, []repograph.Module{m})
+	if err != nil {
+		t.Fatalf("NewRepositoryGraph: unexpected error: %v", err)
+	}
+
+	target, ok := g.DependencyTarget(aPath, "b")
+	if !ok || target.Path() != bPath {
+		t.Errorf("DependencyTarget(a, b) = (%+v, %v), want unit %v, true", target, ok, bPath)
+	}
+	target, ok = g.DependencyTarget(bPath, "a")
+	if !ok || target.Path() != aPath {
+		t.Errorf("DependencyTarget(b, a) = (%+v, %v), want unit %v, true", target, ok, aPath)
+	}
+	self, ok := g.DependencyTarget(aPath, "self")
+	if !ok || self.Path() != aPath {
+		t.Errorf("DependencyTarget(a, self) = (%+v, %v), want unit %v, true", self, ok, aPath)
 	}
 }
 
@@ -285,7 +365,11 @@ func unknownOutputRefs(g *repograph.RepositoryGraph) []repograph.UnitReference {
 		if !ok {
 			continue
 		}
-		if !mod.Surface().HasOutput(ur.Reference.Output()) {
+		surface, ok := mod.Surface()
+		if !ok {
+			continue
+		}
+		if !surface.HasOutput(ur.Reference.Output()) {
 			bad = append(bad, ur)
 		}
 	}

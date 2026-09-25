@@ -139,7 +139,10 @@ func (g *RepositoryGraph) Module(p RepoPath) (Module, bool) {
 }
 
 // ModuleOf returns the module a unit resolves to. It returns false if the
-// unit is absent from the graph or is Unknown.
+// unit is absent from the graph, or is module-unknown or config-unknown.
+// The returned Module's own Surface() may itself be unknown (a resolved
+// unit whose module directory could not be read): callers must check
+// Surface()'s ok result too.
 func (g *RepositoryGraph) ModuleOf(unit RepoPath) (Module, bool) {
 	u, ok := g.Unit(unit)
 	if !ok {
@@ -154,7 +157,8 @@ func (g *RepositoryGraph) ModuleOf(unit RepoPath) (Module, bool) {
 
 // DependencyTarget resolves hop 1 of the GRAPH-04 traversal: it returns the
 // unit that unit's dependency named dep points at. It returns false if the
-// unit, the dependency, or the target unit is missing from the graph.
+// unit or the dependency is missing from the graph, if the dependency is
+// unresolved, or if its target is not a unit in the graph.
 func (g *RepositoryGraph) DependencyTarget(unit RepoPath, dep string) (Unit, bool) {
 	u, ok := g.Unit(unit)
 	if !ok {
@@ -164,7 +168,11 @@ func (g *RepositoryGraph) DependencyTarget(unit RepoPath, dep string) (Unit, boo
 	if !ok {
 		return Unit{}, false
 	}
-	return g.Unit(d.Target())
+	target, ok := d.Target()
+	if !ok {
+		return Unit{}, false
+	}
+	return g.Unit(target)
 }
 
 // References returns every reference of every unit in the graph, sorted by

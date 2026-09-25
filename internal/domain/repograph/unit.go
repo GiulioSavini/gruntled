@@ -6,24 +6,46 @@ import (
 	"strconv"
 )
 
-// Dependency is a `dependency "<name>" { config_path = ... }` block, with
-// its target already resolved to a unit path.
+// Dependency is a `dependency "<name>" { ... }` block. It is either
+// resolved, in which case Target returns the repo-relative unit path it
+// points at, or unresolved (its config_path was dynamic, unresolvable, or
+// escaped the repository), in which case it is kept on the unit with a
+// non-empty UnresolvedReason instead of being dropped: dropping it would
+// turn a `dependency.X.outputs.Y` reference into a reference to an
+// undeclared dependency, a false-positive risk. Options carries the DIAG-03
+// facts (mock_outputs, enabled, skip_outputs, ...) Phase 3 needs regardless
+// of whether the dependency resolved.
 type Dependency struct {
-	name   string
-	target RepoPath
-	pos    Position
+	name             string
+	target           RepoPath
+	resolved         bool
+	unresolvedReason string
+	pos              Position
+	opts             DependencyOptions
 }
 
-// NewDependency validates its arguments and returns a Dependency. name must
-// be non-empty and target must be non-zero.
-func NewDependency(name string, target RepoPath, pos Position) (Dependency, error) {
+// NewDependency validates its arguments and returns a resolved Dependency.
+// name must be non-empty and target must be non-zero.
+func NewDependency(name string, target RepoPath, pos Position, opts DependencyOptions) (Dependency, error) {
 	if name == "" {
 		return Dependency{}, errors.New("repograph: invalid dependency: name must not be empty")
 	}
 	if target.IsZero() {
 		return Dependency{}, errors.New("repograph: invalid dependency " + strconv.Quote(name) + ": target must not be zero")
 	}
-	return Dependency{name: name, target: target, pos: pos}, nil
+	return Dependency{name: name, target: target, resolved: true, pos: pos, opts: opts}, nil
+}
+
+// NewUnresolvedDependency validates its arguments and returns a Dependency
+// whose target could not be determined. name and reason must be non-empty.
+func NewUnresolvedDependency(name, reason string, pos Position, opts DependencyOptions) (Dependency, error) {
+	if name == "" {
+		return Dependency{}, errors.New("repograph: invalid dependency: name must not be empty")
+	}
+	if reason == "" {
+		return Dependency{}, errors.New("repograph: invalid dependency " + strconv.Quote(name) + ": unresolved reason must not be empty")
+	}
+	return Dependency{name: name, resolved: false, unresolvedReason: reason, pos: pos, opts: opts}, nil
 }
 
 // Name returns the dependency block's label.
@@ -32,9 +54,26 @@ func (d Dependency) Name() string {
 }
 
 // Target returns the repo-relative path of the unit this dependency points
-// at.
-func (d Dependency) Target() RepoPath {
-	return d.target
+// at, and true, only when the dependency resolved. It returns the zero
+// RepoPath and false for an unresolved dependency, so a caller must handle
+// the unresolved case explicitly rather than silently traversing a zero
+// path.
+func (d Dependency) Target() (RepoPath, bool) {
+	if !d.resolved {
+		return RepoPath{}, false
+	}
+	return d.target, true
+}
+
+// UnresolvedReason returns why the dependency's target could not be
+// determined. It is empty for a resolved dependency.
+func (d Dependency) UnresolvedReason() string {
+	return d.unresolvedReason
+}
+
+// Options returns the dependency's DIAG-03 facts.
+func (d Dependency) Options() DependencyOptions {
+	return d.opts
 }
 
 // Pos returns the position of the dependency block.
@@ -77,25 +116,38 @@ func (r Reference) Pos() Position {
 	return r.pos
 }
 
-// UnitStatus is whether a Unit's module could be resolved offline.
+// UnitStatus is whether a Unit's own configuration and module could be
+// resolved offline.
 type UnitStatus int
 
 const (
-	// StatusResolved means the unit's module is known and local.
+	// StatusResolved means the unit's own config is known and its module
+	// path is known.
 	StatusResolved UnitStatus = iota + 1
-	// StatusUnknown means the unit's module could not be resolved
-	// offline; analyzers must stay silent about such units (design doc
-	// §7).
-	StatusUnknown
+	// StatusModuleUnknown means the unit's own config is known, but its
+	// module path or effective surface could not be determined offline
+	// (a remote or dynamic source, a missing module directory, or an
+	// unparsable module). Its dependencies and references are still kept:
+	// GRT001 checks the TARGET unit's module, not the referencing unit's,
+	// so references INTO other units' modules must stay checkable.
+	StatusModuleUnknown
+	// StatusConfigUnknown means the unit's own terragrunt.hcl, or a merged
+	// include, is broken or dynamic in a way this domain does not model.
+	// Such a unit carries no dependencies and no references and analyzers
+	// must stay silent about it.
+	StatusConfigUnknown
 )
 
-// String renders the status as "resolved" or "unknown".
+// String renders the status as "resolved", "module-unknown" or
+// "config-unknown".
 func (s UnitStatus) String() string {
 	switch s {
 	case StatusResolved:
 		return "resolved"
-	case StatusUnknown:
-		return "unknown"
+	case StatusModuleUnknown:
+		return "module-unknown"
+	case StatusConfigUnknown:
+		return "config-unknown"
 	default:
 		return "UnitStatus(" + strconv.Itoa(int(s)) + ")"
 	}
@@ -113,25 +165,18 @@ type Unit struct {
 	refs          []Reference
 }
 
-// NewResolvedUnit validates its arguments and returns a Unit whose module is
-// known. path and module must be non-zero, and dependency names must be
-// unique within the unit. deps is sorted by Name and refs by Pos, then
-// Dependency, then Output; both are cloned.
-func NewResolvedUnit(path, module RepoPath, deps []Dependency, refs []Reference) (Unit, error) {
-	if path.IsZero() {
-		return Unit{}, errors.New("repograph: invalid unit: path must not be zero")
-	}
-	if module.IsZero() {
-		return Unit{}, errors.New("repograph: invalid unit " + strconv.Quote(path.String()) + ": module must not be zero")
-	}
-
+// sortAndValidateDepsRefs sorts deps by Name and refs by Pos (then
+// Dependency, then Output), clones both defensively, and rejects duplicate
+// dependency names. It is shared by NewResolvedUnit and
+// NewModuleUnknownUnit, the only two constructors that keep deps/refs.
+func sortAndValidateDepsRefs(unitPath RepoPath, deps []Dependency, refs []Reference) ([]Dependency, []Reference, error) {
 	sortedDeps := slices.Clone(deps)
 	slices.SortFunc(sortedDeps, func(a, b Dependency) int {
 		return compareStrings(a.name, b.name)
 	})
 	for i := 1; i < len(sortedDeps); i++ {
 		if sortedDeps[i].name == sortedDeps[i-1].name {
-			return Unit{}, errors.New("repograph: invalid unit " + strconv.Quote(path.String()) + ": duplicate dependency name " + strconv.Quote(sortedDeps[i].name))
+			return nil, nil, errors.New("repograph: invalid unit " + strconv.Quote(unitPath.String()) + ": duplicate dependency name " + strconv.Quote(sortedDeps[i].name))
 		}
 	}
 
@@ -146,6 +191,26 @@ func NewResolvedUnit(path, module RepoPath, deps []Dependency, refs []Reference)
 		return compareStrings(a.output, b.output)
 	})
 
+	return sortedDeps, sortedRefs, nil
+}
+
+// NewResolvedUnit validates its arguments and returns a Unit whose own
+// config and module are both known. path and module must be non-zero, and
+// dependency names must be unique within the unit. deps is sorted by Name
+// and refs by Pos, then Dependency, then Output; both are cloned.
+func NewResolvedUnit(path, module RepoPath, deps []Dependency, refs []Reference) (Unit, error) {
+	if path.IsZero() {
+		return Unit{}, errors.New("repograph: invalid unit: path must not be zero")
+	}
+	if module.IsZero() {
+		return Unit{}, errors.New("repograph: invalid unit " + strconv.Quote(path.String()) + ": module must not be zero")
+	}
+
+	sortedDeps, sortedRefs, err := sortAndValidateDepsRefs(path, deps, refs)
+	if err != nil {
+		return Unit{}, err
+	}
+
 	return Unit{
 		path:   path,
 		status: StatusResolved,
@@ -155,17 +220,45 @@ func NewResolvedUnit(path, module RepoPath, deps []Dependency, refs []Reference)
 	}, nil
 }
 
-// NewUnknownUnit validates its arguments and returns a Unit whose module
-// could not be resolved offline. reason must be non-empty. An Unknown unit
-// has no dependencies and no references.
-func NewUnknownUnit(path RepoPath, reason string) (Unit, error) {
+// NewModuleUnknownUnit validates its arguments and returns a Unit whose own
+// config is known but whose module path or effective surface could not be
+// determined offline. reason must be non-empty. Unlike a config-unknown
+// unit, its dependencies and references are validated, sorted and kept: a
+// dependency name must still be unique within the unit.
+func NewModuleUnknownUnit(path RepoPath, reason string, deps []Dependency, refs []Reference) (Unit, error) {
 	if path.IsZero() {
 		return Unit{}, errors.New("repograph: invalid unit: path must not be zero")
 	}
 	if reason == "" {
 		return Unit{}, errors.New("repograph: invalid unit " + strconv.Quote(path.String()) + ": unknown reason must not be empty")
 	}
-	return Unit{path: path, status: StatusUnknown, unknownReason: reason}, nil
+
+	sortedDeps, sortedRefs, err := sortAndValidateDepsRefs(path, deps, refs)
+	if err != nil {
+		return Unit{}, err
+	}
+
+	return Unit{
+		path:          path,
+		status:        StatusModuleUnknown,
+		unknownReason: reason,
+		deps:          sortedDeps,
+		refs:          sortedRefs,
+	}, nil
+}
+
+// NewConfigUnknownUnit validates its arguments and returns a Unit whose own
+// config could not be determined offline (its terragrunt.hcl, or a merged
+// include, is broken or dynamic). reason must be non-empty. A config-unknown
+// unit has no dependencies and no references.
+func NewConfigUnknownUnit(path RepoPath, reason string) (Unit, error) {
+	if path.IsZero() {
+		return Unit{}, errors.New("repograph: invalid unit: path must not be zero")
+	}
+	if reason == "" {
+		return Unit{}, errors.New("repograph: invalid unit " + strconv.Quote(path.String()) + ": unknown reason must not be empty")
+	}
+	return Unit{path: path, status: StatusConfigUnknown, unknownReason: reason}, nil
 }
 
 // Path returns the unit's repo-relative path.
@@ -173,14 +266,15 @@ func (u Unit) Path() RepoPath {
 	return u.path
 }
 
-// Status reports whether the unit's module is resolved or unknown.
+// Status reports whether the unit is resolved, module-unknown or
+// config-unknown.
 func (u Unit) Status() UnitStatus {
 	return u.status
 }
 
 // Module returns the unit's module path and true when the unit is
-// resolved; it returns the zero RepoPath and false when the unit is
-// Unknown.
+// resolved; it returns the zero RepoPath and false for a module-unknown or
+// config-unknown unit.
 func (u Unit) Module() (RepoPath, bool) {
 	if u.status != StatusResolved {
 		return RepoPath{}, false
@@ -188,8 +282,8 @@ func (u Unit) Module() (RepoPath, bool) {
 	return u.module, true
 }
 
-// UnknownReason returns why an Unknown unit could not be resolved offline.
-// It is empty for a resolved unit.
+// UnknownReason returns why a module-unknown or config-unknown unit could
+// not be fully resolved offline. It is empty for a resolved unit.
 func (u Unit) UnknownReason() string {
 	return u.unknownReason
 }
