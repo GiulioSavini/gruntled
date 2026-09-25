@@ -41,10 +41,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. Analyzers and graph queries can be exercised in unit tests using hand-built domain objects only — no filesystem access, no HCL parsing
   3. Given a `Spec` (unit count, include nesting depth, dependency fanout, seed), the generator produces a Terragrunt repository tree deterministically — the same `Spec` and seed produce a byte-identical tree on repeated runs
   4. The generator can inject at least one known error kind (e.g. a bad output reference) and return a manifest describing the diagnostics a correct analyzer should report against the generated tree
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 01-01: TBD
+- [ ] 01-01-PLAN.md — Go module bootstrap + pure domain: repograph (value objects, RepositoryGraph aggregate, pure queries) and diagnostic (Diagnostic, Set, Diff)
+- [ ] 01-02-PLAN.md — ARCH-01 enforcement: architecture check script + self-test proving each rule fails + 2-job CI on master
+- [ ] 01-03-PLAN.md — synthrepo: deterministic Render/Generate with pinned digest and BadOutputRef injection manifest (exact oracle)
 
 ### Phase 2: Parsing & Graph Construction
 **Goal**: gruntled walks a real Terragrunt repository on disk and builds a complete, correctly-resolved `RepositoryGraph` — every unit, the module it resolves to, and that module's public surface — using only structural HCL decoding, never evaluating an expression to a value.
@@ -98,7 +100,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Domain Foundation & Test Substrate | 0/TBD | Not started | - |
+| 1. Domain Foundation & Test Substrate | 0/3 | Not started | - |
 | 2. Parsing & Graph Construction | 0/TBD | Not started | - |
 | 3. GRT001 Diagnostic & CLI | 0/TBD | Not started | - |
 | 4. Real-Repo Validation Experiment | 0/TBD | Not started | - |
