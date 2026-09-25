@@ -19,6 +19,17 @@ func mapFS(tree synthrepo.Tree) fstest.MapFS {
 	return m
 }
 
+// filesFS builds an fstest.MapFS from a map of repo-relative path to file
+// content, for tests that write out a small hand-written fixture tree
+// inline rather than through the synthrepo generator.
+func filesFS(files map[string]string) fstest.MapFS {
+	m := fstest.MapFS{}
+	for p, content := range files {
+		m[p] = &fstest.MapFile{Data: []byte(content)}
+	}
+	return m
+}
+
 // countingFS wraps an fs.FS and records how many times ReadFile was called
 // for each name, so a parse-once test can assert every file was read at
 // most once no matter how many distinct callers ask for it. Stat, ReadDir,

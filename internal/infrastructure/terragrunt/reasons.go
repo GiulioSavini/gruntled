@@ -1,0 +1,109 @@
+package terragrunt
+
+// Config-unknown reasons (ports.UnitConfig.ConfigUnknownReason). A
+// config-unknown unit carries no dependencies and no references: its own
+// terragrunt.hcl, or a merged include, is broken or uses a construct this
+// domain does not model. Checked in loader.go's resolveUnit, in the fixed
+// order documented there; the first one that applies wins.
+const (
+	// ReasonSyntaxError means the unit's own terragrunt.hcl, or a merged
+	// include file, has an HCL syntax error. GRT100 is emitted once for
+	// that file (see fileCache.syntaxDiagnostics).
+	ReasonSyntaxError = "syntax-error"
+	// ReasonUnreadableConfig means the unit's own terragrunt.hcl, or an
+	// include file it resolved to, could not be read (fs.ReadFile failed),
+	// even though it exists per fs.Stat.
+	ReasonUnreadableConfig = "unreadable-config"
+	// ReasonJSONConfigUnsupported means the unit directory holds
+	// terragrunt.hcl.json. Terragrunt itself prefers the JSON variant over
+	// terragrunt.hcl when both exist (DefaultTerragruntConfigPaths lists
+	// JSON first); this domain does not parse JSON Terragrunt configs.
+	ReasonJSONConfigUnsupported = "json-config-unsupported"
+	// ReasonAutoincludeUnsupported means the unit directory holds
+	// terragrunt.autoinclude.hcl, which Terragrunt auto-merges as a Stacks
+	// feature this domain does not model.
+	ReasonAutoincludeUnsupported = "autoinclude-unsupported"
+	// ReasonInvalidInclude means an include block (or the unit's set of
+	// include blocks) is structurally invalid: more than one label, a
+	// duplicate label, more than one bare include, a missing path
+	// attribute, a merge_strategy that is not a literal in {"", "shallow",
+	// "deep", "no_merge"}, the same file included twice, or a unit
+	// including its own terragrunt.hcl.
+	ReasonInvalidInclude = "invalid-include"
+	// ReasonIncludeDynamicPath means an include's path attribute failed
+	// closed evaluation (a variable, or a function outside the six PARSE-02
+	// path functions, such as get_env or local.x).
+	ReasonIncludeDynamicPath = "include-dynamic-path"
+	// ReasonIncludeOutsideRepo means an include's evaluated path escapes
+	// the repository (a real absolute path, or a relative path resolving
+	// above the repo root).
+	ReasonIncludeOutsideRepo = "include-outside-repo"
+	// ReasonIncludeNotFound means an include's resolved path is not an
+	// existing regular file in the repository.
+	ReasonIncludeNotFound = "include-not-found"
+	// ReasonNestedInclude means an included file itself contains an
+	// include block, which Terragrunt itself rejects
+	// (TooManyLevelsOfInheritanceError): only a single level of include is
+	// supported.
+	ReasonNestedInclude = "nested-include"
+	// ReasonInvalidTerraformBlock means one effective file (the unit's own
+	// body, or a merged include) has more than one top-level terraform
+	// block.
+	ReasonInvalidTerraformBlock = "invalid-terraform-block"
+	// ReasonInvalidDependency means a dependency block is structurally
+	// invalid (label count other than one, a duplicate label within a
+	// single file, an expansion block), or a dependency's config_path is
+	// missing from every effective file that declares that label, or a
+	// domain constructor rejected an otherwise-validated dependency (an
+	// internal invariant violation this loader never lets escalate to a
+	// crash or a returned error).
+	ReasonInvalidDependency = "invalid-dependency"
+)
+
+// Module-unknown reasons (ports.UnitConfig.ModuleUnknownReason). A
+// module-unknown unit's own configuration is known and its dependencies and
+// references are kept: GRT001 (Phase 3) checks the TARGET unit's module, not
+// the referencing unit's, so a unit whose OWN module is unknown must not
+// poison references made INTO it by other units.
+const (
+	// ReasonSourceDynamicPath means the effective terraform.source
+	// attribute failed closed evaluation.
+	ReasonSourceDynamicPath = "source-dynamic-path"
+	// ReasonSourceOutsideRepo means the source classified as local, but its
+	// root (or the final module path once joined with a "//" subdir)
+	// resolves outside the repository -- including a real absolute path
+	// such as "/opt/shared-modules/vpc" (SRC-04).
+	ReasonSourceOutsideRepo = "source-outside-repo"
+	// ReasonRemoteSource means the source classified as remote (GRAPH-03):
+	// a forced getter, a URL scheme, or a host shorthand. gruntled never
+	// downloads a remote source.
+	ReasonRemoteSource = "remote-source"
+	// ReasonInvalidSource means the source is empty, malformed, or a
+	// construct this domain does not model (a query string on a local
+	// path, a "file://" URL, a backslash).
+	ReasonInvalidSource = "invalid-source"
+	// ReasonGenerateMayDeclareOutputs means an effective generate block's
+	// contents are not provably free of an `output` declaration: contents
+	// missing, not a plain string template, or a literal template whose
+	// text matches the output-declaration pattern.
+	ReasonGenerateMayDeclareOutputs = "generate-may-declare-outputs"
+	// ReasonUnitDirOverlaysModule means the unit's source points somewhere
+	// other than its own directory, and the unit directory itself holds a
+	// .tf/.tf.json/.tofu/.tofu.json file: Terragrunt copies the unit
+	// directory's files over the module's working copy, so the effective
+	// module surface is not the module directory's surface alone.
+	ReasonUnitDirOverlaysModule = "unit-dir-overlays-module"
+)
+
+// Unresolved-dependency reasons (repograph.NewUnresolvedDependency's reason
+// argument). The dependency itself is kept on the unit, never dropped: a
+// dropped dependency would turn a dependency.X.outputs.Y reference into a
+// reference to an undeclared dependency, a false-positive risk.
+const (
+	// ReasonConfigPathDynamic means the dependency's config_path attribute
+	// failed closed evaluation.
+	ReasonConfigPathDynamic = "config-path-dynamic"
+	// ReasonConfigPathOutsideRepo means the dependency's evaluated
+	// config_path escapes the repository.
+	ReasonConfigPathOutsideRepo = "config-path-outside-repo"
+)
