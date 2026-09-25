@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: milestone
 status: planning
-stopped_at: Completed 01-03-PLAN.md (synthetic repo generator, VALID-01, Phase 1 complete)
-last_updated: "2026-09-25T11:14:38.203Z"
-last_activity: "2026-09-25 — Plan 01-03 executed: internal/testsupport/synthrepo Render/Generate, pinned digest, BadOutputRef injection with exact Manifest oracle; CI green on pushed master"
+stopped_at: Completed 02-01-PLAN.md (domain unknown-state model, GRAPH-03/GRAPH-04/PARSE-04, Phase 2 Plan 1 of 5)
+last_updated: "2026-09-25T11:33:00.000Z"
+last_activity: "2026-09-25 — Plan 02-01 executed: repograph config-unknown/module-unknown split, unresolved dependencies, DependencyOptions tri-states, unknown-surface modules, diagnostic Key.Unit; CI green on pushed master"
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 8
-  completed_plans: 3
-  percent: 25
+  completed_plans: 4
+  percent: 50
 ---
 
 # Project State
@@ -21,23 +21,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-01)
 
 **Core value:** Tell the user, before they run anything slow, that `dependency.X.outputs.Y` does not exist in the module it points to.
-**Current focus:** Phase 1 complete — next up: Phase 2 (Parsing & Graph Construction)
+**Current focus:** Phase 2 (Parsing & Graph Construction) — Plan 1 of 5 complete
 
 ## Current Position
 
-Phase: 1 of 4 (Domain Foundation & Test Substrate) — complete
-Plan: 3 of 3 in current phase — complete
-Status: Phase 1 complete, ready to plan Phase 2
-Last activity: 2026-09-25 — Plan 01-03 executed: internal/testsupport/synthrepo Render/Generate, pinned digest, BadOutputRef injection with exact Manifest oracle; CI green on pushed master
+Phase: 2 of 4 (Parsing & Graph Construction) — in progress
+Plan: 1 of 5 in current phase — complete
+Status: Ready to execute Plan 02-02
+Last activity: 2026-09-25 — Plan 02-01 executed: repograph config-unknown/module-unknown split, unresolved dependencies, DependencyOptions tri-states, unknown-surface modules, diagnostic Key.Unit; CI green on pushed master
 
-Progress: [██░░░░░░░░] 25%
+Progress: [█████░░░░░] 50%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3
-- Average duration: ~23 min
-- Total execution time: 1.17 hours
+- Total plans completed: 4
+- Average duration: ~24 min
+- Total execution time: 1.58 hours
 
 **By Phase:**
 
@@ -46,9 +46,10 @@ Progress: [██░░░░░░░░] 25%
 | Phase 1 P1 | 35min | 3 tasks | 14 files |
 | Phase 1 P2 | 15min | 2 tasks | 3 files |
 | Phase 1 P3 | 20min | 2 tasks | 6 files |
+| Phase 2 P1 | 25min | 2 tasks | 9 files |
 
 **Recent Trend:**
-- Last 5 plans: 35min, 15min, 20min
+- Last 5 plans: 35min, 15min, 20min, 25min
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -69,6 +70,9 @@ Recent decisions affecting current work:
 - [Phase 1]: domain-external-deps rule is an allowlist match on `^github.com/GiulioSavini/gruntled/internal/domain/`, not a blacklist of specific libraries, so it also catches future internal-layer leaks a blacklist wouldn't name
 - [Phase 1]: ARCH-01 is enforced by `scripts/check-architecture.sh` (compile gate, non-vacuous guard, domain-direct-io, domain-external-deps, binary-links-testsupport) plus a 7-case self-test proving each rule can genuinely fail; wired into a 2-job GitHub Actions workflow (`check`, `architecture`), both green on master
 - [Phase 01]: VALID-01: synthrepo Render/Generate are stdlib-only, math/rand/v2 PCG with a documented fixed draw order; Manifest.Expected proven exact by an independent regexp-based oracle scan in generate_test.go
+- [Phase 02 P1]: Dependency.Target() and Module.Surface() both changed from single-value to (value, bool) returns so every caller must handle the unresolved/unknown case explicitly, rather than adding separate IsResolved()/IsKnown() predicates
+- [Phase 02 P1]: UnitStatus split into StatusResolved / StatusModuleUnknown / StatusConfigUnknown — a module-unknown unit keeps its deps/refs (GRT001 checks the target unit's module, not the referencing unit's) while a config-unknown unit carries none
+- [Phase 02 P1]: diagnostic.Key gained Unit (a shared include's reference is evaluated once per including unit, so two units can resolve the same dependency differently) but deliberately excludes Severity (a severity-only change is not a new finding); both documented and tested
 
 ### Pending Todos
 
@@ -81,6 +85,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-09-25T10:35:58.846Z
-Stopped at: Completed 01-03-PLAN.md (synthetic repo generator, VALID-01, Phase 1 complete)
+Last session: 2026-09-25T11:33:00.000Z
+Stopped at: Completed 02-01-PLAN.md (domain unknown-state model, GRAPH-03/GRAPH-04/PARSE-04, Phase 2 Plan 1 of 5)
 Resume file: None
