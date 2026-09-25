@@ -1,8 +1,8 @@
 package repograph
 
 import (
-	"fmt"
 	"slices"
+	"strconv"
 )
 
 // UnitReference pairs a Reference with the Unit it was declared on, so a
@@ -20,7 +20,7 @@ type DuplicateUnitError struct {
 }
 
 func (e *DuplicateUnitError) Error() string {
-	return fmt.Sprintf("repograph: duplicate unit path %q", e.Path.String())
+	return "repograph: duplicate unit path " + strconv.Quote(e.Path.String())
 }
 
 // DuplicateModuleError is returned by NewRepositoryGraph when two modules
@@ -30,7 +30,7 @@ type DuplicateModuleError struct {
 }
 
 func (e *DuplicateModuleError) Error() string {
-	return fmt.Sprintf("repograph: duplicate module path %q", e.Path.String())
+	return "repograph: duplicate module path " + strconv.Quote(e.Path.String())
 }
 
 // MissingModuleError is returned by NewRepositoryGraph when a resolved
@@ -41,7 +41,7 @@ type MissingModuleError struct {
 }
 
 func (e *MissingModuleError) Error() string {
-	return fmt.Sprintf("repograph: unit %q resolves to module %q, which is not in the graph", e.Unit.String(), e.Module.String())
+	return "repograph: unit " + strconv.Quote(e.Unit.String()) + " resolves to module " + strconv.Quote(e.Module.String()) + ", which is not in the graph"
 }
 
 // RepositoryGraph is the aggregate root over a repository's units and

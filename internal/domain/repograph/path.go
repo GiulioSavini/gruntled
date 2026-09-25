@@ -6,8 +6,9 @@
 package repograph
 
 import (
-	"fmt"
+	"errors"
 	"path"
+	"strconv"
 	"strings"
 )
 
@@ -24,19 +25,19 @@ type RepoPath struct {
 // not be (or start with) "..". The repository root is spelled ".".
 func NewRepoPath(s string) (RepoPath, error) {
 	if s == "" {
-		return RepoPath{}, fmt.Errorf("repograph: invalid repo path %q: must not be empty", s)
+		return RepoPath{}, errors.New("repograph: invalid repo path " + strconv.Quote(s) + ": must not be empty")
 	}
 	if strings.Contains(s, `\`) {
-		return RepoPath{}, fmt.Errorf("repograph: invalid repo path %q: must not contain a backslash", s)
+		return RepoPath{}, errors.New("repograph: invalid repo path " + strconv.Quote(s) + ": must not contain a backslash")
 	}
 	if strings.HasPrefix(s, "/") {
-		return RepoPath{}, fmt.Errorf("repograph: invalid repo path %q: must not be absolute", s)
+		return RepoPath{}, errors.New("repograph: invalid repo path " + strconv.Quote(s) + ": must not be absolute")
 	}
 	if s == ".." || strings.HasPrefix(s, "../") {
-		return RepoPath{}, fmt.Errorf("repograph: invalid repo path %q: must not escape the repository root", s)
+		return RepoPath{}, errors.New("repograph: invalid repo path " + strconv.Quote(s) + ": must not escape the repository root")
 	}
 	if path.Clean(s) != s {
-		return RepoPath{}, fmt.Errorf("repograph: invalid repo path %q: must already be clean (got %q)", s, path.Clean(s))
+		return RepoPath{}, errors.New("repograph: invalid repo path " + strconv.Quote(s) + ": must already be clean (got " + strconv.Quote(path.Clean(s)) + ")")
 	}
 	return RepoPath{p: s}, nil
 }

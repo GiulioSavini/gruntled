@@ -51,6 +51,40 @@ func TestNewSetDropsDuplicatesByKey(t *testing.T) {
 	}
 }
 
+func TestNewSetDropsNonAdjacentDuplicateKeys(t *testing.T) {
+	// Same position and code. Compare sorts these as
+	// {error,m2}, {warning,m1}, {warning,m2}, so the two "m2" diagnostics,
+	// which share a Key, are not neighbours after sorting.
+	errM2 := mustDiagnostic(t, diagnostic.CodeUnknownOutput, diagnostic.SeverityError, "a.hcl", 1, 1, "m2")
+	warnM1 := mustDiagnostic(t, diagnostic.CodeUnknownOutput, diagnostic.SeverityWarning, "a.hcl", 1, 1, "m1")
+	warnM2 := mustDiagnostic(t, diagnostic.CodeUnknownOutput, diagnostic.SeverityWarning, "a.hcl", 1, 1, "m2")
+
+	for _, in := range [][]diagnostic.Diagnostic{
+		{errM2, warnM1, warnM2},
+		{warnM2, warnM1, errM2},
+		{warnM1, warnM2, errM2},
+	} {
+		s := diagnostic.NewSet(in...)
+		if s.Len() != 2 {
+			t.Fatalf("NewSet(%v).Len() = %d, want 2", in, s.Len())
+		}
+		keys := make(map[diagnostic.Key]int)
+		for _, d := range s.All() {
+			keys[d.Key()]++
+		}
+		for k, n := range keys {
+			if n != 1 {
+				t.Errorf("Key %+v appears %d times, want 1", k, n)
+			}
+		}
+		// The error wins the collision on the shared "m2" Key.
+		all := s.All()
+		if all[0] != errM2 || all[1] != warnM1 {
+			t.Errorf("All() = %v, want [errM2 warnM1]", all)
+		}
+	}
+}
+
 func TestDiff(t *testing.T) {
 	a := mustDiagnostic(t, diagnostic.CodeUnknownOutput, diagnostic.SeverityError, "a.hcl", 1, 1, "a")
 	b := mustDiagnostic(t, diagnostic.CodeUnknownOutput, diagnostic.SeverityError, "a.hcl", 2, 1, "b")

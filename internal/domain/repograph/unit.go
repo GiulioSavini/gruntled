@@ -1,8 +1,9 @@
 package repograph
 
 import (
-	"fmt"
+	"errors"
 	"slices"
+	"strconv"
 )
 
 // Dependency is a `dependency "<name>" { config_path = ... }` block, with
@@ -17,10 +18,10 @@ type Dependency struct {
 // be non-empty and target must be non-zero.
 func NewDependency(name string, target RepoPath, pos Position) (Dependency, error) {
 	if name == "" {
-		return Dependency{}, fmt.Errorf("repograph: invalid dependency: name must not be empty")
+		return Dependency{}, errors.New("repograph: invalid dependency: name must not be empty")
 	}
 	if target.IsZero() {
-		return Dependency{}, fmt.Errorf("repograph: invalid dependency %q: target must not be zero", name)
+		return Dependency{}, errors.New("repograph: invalid dependency " + strconv.Quote(name) + ": target must not be zero")
 	}
 	return Dependency{name: name, target: target, pos: pos}, nil
 }
@@ -53,10 +54,10 @@ type Reference struct {
 // dependency and output must be non-empty.
 func NewReference(dependency, output string, pos Position) (Reference, error) {
 	if dependency == "" {
-		return Reference{}, fmt.Errorf("repograph: invalid reference: dependency must not be empty")
+		return Reference{}, errors.New("repograph: invalid reference: dependency must not be empty")
 	}
 	if output == "" {
-		return Reference{}, fmt.Errorf("repograph: invalid reference: output must not be empty")
+		return Reference{}, errors.New("repograph: invalid reference: output must not be empty")
 	}
 	return Reference{dependency: dependency, output: output, pos: pos}, nil
 }
@@ -96,7 +97,7 @@ func (s UnitStatus) String() string {
 	case StatusUnknown:
 		return "unknown"
 	default:
-		return fmt.Sprintf("UnitStatus(%d)", int(s))
+		return "UnitStatus(" + strconv.Itoa(int(s)) + ")"
 	}
 }
 
@@ -118,10 +119,10 @@ type Unit struct {
 // Dependency, then Output; both are cloned.
 func NewResolvedUnit(path, module RepoPath, deps []Dependency, refs []Reference) (Unit, error) {
 	if path.IsZero() {
-		return Unit{}, fmt.Errorf("repograph: invalid unit: path must not be zero")
+		return Unit{}, errors.New("repograph: invalid unit: path must not be zero")
 	}
 	if module.IsZero() {
-		return Unit{}, fmt.Errorf("repograph: invalid unit %q: module must not be zero", path.String())
+		return Unit{}, errors.New("repograph: invalid unit " + strconv.Quote(path.String()) + ": module must not be zero")
 	}
 
 	sortedDeps := slices.Clone(deps)
@@ -130,7 +131,7 @@ func NewResolvedUnit(path, module RepoPath, deps []Dependency, refs []Reference)
 	})
 	for i := 1; i < len(sortedDeps); i++ {
 		if sortedDeps[i].name == sortedDeps[i-1].name {
-			return Unit{}, fmt.Errorf("repograph: invalid unit %q: duplicate dependency name %q", path.String(), sortedDeps[i].name)
+			return Unit{}, errors.New("repograph: invalid unit " + strconv.Quote(path.String()) + ": duplicate dependency name " + strconv.Quote(sortedDeps[i].name))
 		}
 	}
 
@@ -159,10 +160,10 @@ func NewResolvedUnit(path, module RepoPath, deps []Dependency, refs []Reference)
 // has no dependencies and no references.
 func NewUnknownUnit(path RepoPath, reason string) (Unit, error) {
 	if path.IsZero() {
-		return Unit{}, fmt.Errorf("repograph: invalid unit: path must not be zero")
+		return Unit{}, errors.New("repograph: invalid unit: path must not be zero")
 	}
 	if reason == "" {
-		return Unit{}, fmt.Errorf("repograph: invalid unit %q: unknown reason must not be empty", path.String())
+		return Unit{}, errors.New("repograph: invalid unit " + strconv.Quote(path.String()) + ": unknown reason must not be empty")
 	}
 	return Unit{path: path, status: StatusUnknown, unknownReason: reason}, nil
 }

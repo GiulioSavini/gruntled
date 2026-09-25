@@ -32,31 +32,27 @@ mkcopy() {
 run_case() {
   local name="$1"
   local copy="$2"
-  local expect="$3" # "zero" or "nonzero"
+  local expect="$3" # "zero", or the name of the rule that must fail
   local rc=0
   bash "$copy/scripts/check-architecture.sh" >/tmp/tca-out.$$ 2>/tmp/tca-err.$$ || rc=$?
-  case "$expect" in
-    zero)
-      if [ "$rc" -eq 0 ]; then
-        echo "PASS $name"
-      else
-        echo "FAIL $name (expected exit 0, got $rc)"
-        cat /tmp/tca-out.$$ /tmp/tca-err.$$ >&2
-        rm -f /tmp/tca-out.$$ /tmp/tca-err.$$
-        exit 1
-      fi
-      ;;
-    nonzero)
-      if [ "$rc" -ne 0 ]; then
-        echo "PASS $name"
-      else
-        echo "FAIL $name (expected non-zero exit, got 0)"
-        cat /tmp/tca-out.$$ /tmp/tca-err.$$ >&2
-        rm -f /tmp/tca-out.$$ /tmp/tca-err.$$
-        exit 1
-      fi
-      ;;
-  esac
+  if [ "$expect" = zero ]; then
+    if [ "$rc" -ne 0 ]; then
+      echo "FAIL $name (expected exit 0, got $rc)"
+      cat /tmp/tca-out.$$ /tmp/tca-err.$$ >&2
+      rm -f /tmp/tca-out.$$ /tmp/tca-err.$$
+      exit 1
+    fi
+  else
+    # A non-zero exit is not enough: the failure must come from the rule
+    # this case targets, or the case proves nothing about that rule.
+    if [ "$rc" -eq 0 ] || ! grep -q -x -F "=== RULE FAILED: ${expect} ===" /tmp/tca-err.$$; then
+      echo "FAIL $name (expected rule ${expect} to fail, got exit $rc)"
+      cat /tmp/tca-out.$$ /tmp/tca-err.$$ >&2
+      rm -f /tmp/tca-out.$$ /tmp/tca-err.$$
+      exit 1
+    fi
+  fi
+  echo "PASS $name"
   rm -f /tmp/tca-out.$$ /tmp/tca-err.$$
 }
 
@@ -71,7 +67,7 @@ package repograph
 
 import _ "os"
 EOF
-run_case "direct-os" "$copy" nonzero
+run_case "direct-os" "$copy" domain-stdlib-allowlist
 
 # --- xtest-os: domain external test package imports os ---------------------
 copy=$(mkcopy)
@@ -85,7 +81,69 @@ import (
 
 func TestZZProbe(t *testing.T) {}
 EOF
-run_case "xtest-os" "$copy" nonzero
+run_case "xtest-os" "$copy" domain-stdlib-allowlist
+
+# --- fmt: domain prints via fmt (the old blocklist let this through) -------
+copy=$(mkcopy)
+cat >"$copy/internal/domain/repograph/zz_probe.go" <<'EOF'
+package repograph
+
+import "fmt"
+
+func zzProbe() { fmt.Println("hello") }
+EOF
+run_case "fmt" "$copy" domain-stdlib-allowlist
+
+# --- log: domain logs to stderr ----------------------------------------------
+copy=$(mkcopy)
+cat >"$copy/internal/domain/repograph/zz_probe.go" <<'EOF'
+package repograph
+
+import "log"
+
+func zzProbe() { log.Print("hello") }
+EOF
+run_case "log" "$copy" domain-stdlib-allowlist
+
+# --- unsafe: domain imports unsafe --------------------------------------------
+copy=$(mkcopy)
+cat >"$copy/internal/domain/repograph/zz_probe.go" <<'EOF'
+package repograph
+
+import "unsafe"
+
+var zzProbe = unsafe.Sizeof(0)
+EOF
+run_case "unsafe" "$copy" domain-stdlib-allowlist
+
+# --- windows-file: os imported from a file linux never compiles --------------
+copy=$(mkcopy)
+cat >"$copy/internal/domain/repograph/zz_probe_windows.go" <<'EOF'
+package repograph
+
+import _ "os"
+EOF
+run_case "windows-file" "$copy" domain-platform-neutral
+
+# --- build-tag: os imported behind a //go:build line --------------------------
+copy=$(mkcopy)
+cat >"$copy/internal/domain/repograph/zz_probe.go" <<'EOF'
+//go:build ignore
+
+package repograph
+
+import _ "os"
+EOF
+run_case "build-tag" "$copy" domain-platform-neutral
+
+# --- tagged-test: a test file with a build constraint ------------------------
+copy=$(mkcopy)
+cat >"$copy/internal/domain/repograph/zz_probe_test.go" <<'EOF'
+//go:build linux
+
+package repograph_test
+EOF
+run_case "tagged-test" "$copy" domain-platform-neutral
 
 # --- external-dep: domain imports a non-domain internal package ------------
 copy=$(mkcopy)
@@ -100,7 +158,7 @@ package repograph
 
 import _ "${MODULE}/internal/infrastructure/zzprobe"
 EOF
-run_case "external-dep" "$copy" nonzero
+run_case "external-dep" "$copy" domain-external-deps
 
 # --- broken-code: domain file fails to compile ------------------------------
 copy=$(mkcopy)
@@ -109,7 +167,7 @@ package repograph
 
 func {
 EOF
-run_case "broken-code" "$copy" nonzero
+run_case "broken-code" "$copy" compile-gate
 
 # --- testsupport-linked: cmd/gruntled links internal/testsupport -----------
 copy=$(mkcopy)
@@ -124,11 +182,14 @@ package main
 
 import _ "${MODULE}/internal/testsupport/zzprobe"
 EOF
-run_case "testsupport-linked" "$copy" nonzero
+run_case "testsupport-linked" "$copy" binary-links-testsupport
 
-# --- vacuous: internal/domain missing entirely ------------------------------
+# --- vacuous: internal/domain exists but holds no packages ------------------
+# (Deleting the directory outright trips compile-gate first, which would not
+# prove anything about the guard.)
 copy=$(mkcopy)
 rm -rf "$copy/internal/domain"
-run_case "vacuous" "$copy" nonzero
+mkdir -p "$copy/internal/domain"
+run_case "vacuous" "$copy" non-vacuous-guard
 
 echo "all architecture self-tests passed"

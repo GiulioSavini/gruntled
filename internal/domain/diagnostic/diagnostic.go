@@ -5,7 +5,8 @@
 package diagnostic
 
 import (
-	"fmt"
+	"errors"
+	"strconv"
 
 	"github.com/GiulioSavini/gruntled/internal/domain/repograph"
 )
@@ -27,7 +28,7 @@ const (
 func ParseCode(s string) (Code, error) {
 	c := Code(s)
 	if !c.Valid() {
-		return "", fmt.Errorf("diagnostic: invalid code %q: must be \"GRT\" followed by exactly 3 digits", s)
+		return "", errors.New("diagnostic: invalid code " + strconv.Quote(s) + ": must be \"GRT\" followed by exactly 3 digits")
 	}
 	return c, nil
 }
@@ -67,7 +68,7 @@ func (s Severity) String() string {
 	case SeverityWarning:
 		return "warning"
 	default:
-		return fmt.Sprintf("Severity(%d)", int(s))
+		return "Severity(" + strconv.Itoa(int(s)) + ")"
 	}
 }
 
@@ -85,16 +86,16 @@ type Diagnostic struct {
 // non-zero (its File must be non-zero), and message must be non-empty.
 func New(code Code, severity Severity, pos repograph.Position, message string) (Diagnostic, error) {
 	if !code.Valid() {
-		return Diagnostic{}, fmt.Errorf("diagnostic: invalid code %q", string(code))
+		return Diagnostic{}, errors.New("diagnostic: invalid code " + strconv.Quote(string(code)))
 	}
 	if severity != SeverityError && severity != SeverityWarning {
-		return Diagnostic{}, fmt.Errorf("diagnostic: invalid severity %d", int(severity))
+		return Diagnostic{}, errors.New("diagnostic: invalid severity " + strconv.Itoa(int(severity)))
 	}
 	if pos.File().IsZero() {
-		return Diagnostic{}, fmt.Errorf("diagnostic: invalid position: file must not be zero")
+		return Diagnostic{}, errors.New("diagnostic: invalid position: file must not be zero")
 	}
 	if message == "" {
-		return Diagnostic{}, fmt.Errorf("diagnostic: message must not be empty")
+		return Diagnostic{}, errors.New("diagnostic: message must not be empty")
 	}
 	return Diagnostic{code: code, severity: severity, pos: pos, message: message}, nil
 }

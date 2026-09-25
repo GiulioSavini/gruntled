@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# check-architecture.sh enforces ARCH-01: internal/domain must never touch
-# the filesystem/network directly and must never depend on anything outside
-# internal/domain, and the shipped binary must never link internal/testsupport.
+# check-architecture.sh enforces ARCH-01: internal/domain may import only an
+# allowlist of pure standard-library packages, must be platform-neutral (no
+# build constraints), and must never depend on anything outside
+# internal/domain; the shipped binary must never link internal/testsupport.
 #
 # Exit 0 means every rule held. Exit 1 means at least one rule failed; every
 # failing rule prints its own labelled block to stderr before the script
@@ -37,14 +38,65 @@ fi
 module=$(go list -m)
 module_re=$(printf '%s' "$module" | sed 's/[.]/\\./g')
 
-# --- Step 2: domain-direct-io ----------------------------------------------
-domain_imports=$(go list -f '{{range .Imports}}{{.}}{{"\n"}}{{end}}{{range .TestImports}}{{.}}{{"\n"}}{{end}}{{range .XTestImports}}{{.}}{{"\n"}}{{end}}' ./internal/domain/...)
-direct_io=$(printf '%s\n' "$domain_imports" | sort -u | grep -E '^(os|os/.+|io/fs|io/ioutil|path/filepath|net|net/.+|syscall)$' || true)
-if [ -n "$direct_io" ]; then
-  echo "=== RULE FAILED: domain-direct-io ===" >&2
-  echo "internal/domain (or one of its tests) imports a filesystem/network/syscall package directly:" >&2
-  printf '%s\n' "$direct_io" >&2
-  echo "The domain must be pure. Move filesystem/network access to internal/infrastructure." >&2
+# --- Step 2: domain-stdlib-allowlist ---------------------------------------
+# The domain may import only the pure standard-library packages listed
+# here (plus other internal/domain packages, which Step 3 polices). This is
+# an allowlist on purpose: a blocklist silently lets through fmt/log
+# (printing to stdout/stderr), crypto/rand, embed, unsafe, runtime and
+# anything added to the standard library later. fmt is deliberately absent:
+# the domain builds its messages with errors and strconv, so nothing in it
+# can ever reach os.Stdout. testing and reflect are allowed in test files only.
+domain_allowed='errors
+strings
+strconv
+sort
+slices
+maps
+path
+cmp
+iter
+bytes
+math
+math/bits
+unicode
+unicode/utf8
+unicode/utf16'
+domain_test_allowed='testing
+reflect'
+domain_prod_imports=$(go list -f '{{range .Imports}}{{.}}{{"\n"}}{{end}}' ./internal/domain/... | grep -v '^$' | sort -u)
+domain_test_imports=$(go list -f '{{range .TestImports}}{{.}}{{"\n"}}{{end}}{{range .XTestImports}}{{.}}{{"\n"}}{{end}}' ./internal/domain/... | grep -v '^$' | sort -u)
+not_allowed=$(
+  {
+    printf '%s\n' "$domain_prod_imports" | grep -v -x -F "$domain_allowed" || true
+    printf '%s\n' "$domain_test_imports" | grep -v -x -F "$domain_allowed
+$domain_test_allowed" || true
+  } | grep -v '^$' | grep -v -E "^${module_re}/internal/domain/" | sort -u || true
+)
+if [ -n "$not_allowed" ]; then
+  echo "=== RULE FAILED: domain-stdlib-allowlist ===" >&2
+  echo "internal/domain (or one of its tests) imports package(s) outside the pure allowlist:" >&2
+  printf '%s\n' "$not_allowed" >&2
+  echo "The domain must be pure: no I/O, no printing, no randomness, no unsafe." >&2
+  echo "Move the code to internal/infrastructure, or justify extending the allowlist in review." >&2
+  fail=1
+fi
+
+# --- Step 2b: domain-platform-neutral ---------------------------------------
+# Everything above only sees the files that compile for the host platform.
+# A foo_windows.go or a file with a //go:build line is invisible to go list
+# on linux, so it could import os unseen. The domain must be
+# platform-neutral: no build constraints of any kind, no cgo, no assembly.
+constrained=$(go list -f '{{range .IgnoredGoFiles}}{{$.Dir}}/{{.}}{{"\n"}}{{end}}{{range .IgnoredOtherFiles}}{{$.Dir}}/{{.}}{{"\n"}}{{end}}{{range .CgoFiles}}{{$.Dir}}/{{.}}{{"\n"}}{{end}}{{range .SFiles}}{{$.Dir}}/{{.}}{{"\n"}}{{end}}{{range .CFiles}}{{$.Dir}}/{{.}}{{"\n"}}{{end}}' ./internal/domain/... | grep -v '^$' || true)
+goos_re=$(go tool dist list | cut -d/ -f1 | sort -u | paste -sd'|' -)
+goarch_re=$(go tool dist list | cut -d/ -f2 | sort -u | paste -sd'|' -)
+suffixed=$(find internal/domain -type f -name '*.go' | grep -E "_(${goos_re}|${goarch_re})(_(${goarch_re}))?(_test)?\.go$" || true)
+tagged=$(find internal/domain -type f -name '*.go' -exec grep -l -E '^[[:space:]]*//[[:space:]]*(go:build|\+build)([[:space:]]|$)' {} + || true)
+platform=$(printf '%s\n%s\n%s\n' "$constrained" "$suffixed" "$tagged" | grep -v '^$' | sort -u || true)
+if [ -n "$platform" ]; then
+  echo "=== RULE FAILED: domain-platform-neutral ===" >&2
+  echo "internal/domain has build-constrained, cgo or non-Go source file(s):" >&2
+  printf '%s\n' "$platform" >&2
+  echo "The domain must compile identically on every platform. Remove the constraint or move the code out of the domain." >&2
   fail=1
 fi
 

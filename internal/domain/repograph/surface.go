@@ -1,8 +1,9 @@
 package repograph
 
 import (
-	"fmt"
+	"errors"
 	"slices"
+	"strconv"
 )
 
 // Surface is the public variable and output names of a Module (design doc
@@ -34,10 +35,10 @@ func sortedUniqueNames(kind string, names []string) ([]string, error) {
 	slices.Sort(sorted)
 	for i, name := range sorted {
 		if name == "" {
-			return nil, fmt.Errorf("repograph: invalid surface %s name: must not be empty", kind)
+			return nil, errors.New("repograph: invalid surface " + kind + " name: must not be empty")
 		}
 		if i > 0 && sorted[i-1] == name {
-			return nil, fmt.Errorf("repograph: invalid surface %s name %q: duplicate", kind, name)
+			return nil, errors.New("repograph: invalid surface " + kind + " name " + strconv.Quote(name) + ": duplicate")
 		}
 	}
 	return sorted, nil

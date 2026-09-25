@@ -1,6 +1,9 @@
 package repograph
 
-import "fmt"
+import (
+	"errors"
+	"strconv"
+)
 
 // Position is a 1-based line and column (column counted in bytes) inside a
 // repo-relative file. It is the single location type used across the whole
@@ -15,13 +18,13 @@ type Position struct {
 // non-zero, and line and column must each be at least 1.
 func NewPosition(file RepoPath, line, column int) (Position, error) {
 	if file.IsZero() {
-		return Position{}, fmt.Errorf("repograph: invalid position: file must not be zero")
+		return Position{}, errors.New("repograph: invalid position: file must not be zero")
 	}
 	if line < 1 {
-		return Position{}, fmt.Errorf("repograph: invalid position: line must be >= 1, got %d", line)
+		return Position{}, errors.New("repograph: invalid position: line must be >= 1, got " + strconv.Itoa(line))
 	}
 	if column < 1 {
-		return Position{}, fmt.Errorf("repograph: invalid position: column must be >= 1, got %d", column)
+		return Position{}, errors.New("repograph: invalid position: column must be >= 1, got " + strconv.Itoa(column))
 	}
 	return Position{file: file, line: line, column: column}, nil
 }
@@ -63,5 +66,5 @@ func (p Position) Compare(q Position) int {
 
 // String renders the position as "file:line:column".
 func (p Position) String() string {
-	return fmt.Sprintf("%s:%d:%d", p.file.String(), p.line, p.column)
+	return p.file.String() + ":" + strconv.Itoa(p.line) + ":" + strconv.Itoa(p.column)
 }

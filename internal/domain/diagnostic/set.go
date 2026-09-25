@@ -10,18 +10,26 @@ type Set struct {
 }
 
 // NewSet builds a Set from ds: it clones, sorts with Compare, and keeps
-// only the first occurrence of each Key. Since Compare orders
-// SeverityError before SeverityWarning for an otherwise-equal Key, a
-// collision keeps the error.
+// only the first occurrence of each Key, so every Key appears at most once
+// in the result. Diagnostics sharing a Key can differ only in Severity, and
+// Compare orders SeverityError before SeverityWarning at the same position
+// and code, so a collision keeps the error.
+//
+// Deduplication tracks every Key already kept rather than comparing
+// neighbours: Compare orders by Severity before Message, so two diagnostics
+// with the same Key are not necessarily adjacent after sorting.
 func NewSet(ds ...Diagnostic) Set {
 	sorted := slices.Clone(ds)
 	slices.SortFunc(sorted, Compare)
 
+	seen := make(map[Key]struct{}, len(sorted))
 	items := make([]Diagnostic, 0, len(sorted))
-	for i, d := range sorted {
-		if i > 0 && sorted[i-1].Key() == d.Key() {
+	for _, d := range sorted {
+		k := d.Key()
+		if _, dup := seen[k]; dup {
 			continue
 		}
+		seen[k] = struct{}{}
 		items = append(items, d)
 	}
 	return Set{items: items}
