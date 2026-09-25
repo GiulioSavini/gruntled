@@ -105,7 +105,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Domain Foundation & Test Substrate | 3/3 | Complete    | 2026-09-25 |
-| 2. Parsing & Graph Construction | 2/5 | In Progress|  |
+| 2. Parsing & Graph Construction | 3/5 | In Progress|  |
 | 3. GRT001 Diagnostic & CLI | 0/TBD | Not started | - |
 | 4. Real-Repo Validation Experiment | 0/TBD | Not started | - |
 

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-02-PLAN.md (application ports + indexing.Build + application/HCL layering arch rules, GRAPH-04/PARSE-04, Phase 2 Plan 2 of 5)
-last_updated: "2026-09-25T13:58:00.000Z"
-last_activity: "2026-09-25 — Plan 02-02 executed: internal/application/ports (UnitLoader/SurfaceReader), indexing.Build over fakes, 5 new arch rules (application allowlist/deps/platform/guard, hcl-only-in-infrastructure) with self-tests; CI green on pushed master"
+stopped_at: Completed 02-03-PLAN.md (hclconv, sourceresolve, terragrunt path functions, tfsurface.Reader)
+last_updated: "2026-09-25T15:07:46.000Z"
+last_activity: "2026-09-25 — Plan 02-03 executed: internal/infrastructure/hclconv (byte-accurate positions, GRT100), sourceresolve.Classify (offline source classifier), terragrunt path functions (six functions, closed S0/S1/S2 evaluation), tfsurface.Reader (working ports.SurfaceReader); full local suite green, push/CI pending"
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 8
-  completed_plans: 5
-  percent: 63
+  completed_plans: 6
+  percent: 75
 ---
 
 # Project State
@@ -21,23 +21,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-01)
 
 **Core value:** Tell the user, before they run anything slow, that `dependency.X.outputs.Y` does not exist in the module it points to.
-**Current focus:** Phase 2 (Parsing & Graph Construction) — Plan 2 of 5 complete
+**Current focus:** Phase 2 (Parsing & Graph Construction) — Plan 3 of 5 complete
 
 ## Current Position
 
 Phase: 2 of 4 (Parsing & Graph Construction) — in progress
-Plan: 2 of 5 in current phase — complete
-Status: Ready to execute Plan 02-03
-Last activity: 2026-09-25 — Plan 02-02 executed: internal/application/ports (UnitLoader/SurfaceReader), indexing.Build over fakes, 5 new arch rules (application allowlist/deps/platform/guard, hcl-only-in-infrastructure) with self-tests; CI green on pushed master
+Plan: 3 of 5 in current phase — complete
+Status: Ready to execute Plan 02-04
+Last activity: 2026-09-25 — Plan 02-03 executed: internal/infrastructure/hclconv (byte-accurate positions, GRT100), sourceresolve.Classify (offline source classifier), terragrunt path functions (six functions, closed S0/S1/S2 evaluation), tfsurface.Reader (working ports.SurfaceReader); full local suite green, push/CI pending
 
-Progress: [██████░░░░] 63%
+Progress: [████████░░] 75%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 5
-- Average duration: ~24 min
-- Total execution time: 1.98 hours
+- Total plans completed: 6
+- Average duration: ~29 min
+- Total execution time: 2.87 hours
 
 **By Phase:**
 
@@ -48,10 +48,11 @@ Progress: [██████░░░░] 63%
 | Phase 1 P3 | 20min | 2 tasks | 6 files |
 | Phase 2 P1 | 25min | 2 tasks | 9 files |
 | Phase 2 P2 | 24min | 3 tasks | 5 files |
+| Phase 2 P3 | 53min | 3 tasks | 13 files |
 
 **Recent Trend:**
-- Last 5 plans: 35min, 15min, 20min, 25min, 24min
-- Trend: Stable
+- Last 5 plans: 15min, 20min, 25min, 24min, 53min
+- Trend: Plan 02-03 took longer (3 leaf infrastructure packages plus a new third-party dependency in one plan, by design)
 
 *Updated after each plan completion*
 
@@ -78,6 +79,10 @@ Recent decisions affecting current work:
 - [Phase 02 P2]: indexing.Build assembles every unit from its UnitConfig before reading any module surface, so a DTO the domain constructors reject (e.g. a "resolved" unit with a zero Module) fails at the assemble stage without ever calling ReadSurface
 - [Phase 02 P2]: hcl-only-in-infrastructure (no package outside internal/infrastructure may directly import hashicorp/hcl or zclconf/go-cty) landed in scripts/check-architecture.sh before any infrastructure package exists, so Plan 03's first commit is already policed
 - [Phase 02 P2]: check-architecture.sh's non-vacuous guards now run before its compile gate — internal/application imports internal/domain, so emptying internal/domain would otherwise trip compile-gate instead of non-vacuous-guard
+- [Phase 02 P3]: hclconv.Position recomputes every hcl position's column from hcl.Pos.Byte, never hcl.Pos.Column (grapheme clusters); the non-ASCII test asserts byte column 22 for a "ééé"-prefixed line against hcl's own grapheme column 19, independently verified outside Go before trusting the test
+- [Phase 02 P3]: sourceresolve.Classify hand-rolls Terragrunt's detector chain (not go-getter/v2): the FileDetector catch-all makes any unmatched string local, so a bare `units/chicken` is local like Terragrunt, unlike plain Terraform; misclassification fails safe through the surface reader's existence check either direction
+- [Phase 02 P3]: get_terragrunt_dir/get_original_terragrunt_dir take Params: nil (no VarParam), so hcl/cty itself rejects any argument before Impl ever runs — no manual arity check needed
+- [Phase 02 P3]: tfsurface.Reader always calls fs.Stat on every kept file (not just symlinks), verified against a real os.Root-backed FS to be exactly where an escaping or dangling symlink surfaces as an error, so one code path handles directories, in-repo symlinks and escapes/dangling links uniformly
 
 ### Pending Todos
 
@@ -85,11 +90,10 @@ None yet.
 
 ### Blockers/Concerns
 
-- Phase 2: half-day spike needed early — check whether `gruntwork-io/terragrunt`'s internal source-classification logic is reusable, or fall back to `go-getter.Detect` (ARCHITECTURE.md §A.5, unresolved open question)
 - Phase 4: no naturally occurring wiring bug exists in any maintained corpus surveyed — VALID-04/05 depend on a deliberately injected, single-line mutation (rename/delete an output), documented as such, not an organic bug
 
 ## Session Continuity
 
-Last session: 2026-09-25T13:58:00.000Z
-Stopped at: Completed 02-02-PLAN.md (application ports + indexing.Build + application/HCL layering arch rules, GRAPH-04/PARSE-04, Phase 2 Plan 2 of 5)
+Last session: 2026-09-25T15:07:46.000Z
+Stopped at: Completed 02-03-PLAN.md (hclconv, sourceresolve, terragrunt path functions, tfsurface.Reader)
 Resume file: None
