@@ -24,11 +24,37 @@ type Dependency struct {
 	opts             DependencyOptions
 }
 
-// NewDependency validates its arguments and returns a resolved Dependency.
-// name must be non-empty and target must be non-zero.
-func NewDependency(name string, target RepoPath, pos Position, opts DependencyOptions) (Dependency, error) {
+// validateDependencyCommon checks the fields NewDependency and
+// NewUnresolvedDependency both validate: a non-empty name, a non-zero
+// position, and that every Tristate option field is one of the defined
+// states. A value outside those states can only come from a forged
+// conversion like Tristate(99); storing it would let a later query report a
+// fact that was never actually observed.
+func validateDependencyCommon(name string, pos Position, opts DependencyOptions) error {
 	if name == "" {
-		return Dependency{}, errors.New("repograph: invalid dependency: name must not be empty")
+		return errors.New("repograph: invalid dependency: name must not be empty")
+	}
+	if pos.IsZero() {
+		return errors.New("repograph: invalid dependency " + strconv.Quote(name) + ": position must not be zero")
+	}
+	if !opts.Enabled.IsValid() {
+		return errors.New("repograph: invalid dependency " + strconv.Quote(name) + ": invalid option Enabled: " + strconv.Itoa(int(opts.Enabled)))
+	}
+	if !opts.SkipOutputs.IsValid() {
+		return errors.New("repograph: invalid dependency " + strconv.Quote(name) + ": invalid option SkipOutputs: " + strconv.Itoa(int(opts.SkipOutputs)))
+	}
+	if !opts.MockMergeWithState.IsValid() {
+		return errors.New("repograph: invalid dependency " + strconv.Quote(name) + ": invalid option MockMergeWithState: " + strconv.Itoa(int(opts.MockMergeWithState)))
+	}
+	return nil
+}
+
+// NewDependency validates its arguments and returns a resolved Dependency.
+// name must be non-empty, target and pos must be non-zero, and every
+// Tristate field of opts must be a defined Tristate value.
+func NewDependency(name string, target RepoPath, pos Position, opts DependencyOptions) (Dependency, error) {
+	if err := validateDependencyCommon(name, pos, opts); err != nil {
+		return Dependency{}, err
 	}
 	if target.IsZero() {
 		return Dependency{}, errors.New("repograph: invalid dependency " + strconv.Quote(name) + ": target must not be zero")
@@ -37,10 +63,12 @@ func NewDependency(name string, target RepoPath, pos Position, opts DependencyOp
 }
 
 // NewUnresolvedDependency validates its arguments and returns a Dependency
-// whose target could not be determined. name and reason must be non-empty.
+// whose target could not be determined. name and reason must be non-empty,
+// pos must be non-zero, and every Tristate field of opts must be a defined
+// Tristate value.
 func NewUnresolvedDependency(name, reason string, pos Position, opts DependencyOptions) (Dependency, error) {
-	if name == "" {
-		return Dependency{}, errors.New("repograph: invalid dependency: name must not be empty")
+	if err := validateDependencyCommon(name, pos, opts); err != nil {
+		return Dependency{}, err
 	}
 	if reason == "" {
 		return Dependency{}, errors.New("repograph: invalid dependency " + strconv.Quote(name) + ": unresolved reason must not be empty")
@@ -89,14 +117,17 @@ type Reference struct {
 	pos        Position
 }
 
-// NewReference validates its arguments and returns a Reference. Both
-// dependency and output must be non-empty.
+// NewReference validates its arguments and returns a Reference. dependency
+// and output must be non-empty, and pos must be non-zero.
 func NewReference(dependency, output string, pos Position) (Reference, error) {
 	if dependency == "" {
 		return Reference{}, errors.New("repograph: invalid reference: dependency must not be empty")
 	}
 	if output == "" {
 		return Reference{}, errors.New("repograph: invalid reference: output must not be empty")
+	}
+	if pos.IsZero() {
+		return Reference{}, errors.New("repograph: invalid reference: position must not be zero")
 	}
 	return Reference{dependency: dependency, output: output, pos: pos}, nil
 }
@@ -153,6 +184,19 @@ func (s UnitStatus) String() string {
 	}
 }
 
+// IsValid reports whether s is one of the three defined UnitStatus
+// constants. UnitStatus(0) is the zero value and is never valid: only
+// NewResolvedUnit, NewModuleUnknownUnit and NewConfigUnknownUnit produce a
+// valid status.
+func (s UnitStatus) IsValid() bool {
+	switch s {
+	case StatusResolved, StatusModuleUnknown, StatusConfigUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
 // Unit is a Terragrunt unit: a repo-relative path, the module it resolves
 // to (when known), and the dependency blocks and output references it
 // declares.
@@ -166,10 +210,27 @@ type Unit struct {
 }
 
 // sortAndValidateDepsRefs sorts deps by Name and refs by Pos (then
-// Dependency, then Output), clones both defensively, and rejects duplicate
-// dependency names. It is shared by NewResolvedUnit and
-// NewModuleUnknownUnit, the only two constructors that keep deps/refs.
+// Dependency, then Output), clones both defensively, rejects a zero-value
+// Dependency or Reference entry, and rejects duplicate dependency names. It
+// is shared by NewResolvedUnit and NewModuleUnknownUnit, the only two
+// constructors that keep deps/refs.
 func sortAndValidateDepsRefs(unitPath RepoPath, deps []Dependency, refs []Reference) ([]Dependency, []Reference, error) {
+	// Every constructor rejects an empty name, so only the zero value can
+	// have one: a caller that appended a zero-value Dependency{} or
+	// Reference{} (for example a discarded error) must not have it
+	// silently dropped, which would turn a real reference into one to an
+	// undeclared dependency.
+	for i, d := range deps {
+		if d.name == "" {
+			return nil, nil, errors.New("repograph: invalid unit " + strconv.Quote(unitPath.String()) + ": zero-value dependency at index " + strconv.Itoa(i))
+		}
+	}
+	for i, r := range refs {
+		if r.dependency == "" {
+			return nil, nil, errors.New("repograph: invalid unit " + strconv.Quote(unitPath.String()) + ": zero-value reference at index " + strconv.Itoa(i))
+		}
+	}
+
 	sortedDeps := slices.Clone(deps)
 	slices.SortFunc(sortedDeps, func(a, b Dependency) int {
 		return compareStrings(a.name, b.name)
@@ -195,9 +256,10 @@ func sortAndValidateDepsRefs(unitPath RepoPath, deps []Dependency, refs []Refere
 }
 
 // NewResolvedUnit validates its arguments and returns a Unit whose own
-// config and module are both known. path and module must be non-zero, and
-// dependency names must be unique within the unit. deps is sorted by Name
-// and refs by Pos, then Dependency, then Output; both are cloned.
+// config and module are both known. path and module must be non-zero,
+// dependency names must be unique within the unit, and deps/refs must not
+// contain a zero-value Dependency or Reference entry. deps is sorted by
+// Name and refs by Pos, then Dependency, then Output; both are cloned.
 func NewResolvedUnit(path, module RepoPath, deps []Dependency, refs []Reference) (Unit, error) {
 	if path.IsZero() {
 		return Unit{}, errors.New("repograph: invalid unit: path must not be zero")
@@ -224,7 +286,8 @@ func NewResolvedUnit(path, module RepoPath, deps []Dependency, refs []Reference)
 // config is known but whose module path or effective surface could not be
 // determined offline. reason must be non-empty. Unlike a config-unknown
 // unit, its dependencies and references are validated, sorted and kept: a
-// dependency name must still be unique within the unit.
+// dependency name must still be unique within the unit, and deps/refs must
+// not contain a zero-value Dependency or Reference entry.
 func NewModuleUnknownUnit(path RepoPath, reason string, deps []Dependency, refs []Reference) (Unit, error) {
 	if path.IsZero() {
 		return Unit{}, errors.New("repograph: invalid unit: path must not be zero")
