@@ -292,7 +292,11 @@ fi
 # legitimately link infrastructure transitively once Phase 3 wires the CLI.
 # go list -e (not plain go list) so a probe that breaks some unrelated
 # package under set -e does not abort the script before this rule runs.
-hcl_violations=$(
+# go list only sees the files the host platform compiles, so the source
+# scan below adds every file hidden behind a _GOOS/_GOARCH suffix or a
+# //go:build tag. It reads import declarations only, so a doc comment
+# that names the libraries stays allowed.
+hcl_go_list=$(
   go list -e -f '{{.ImportPath}}{{"\t"}}{{join .Imports " "}} {{join .TestImports " "}} {{join .XTestImports " "}}' ./... |
     while IFS=$'\t' read -r pkg rest; do
       case "$pkg" in
@@ -307,6 +311,8 @@ hcl_violations=$(
       done
     done
 )
+hcl_source=$(scan_import_lines 'github\.com/(hashicorp|zclconf)/' -not -path './internal/infrastructure/*')
+hcl_violations=$(printf '%s\n%s\n' "$hcl_go_list" "$hcl_source" | grep -v '^$' | sort -u || true)
 if [ -n "$hcl_violations" ]; then
   echo "=== RULE FAILED: hcl-only-in-infrastructure ===" >&2
   echo "package(s) outside internal/infrastructure import HCL directly:" >&2
