@@ -39,24 +39,27 @@ created: 2026-09-28
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 4-01-01 | 01 | 1 | VALID-02 | golden (synthrepo full scale + 3 txtar) | `go test -count=1 ./cmd/gruntled -run 'TestGoldenSynthrepoFullScale\|TestGoldenFixtures/(live_clean\|live_broken\|shared_include)' -v` | ❌ W0 (created in task) | ⬜ pending |
-| 4-01-02 | 01 | 1 | VALID-02 | golden (7 more txtar) + full suite | `go test -count=1 ./cmd/gruntled -run TestGolden -v && <full suite>` | ❌ W0 (created in task) | ⬜ pending |
+| 4-01-01 | 01 | 1 | VALID-02 | golden (synthrepo full scale + 3 txtar) | `go test -count=1 ./cmd/gruntled -run 'TestGoldenSynthrepoFullScale\|TestGoldenFixtures/(live_clean\|live_broken\|shared_include)' -v && go test -count=1 ./cmd/gruntled` (package green: no fixture-count guard yet) | ❌ W0 (created in task) | ⬜ pending |
+| 4-01-02 | 01 | 1 | VALID-02 | golden (7 more txtar + TestGoldenFixtureCount) + full suite | `go test -count=1 ./cmd/gruntled -run TestGolden -v && <full suite>` | ❌ W0 (created in task) | ⬜ pending |
 | 4-02-01 | 02 | 1 | VALID-03, VALID-04 | integration (env-gated, corpus) | `GRUNTLED_CORPUS=... go test -count=1 -v -run 'TestCorpusClean\|TestCorpusMutation' ./cmd/gruntled` (+ skip check with env unset) | ❌ W0 (created in task) | ⬜ pending |
 | 4-02-02 | 02 | 1 | VALID-05 | integration (env-gated, corpus + pinned terragrunt) | `GRUNTLED_CORPUS=... GRUNTLED_TERRAGRUNT_BIN=... go test -count=1 -v -run TestTerragruntGap ./cmd/gruntled && <full suite> && test -z "$(go list -deps ./cmd/gruntled \| grep -x os/exec)"` | ❌ W0 (created in task) | ⬜ pending |
 | 4-04-01 | 04 | 1 | VALID-02 (secondary corpus) | integration (env-gated, denis256): pinned-commit guard + text self-check of the expectation table | `go test -count=1 -run TestDenis256Corpus -v ./cmd/gruntled` (skip check) `&& GRUNTLED_CORPUS_DENIS256=... go test -count=1 -v -run 'TestDenis256Corpus/expectations_match_corpus_text' ./cmd/gruntled` | ❌ W0 (created in task) | ⬜ pending |
 | 4-04-02 | 04 | 1 | VALID-02 (secondary corpus) | integration (env-gated, denis256): exact GRT001 set, no panic, determinism + full suite | `GRUNTLED_CORPUS_DENIS256=... go test -count=1 -v -run TestDenis256Corpus ./cmd/gruntled && <full suite>` | ❌ W0 (created in task) | ⬜ pending |
-| 4-03-01 | 03 | 2 | VALID-06 | benchmark (env-gated, process vs process) | `GRUNTLED_CORPUS=... GRUNTLED_TERRAGRUNT_BIN=... go test -count=1 -v -run TestBenchmarkVsTerragrunt ./cmd/gruntled` (+ skip check with env unset) | ❌ W0 (created in task) | ⬜ pending |
-| 4-03-02 | 03 | 2 | VALID-02..06 (results record) | doc drift guard + full suite | `go test -count=1 -run 'TestValidationDocPins\|TestGolden' ./cmd/gruntled && grep -q '^## Outcome' docs/validation.md && <full suite>` | ❌ W0 (created in task) | ⬜ pending |
+| 4-03-01 | 03 | 2 | VALID-06 | benchmark (env-gated, process vs process) | `GRUNTLED_CORPUS=... GRUNTLED_TERRAGRUNT_BIN=... go test -count=1 -v -run TestBenchmarkVsTerragrunt ./cmd/gruntled` (+ skip check with env unset, + `go test -count=1 ./cmd/gruntled` green) | ❌ W0 (created in task) | ⬜ pending |
+| 4-03-02 | 03 | 2 | VALID-02..06 (results record) | docs/validation.md + doc drift guard (same commit) + full suite | `go test -count=1 -run 'TestValidationDocPins\|TestGolden' ./cmd/gruntled && grep -q '^## Outcome' docs/validation.md && <full suite>` | ❌ W0 (created in task) | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
 Assertion discipline (from 04-CONTEXT):
 - VALID-03 asserts zero diagnostics of any code. It does not assert PREP's unit counts, which are logged.
 - VALID-04 asserts exact set equality against a textual oracle recomputed at test time, cross-checked with `grep` and against the pinned-text counts 8 and 3.
-- VALID-05 asserts exit 0 on both the baseline and the mutated copy, and that no added output line names the broken output.
+- VALID-05 asserts exit 0 on both the baseline and the mutated copy, and that no added output line names the broken output. The measured terragrunt SHA256 and `--version` output are logged (VALIDATION-TG) and quoted in docs/validation.md.
 - VALID-06 asserts median(gruntled) < median(terragrunt), with every run's exit code checked.
 - denis256 (secondary) asserts exact GRT001 set equality with the 8 hand-derived entries (position, unit, full message including suffix presence), the disabled-dependency reference silent, exit 1, codes only GRT001/GRT100, byte-identical reruns and an unchanged tree digest. GRT100 count and unit counts are logged only.
+- Golden wants are hand-computed and self-checked against fixture bytes; no position is a wildcard, and GRT100 multiplicity comes from the FirstSyntaxError contract (one per broken file), never from gruntled output.
+- denis256 extras or misses are classified from the HCL and DIAG-03 (false positive vs. expectation gap), never assumed.
 - A failing assertion is recorded, never loosened.
+- Always-on tests land in the same commit as what makes them pass (TestGoldenFixtureCount with the last fixtures, TestValidationDocPins with docs/validation.md), because every commit is pushed and CI must stay green.
 
 ---
 
@@ -65,12 +68,12 @@ Assertion discipline (from 04-CONTEXT):
 Every task creates its own tests in the same task. There are no separate Wave 0 stubs.
 
 - [ ] Phase 3 executed and verified: `run()` in cmd/gruntled, the JSON presenter, go-internal in go.mod. Every plan checks this precondition first.
-- [ ] Phase 2 gap-closure plans (02-06 lazy guard, 02-07 stack, include-target and non-default-file guards) merged. The lazy_guards and dependency_edges goldens depend on them.
+- [ ] Phase 2 gap-closure plans 02-06..02-11 executed: `.planning/phases/02-parsing-graph-construction/02-{06..11}-SUMMARY.md` all exist. 04-01, 04-02 and 04-04 check this in their precondition. The lazy_guards and dependency_edges goldens and the denis256 expectation depend on them.
 - [ ] Pinned assets present: `~/.cache/gruntled-phase4/bin/terragrunt` (SHA256 d75a80bb…), `~/.cache/gruntled-phase4/corpus/primary` at e6c55d11… (detached), and `~/.cache/gruntled-phase4/corpus/denis256` at 726485e6… (HEAD on refs/heads/master, resolved by the test).
 - [ ] `cmd/gruntled/golden_test.go` + `testdata/golden/*.txtar` (4-01-01, 4-01-02)
 - [ ] `cmd/gruntled/corpus_test.go` (4-02-01), `cmd/gruntled/terragrunt_gap_test.go` (4-02-02)
 - [ ] `cmd/gruntled/denis256_test.go` (4-04-01, 4-04-02)
-- [ ] `cmd/gruntled/bench_test.go` (4-03-01), `cmd/gruntled/validation_doc_test.go` + `docs/validation.md` (4-03-02)
+- [ ] `cmd/gruntled/bench_test.go` (4-03-01), `docs/validation.md` + `cmd/gruntled/validation_doc_test.go` together (4-03-02)
 - [ ] No framework install and no go.mod change.
 
 ---
