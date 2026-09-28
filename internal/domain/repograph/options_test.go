@@ -71,6 +71,21 @@ func TestDefaultDependencyOptions(t *testing.T) {
 	}
 }
 
+func TestTristateIsValid(t *testing.T) {
+	valid := []repograph.Tristate{repograph.TristateUnknown, repograph.TristateFalse, repograph.TristateTrue}
+	for _, v := range valid {
+		if !v.IsValid() {
+			t.Errorf("%v.IsValid() = false, want true", v)
+		}
+	}
+	invalid := []repograph.Tristate{repograph.Tristate(-1), repograph.Tristate(3), repograph.Tristate(99)}
+	for _, v := range invalid {
+		if v.IsValid() {
+			t.Errorf("Tristate(%d).IsValid() = true, want false", int(v))
+		}
+	}
+}
+
 func TestKnownNamesSortsDedupsAndRejectsEmpty(t *testing.T) {
 	l, err := repograph.KnownNames([]string{"b", "a", "b"})
 	if err != nil {

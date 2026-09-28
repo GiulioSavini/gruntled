@@ -126,6 +126,93 @@ func mustPosition(t *testing.T, file repograph.RepoPath, line, column int) repog
 	return p
 }
 
+func TestPositionIsZero(t *testing.T) {
+	var zero repograph.Position
+	if !zero.IsZero() {
+		t.Errorf("zero-value Position.IsZero() = false, want true")
+	}
+
+	p := mustPosition(t, repograph.MustRepoPath("a.hcl"), 1, 1)
+	if p.IsZero() {
+		t.Errorf("NewPosition result IsZero() = true, want false")
+	}
+}
+
+func TestNewDependencyRejectsZeroPosition(t *testing.T) {
+	target := repograph.MustRepoPath("units/vpc")
+	opts := repograph.DefaultDependencyOptions()
+	var zeroPos repograph.Position
+
+	if _, err := repograph.NewDependency("vpc", target, zeroPos, opts); err == nil {
+		t.Errorf("NewDependency with zero Position: expected error, got nil")
+	}
+	if _, err := repograph.NewUnresolvedDependency("vpc", "r", zeroPos, opts); err == nil {
+		t.Errorf("NewUnresolvedDependency with zero Position: expected error, got nil")
+	}
+	if _, err := repograph.NewReference("vpc", "id", zeroPos); err == nil {
+		t.Errorf("NewReference with zero Position: expected error, got nil")
+	}
+}
+
+func TestNewDependencyRejectsInvalidOptions(t *testing.T) {
+	target := repograph.MustRepoPath("units/vpc")
+	pos := mustPosition(t, repograph.MustRepoPath("units/app/terragrunt.hcl"), 4, 1)
+
+	cases := []struct {
+		name string
+		opts repograph.DependencyOptions
+	}{
+		{"Enabled", repograph.DependencyOptions{Enabled: repograph.Tristate(99)}},
+		{"SkipOutputs", repograph.DependencyOptions{SkipOutputs: repograph.Tristate(99)}},
+		{"MockMergeWithState", repograph.DependencyOptions{MockMergeWithState: repograph.Tristate(99)}},
+	}
+	for _, c := range cases {
+		if _, err := repograph.NewDependency("vpc", target, pos, c.opts); err == nil {
+			t.Errorf("NewDependency with invalid %s: expected error, got nil", c.name)
+		}
+		if _, err := repograph.NewUnresolvedDependency("vpc", "r", pos, c.opts); err == nil {
+			t.Errorf("NewUnresolvedDependency with invalid %s: expected error, got nil", c.name)
+		}
+	}
+
+	// The zero-value DependencyOptions{} (every field Unknown) is the
+	// loader's deep-merge fallback and must remain accepted.
+	if _, err := repograph.NewDependency("vpc", target, pos, repograph.DependencyOptions{}); err != nil {
+		t.Errorf("NewDependency with zero-value DependencyOptions: unexpected error: %v", err)
+	}
+	if _, err := repograph.NewUnresolvedDependency("vpc", "r", pos, repograph.DependencyOptions{}); err != nil {
+		t.Errorf("NewUnresolvedDependency with zero-value DependencyOptions: unexpected error: %v", err)
+	}
+}
+
+func TestUnitConstructorsRejectZeroEntries(t *testing.T) {
+	unitPath := repograph.MustRepoPath("units/app")
+	modulePath := repograph.MustRepoPath("modules/app")
+	pos := mustPosition(t, unitPath, 1, 1)
+	validDep := mustDependency(t, "vpc", repograph.MustRepoPath("units/vpc"), pos)
+	validRef := mustReference(t, "vpc", "out", pos)
+
+	if _, err := repograph.NewResolvedUnit(unitPath, modulePath, []repograph.Dependency{{}}, nil); err == nil {
+		t.Errorf("NewResolvedUnit with a zero-value Dependency: expected error, got nil")
+	}
+	if _, err := repograph.NewResolvedUnit(unitPath, modulePath, nil, []repograph.Reference{{}}); err == nil {
+		t.Errorf("NewResolvedUnit with a zero-value Reference: expected error, got nil")
+	}
+	if _, err := repograph.NewResolvedUnit(unitPath, modulePath, []repograph.Dependency{validDep, {}}, nil); err == nil {
+		t.Errorf("NewResolvedUnit with a valid dep plus a zero-value dep: expected error, got nil (must not be silently dropped)")
+	}
+
+	if _, err := repograph.NewModuleUnknownUnit(unitPath, "remote-source", []repograph.Dependency{{}}, nil); err == nil {
+		t.Errorf("NewModuleUnknownUnit with a zero-value Dependency: expected error, got nil")
+	}
+	if _, err := repograph.NewModuleUnknownUnit(unitPath, "remote-source", nil, []repograph.Reference{{}}); err == nil {
+		t.Errorf("NewModuleUnknownUnit with a zero-value Reference: expected error, got nil")
+	}
+	if _, err := repograph.NewModuleUnknownUnit(unitPath, "remote-source", []repograph.Dependency{validDep, {}}, []repograph.Reference{validRef}); err == nil {
+		t.Errorf("NewModuleUnknownUnit with a valid dep plus a zero-value dep: expected error, got nil (must not be silently dropped)")
+	}
+}
+
 func TestNewSurface(t *testing.T) {
 	s, err := repograph.NewSurface([]string{"b", "a"}, []string{"y", "x"})
 	if err != nil {
