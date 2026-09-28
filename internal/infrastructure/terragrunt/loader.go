@@ -184,8 +184,12 @@ func (l *Loader) resolveUnit(cache *fileCache, e unitEntry, located map[string]b
 
 	// 11. The unit directory overlaying the module's own files, only
 	// meaningful when the module is somewhere other than the unit itself.
+	// A ReadDir failure here (G6) makes the module unknown too, since
+	// whether it overlays is itself unreadable.
 	if moduleUnknownReason == "" && modulePath.Compare(unitPath) != 0 {
-		if unitDirOverlaysModule(l.fsys, unitDir) {
+		if overlays, reason := unitDirOverlaysModule(l.fsys, unitDir); reason != "" {
+			moduleUnknownReason = reason
+		} else if overlays {
 			moduleUnknownReason = ReasonUnitDirOverlaysModule
 		}
 	}

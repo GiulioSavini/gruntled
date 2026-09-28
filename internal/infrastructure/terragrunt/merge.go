@@ -139,24 +139,38 @@ func buildEffectiveFiles(childPF *parsedFile, unitDir string, resolved []resolve
 	return files
 }
 
-// validateEffectiveFile checks one effective file's own terraform and
-// dependency blocks: more than one terraform block, or a dependency block
-// with a label count other than one, an expansion block, or a label
-// duplicated within this single file, are each structurally invalid,
-// independent of merging.
+// validateEffectiveFile checks one effective file's own terraform,
+// dependency and generate blocks: more than one terraform block; a
+// dependency block with a label count other than one, an expansion block,
+// or a label duplicated within this single file; or a generate block with
+// a label count other than one, or a label duplicated within this single
+// file (G9), are each structurally invalid, independent of merging. A
+// generate label repeated ACROSS files (child vs. an include) is a valid
+// merge -- Terragrunt selects by precedence, highest wins -- and is left to
+// mergeGenerateUnknownReason.
 func validateEffectiveFile(ef effectiveFile) string {
 	if len(ef.pf.terraforms) > 1 {
 		return ReasonInvalidTerraformBlock
 	}
-	seen := map[string]bool{}
+	seenDeps := map[string]bool{}
 	for _, d := range ef.pf.deps {
 		if len(d.labels) != 1 || d.hasExpansion {
 			return ReasonInvalidDependency
 		}
-		if seen[d.labels[0]] {
+		if seenDeps[d.labels[0]] {
 			return ReasonInvalidDependency
 		}
-		seen[d.labels[0]] = true
+		seenDeps[d.labels[0]] = true
+	}
+	seenGenerate := map[string]bool{}
+	for _, g := range ef.pf.generates {
+		if len(g.labels) != 1 {
+			return ReasonInvalidGenerate
+		}
+		if seenGenerate[g.labels[0]] {
+			return ReasonInvalidGenerate
+		}
+		seenGenerate[g.labels[0]] = true
 	}
 	return ""
 }
@@ -275,7 +289,13 @@ func mergeGenerateUnknownReason(files []effectiveFile) string {
 	for _, ef := range files {
 		for _, g := range ef.pf.generates {
 			if len(g.labels) != 1 {
-				continue
+				// Defensive: validateEffectiveFile (G9) already rejects any
+				// generate block whose label count isn't exactly one before
+				// this function ever runs, so this is unreachable in
+				// practice. Kept so a future change to that ordering fails
+				// closed here (the module becomes unknown) instead of
+				// panicking on g.labels[0] below or skipping the block.
+				return ReasonInvalidGenerate
 			}
 			label := g.labels[0]
 			if seen[label] {
@@ -294,11 +314,15 @@ func mergeGenerateUnknownReason(files []effectiveFile) string {
 // non-ignored .tf/.tf.json/.tofu/.tofu.json file: Terragrunt copies the
 // unit directory's own files over the module's working copy
 // (CopyFolderContents), so such a unit's effective module surface is not
-// the module directory's surface alone (research Pitfall 7).
-func unitDirOverlaysModule(fsys fs.FS, unitDir string) bool {
+// the module directory's surface alone (research Pitfall 7). A ReadDir
+// failure means whether it overlays is itself unknown (G6): the caller
+// must treat the module as unknown rather than assume it does not overlay,
+// so reason is ReasonModuleFileUnreadable in that case, "" otherwise
+// (whether or not it overlays -- the bool return still answers that).
+func unitDirOverlaysModule(fsys fs.FS, unitDir string) (overlays bool, reason string) {
 	entries, err := fs.ReadDir(fsys, unitDir)
 	if err != nil {
-		return false
+		return false, ReasonModuleFileUnreadable
 	}
 	for _, e := range entries {
 		if e.IsDir() {
@@ -309,10 +333,10 @@ func unitDirOverlaysModule(fsys fs.FS, unitDir string) bool {
 			continue
 		}
 		if _, ok := moduleExt(name); ok {
-			return true
+			return true, ""
 		}
 	}
-	return false
+	return false, ""
 }
 
 // isIgnoredFileName reports whether name is a Terraform-ignored file:
