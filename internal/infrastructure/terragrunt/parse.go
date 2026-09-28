@@ -75,6 +75,11 @@ type parsedFile struct {
 	src     []byte
 	readErr error
 	syntax  *diagnostic.Diagnostic
+	// limitReason is non-empty (ReasonConfigTooLarge or
+	// ReasonConfigTooDeep) when the file was deliberately not parsed
+	// because it exceeds an hclconv limit (02-REVIEW G7). Such a file has
+	// no facts and no syntax diagnostic: it is not known to be invalid.
+	limitReason string
 
 	// Facts, populated only when readErr == nil && syntax == nil. Each
 	// slice is in source order: body.Blocks is already ordered, and
