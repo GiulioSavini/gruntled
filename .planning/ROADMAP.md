@@ -104,11 +104,12 @@ Plans:
   3. After a deliberate output rename or deletion is injected into the corpus, `gruntled check` reports every reference broken by it
   4. `terragrunt hcl validate` is run against the same mutated corpus and confirmed not to report the injected breakage, evidencing the gap `GRT001` closes
   5. A reproducible benchmark shows `gruntled check` faster than `terragrunt hcl validate` on the same repository
-**Plans**: 3 plans in 2 waves (wave 1 runs 04-01 and 04-02 in parallel with disjoint files; 04-03 needs both; assumes Phase 3 and the Phase 2 gap-closure plans are executed; corpus and terragrunt tests are env-gated and never in CI)
+**Plans**: 4 plans in 2 waves (wave 1 runs 04-01, 04-02 and 04-04 in parallel with disjoint files; 04-03 needs all three; assumes Phase 3 and the Phase 2 gap-closure plans are executed; corpus and terragrunt tests are env-gated and never in CI)
 
 Plans:
 - [ ] 04-01-PLAN.md — VALID-02 golden tests: 10 hand-written txtar fixture repos with hand-computed, self-checked exact diagnostic sets, plus full-scale synthrepo trees (400-600 units) against Manifest.Expected
 - [ ] 04-02-PLAN.md — VALID-03/04/05 on the pinned primary corpus: zero diagnostics unmutated, exact textual-oracle match for a rename (8 refs) and a deletion (3 refs) on scratch copies, and plain `terragrunt hcl validate` (hash-pinned v1.1.6) confirmed not to report either
+- [ ] 04-04-PLAN.md — Secondary corpus denis256/terragrunt-tests (pinned 726485e6, env-gated): exact GRT001 set of 8 hand-derived hits (2 fixture bugs, 6 mock-only keys with per-hit suffix), the enabled=false reference silent, no panic, deterministic output
 - [ ] 04-03-PLAN.md — VALID-06 process-vs-process benchmark (warm-up, 21 interleaved samples, medians), a full experiment run, and the committed docs/validation.md results record with a doc-pin drift guard
 
 ## Progress

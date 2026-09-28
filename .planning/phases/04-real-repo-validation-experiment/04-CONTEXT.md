@@ -37,9 +37,10 @@ Phase 4 drives `run()` in `cmd/gruntled` and the JSON schema v1 from 03-02/03-03
   no `-update` flag, and expectations are never generated from gruntled's own output.
 
 ### Environment gating (locked)
-- Exactly two environment variables: `GRUNTLED_CORPUS` (existing convention) points at
+- Exactly three environment variables: `GRUNTLED_CORPUS` (existing convention) points at
   the pinned primary-corpus checkout. `GRUNTLED_TERRAGRUNT_BIN` points at the pinned
-  terragrunt binary.
+  terragrunt binary. `GRUNTLED_CORPUS_DENIS256` points at the pinned secondary corpus
+  (amendment below).
 - Corpus and terragrunt tests skip when their variables are unset. They are NOT added to
   CI. `.github/workflows/ci.yml` must not be edited.
 - Golden tests (VALID-02) need no external asset. They are always on, so they run in CI's
@@ -91,6 +92,40 @@ Phase 4 drives `run()` in `cmd/gruntled` and the JSON schema v1 from 03-02/03-03
   8 `dependency.s3.outputs.role_name` references and 3 `dependency.mq.outputs.region`
   references.
 
+### Amendment 2026-09-28: denis256 as a secondary exact-set corpus (locked, user's proxy)
+- `denis256/terragrunt-tests` at `726485e699a70c02dabbde629f66c0119e197357` is a SECONDARY
+  Phase 4 corpus. It is used only for an exact-set check of gruntled's GRT001 output, with
+  no panic and deterministic output. It is not a VALID-03 zero-diagnostic claim (it is a
+  deliberately broken fixture suite), not a mutation corpus, and not a timing corpus
+  (terragrunt v1.1.6 crashes on it, PREP.md §3).
+- Env gate `GRUNTLED_CORPUS_DENIS256`; the test skips when it is unset and fails (not skips)
+  when the checkout is not at the pinned commit. That checkout has `HEAD` on a branch ref
+  (`ref: refs/heads/master`), not detached, so the check resolves the ref. The checkout also
+  holds an untracked `terragrunt-crash-*.log` left by PREP's terragrunt run; the test uses a
+  before/after tree digest, not `git status`.
+- The expectation is hand-derived from the corpus text and the locked DIAG-03 table
+  (03-CONTEXT), starting from the 9 would-be hits in the Phase 2 stress report
+  (`~/.cache/gruntled-qa/phase2-stress.md` §1), which ran without DIAG-03:
+  - 2 genuine fixture bugs: `issue-2631/main` `dep.outputs.a`, `mocks/module1`
+    `module2.outputs.vpc_id2`. Reported, no mock-masking suffix.
+  - 6 references whose key exists only in `mock_outputs`, on an enabled dependency. Reported
+    under "mocks never suppress", severity error. The suffix is expected exactly where the
+    literal facts make masking at apply certain (per-hit table in 04-04-PLAN.md).
+  - 1 reference, `optional-dependency/reference-disabled-dependency/app` line 18
+    `dependency.db.outputs.db`, is on a dependency with `enabled = false`. Locked DIAG-03
+    row 2 (`enabled != true` is silent) makes it silent. It is NOT in the expected GRT001
+    set. The test asserts its absence, and docs/validation.md lists it with that reason.
+    Planner note: the proxy's request said "exactly those 9". 8 is what the two locked
+    decisions give together, because row 2 wins before mocks are consulted. Asserting 9
+    would assert a DIAG-03 violation. The orchestrator may override this.
+- GRT100 diagnostics on denis256 are allowed (broken fixtures). They are counted and logged,
+  not asserted. Only the codes GRT001 and GRT100 may appear.
+- Honest-failure rule: if gruntled's GRT001 set differs from the expectation, the difference
+  is recorded in the SUMMARY and docs/validation.md as a FAIL of the secondary-corpus check.
+  The expectation is not edited to match gruntled. The one allowed repair is an expectation
+  error shown from the corpus text and the locked rules alone, without looking at gruntled's
+  output, with the evidence in the SUMMARY.
+
 ### Claude's Discretion
 - The second (deletion) mutation: delete `output "region"` from `iac.mq/mq_broker/state.tf`,
   which breaks the 3 `dependency.mq.outputs.region` references in `iac.mq/ecr_mq_*`. It
@@ -100,14 +135,17 @@ Phase 4 drives `run()` in `cmd/gruntled` and the JSON schema v1 from 03-02/03-03
   supplementary in-process `b.Loop()` benchmark is included.
 - Golden fixture format: txtar archives under `cmd/gruntled/testdata/golden/`, with a
   reserved `_golden/` section for expectations and symlinks.
-- The secondary corpora (cds-snc/secret, cds-snc/gc-articles, denis256) are not used for
-  any VALID-* claim. docs/validation.md says why (see PREP.md §3).
+- The secondary corpora cds-snc/secret and cds-snc/gc-articles are not used for any
+  VALID-* claim. docs/validation.md says why (see PREP.md §3). denis256 is used as a
+  secondary exact-set corpus, per the amendment below.
 </decisions>
 
 <deferred>
 ## Deferred Ideas
 - Running the corpus or benchmark in CI, and a hyperfine-based benchmark.
-- Secondary-corpus experiments and more mutation kinds beyond one rename and one deletion.
+- Experiments on the secondary corpora cds-snc/secret and cds-snc/gc-articles, and more
+  mutation kinds beyond one rename and one deletion. (denis256 is no longer deferred: see
+  the amendment.)
 - Anything that changes gruntled's behaviour. That is out of scope for a terminal
   experiment phase.
 </deferred>
