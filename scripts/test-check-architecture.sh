@@ -406,4 +406,61 @@ import _ "${MODULE}/internal/testsupport/synthrepo"
 EOF
 run_case "testsupport-in-tagged-prod" "$copy" testsupport-only-in-tests
 
+# --- hcl-windows-file-in-cmd: HCL imported from a file linux never compiles
+copy=$(mkcopy)
+addstub "$copy" hashicorp
+cat >"$copy/cmd/gruntled/zz_windows.go" <<'EOF'
+package main
+
+import _ "github.com/hashicorp/zzprobe"
+EOF
+run_case "hcl-windows-file-in-cmd" "$copy" hcl-only-in-infrastructure
+
+# --- hcl-tagged-in-testsupport: go-cty imported behind a //go:build tag ----
+copy=$(mkcopy)
+addstub "$copy" zclconf
+mkdir -p "$copy/internal/testsupport/zz"
+cat >"$copy/internal/testsupport/zz/zz.go" <<'EOF'
+//go:build integration
+
+package zz
+
+import _ "github.com/zclconf/zzprobe"
+EOF
+run_case "hcl-tagged-in-testsupport" "$copy" hcl-only-in-infrastructure
+
+# --- hcl-aliased-import-block: aliased spec inside an import block ---------
+copy=$(mkcopy)
+addstub "$copy" hashicorp
+cat >"$copy/cmd/gruntled/zz_probe_windows.go" <<'EOF'
+package main
+
+import (
+	x "github.com/hashicorp/zzprobe"
+)
+
+var _ = x.X
+EOF
+run_case "hcl-aliased-import-block" "$copy" hcl-only-in-infrastructure
+
+# --- hcl-tagged-in-infrastructure-allowed: tagged HCL import in infra ------
+copy=$(mkcopy)
+addstub "$copy" hashicorp
+mkdir -p "$copy/internal/infrastructure/zzprobe"
+cat >"$copy/internal/infrastructure/zzprobe/zz_windows.go" <<'EOF'
+package zzprobe
+
+import _ "github.com/hashicorp/zzprobe"
+EOF
+run_case "hcl-tagged-in-infrastructure-allowed" "$copy" zero
+
+# --- hcl-mention-in-comment-allowed: naming HCL in a comment is fine -------
+copy=$(mkcopy)
+cat >"$copy/internal/domain/repograph/zz_probe.go" <<'EOF'
+package repograph
+
+// see "github.com/hashicorp/hcl/v2" for the grammar
+EOF
+run_case "hcl-mention-in-comment-allowed" "$copy" zero
+
 echo "all architecture self-tests passed"
