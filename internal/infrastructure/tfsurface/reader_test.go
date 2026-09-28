@@ -3,11 +3,13 @@ package tfsurface_test
 import (
 	"context"
 	"io/fs"
+	"strings"
 	"testing"
 	"testing/fstest"
 
 	"github.com/GiulioSavini/gruntled/internal/application/ports"
 	"github.com/GiulioSavini/gruntled/internal/domain/repograph"
+	"github.com/GiulioSavini/gruntled/internal/infrastructure/hclconv"
 	"github.com/GiulioSavini/gruntled/internal/infrastructure/tfsurface"
 )
 
@@ -214,4 +216,152 @@ func TestReadSurfaceContextCancelled(t *testing.T) {
 	if _, err := r.ReadSurface(ctx, repograph.MustRepoPath("mod")); err == nil {
 		t.Fatal("ReadSurface with a cancelled context: err = nil, want non-nil")
 	}
+}
+
+// --- G7: module-file size cap and nesting-depth guard ----------------------
+
+// readFailFS wraps an fstest.MapFS so that ReadFile fails for exactly one
+// named file, while Stat (promoted, unmodified, from the embedded MapFS)
+// still succeeds: this exercises ReasonModuleFileUnreadable without
+// needing a real dangling or escaping symlink (realfs_test.go covers
+// those).
+type readFailFS struct {
+	fstest.MapFS
+	failFile string
+}
+
+func (f readFailFS) ReadFile(name string) ([]byte, error) {
+	if name == f.failFile {
+		return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrPermission}
+	}
+	return f.MapFS.ReadFile(name)
+}
+
+// deepParenValue returns an `output "x" { value = ... }` block whose value
+// nests n parens deep, entirely generated in memory (never written to the
+// repo as a fixture).
+func deepParenValue(n int) string {
+	return `output "x" {` + "\n  value = " + strings.Repeat("(", n) + "1" + strings.Repeat(")", n) + "\n}\n"
+}
+
+// deepJSONValue returns a .tf.json document with an output named "x" whose
+// value nests n JSON objects deep.
+func deepJSONValue(n int) string {
+	nested := strings.Repeat(`{"a":`, n) + "1" + strings.Repeat("}", n)
+	return `{"output": {"x": {"value": ` + nested + `}}}`
+}
+
+// TestReadSurfaceDeepNestingNoCrash is the G7 regression: before the fix,
+// this killed the test binary with a fatal stack overflow (150k levels
+// crashed in the 02-10 planning probe; 200k is used here for headroom).
+func TestReadSurfaceDeepNestingNoCrash(t *testing.T) {
+	fsys := fstest.MapFS{
+		"m/main.tf": &fstest.MapFile{Data: []byte(deepParenValue(200_000))},
+	}
+	res := readSurface(t, fsys, "m")
+	if res.UnknownReason != tfsurface.ReasonModuleFileTooDeep {
+		t.Fatalf("UnknownReason = %q, want %q", res.UnknownReason, tfsurface.ReasonModuleFileTooDeep)
+	}
+	if len(res.Diagnostics) != 0 {
+		t.Fatalf("Diagnostics = %v, want none", res.Diagnostics)
+	}
+}
+
+// TestReadSurfaceDeepJSONNoCrash is the JSON counterpart of the G7
+// regression: hcl/json.Parse recurses just as hclsyntax does.
+func TestReadSurfaceDeepJSONNoCrash(t *testing.T) {
+	fsys := fstest.MapFS{
+		"m/main.tf.json": &fstest.MapFile{Data: []byte(deepJSONValue(200_000))},
+	}
+	res := readSurface(t, fsys, "m")
+	if res.UnknownReason != tfsurface.ReasonModuleFileTooDeep {
+		t.Fatalf("UnknownReason = %q, want %q", res.UnknownReason, tfsurface.ReasonModuleFileTooDeep)
+	}
+}
+
+// TestReadSurfaceOversizeFile proves a file over hclconv.MaxFileBytes is
+// refused before parsing, with no diagnostic (it is not a syntax error).
+func TestReadSurfaceOversizeFile(t *testing.T) {
+	base := "output \"x\" {}\n# "
+	pad := strings.Repeat("a", hclconv.MaxFileBytes+1-len(base))
+	fsys := fstest.MapFS{
+		"m/main.tf": &fstest.MapFile{Data: []byte(base + pad)},
+	}
+	res := readSurface(t, fsys, "m")
+	if res.UnknownReason != tfsurface.ReasonModuleFileTooLarge {
+		t.Fatalf("UnknownReason = %q, want %q", res.UnknownReason, tfsurface.ReasonModuleFileTooLarge)
+	}
+	if len(res.Diagnostics) != 0 {
+		t.Fatalf("Diagnostics = %v, want none", res.Diagnostics)
+	}
+}
+
+// TestReadSurfaceAtDepthLimitStillReads proves a module file at exactly
+// hclconv.MaxNestingDepth still parses normally: the bound is inclusive.
+func TestReadSurfaceAtDepthLimitStillReads(t *testing.T) {
+	fsys := fstest.MapFS{
+		"m/main.tf": &fstest.MapFile{Data: []byte(deepParenValue(hclconv.MaxNestingDepth))},
+	}
+	res := readSurface(t, fsys, "m")
+	assertSurface(t, res, nil, []string{"x"})
+}
+
+// TestReadSurfaceLimitPrecedence proves the reader's final precedence:
+// unreadable > too-large > too-deep > syntax-error (> invalid-block,
+// unchanged from before this plan).
+func TestReadSurfaceLimitPrecedence(t *testing.T) {
+	t.Run("unreadable beats too-large", func(t *testing.T) {
+		fsys := readFailFS{
+			MapFS: fstest.MapFS{
+				"m/bad.tf": &fstest.MapFile{Data: []byte(`output "a" { value = 1 }`)},
+				"m/big.tf": &fstest.MapFile{Data: []byte(strings.Repeat("a", hclconv.MaxFileBytes+1))},
+			},
+			failFile: "m/bad.tf",
+		}
+		res := readSurface(t, fsys, "m")
+		if res.UnknownReason != tfsurface.ReasonModuleFileUnreadable {
+			t.Fatalf("UnknownReason = %q, want %q", res.UnknownReason, tfsurface.ReasonModuleFileUnreadable)
+		}
+	})
+
+	t.Run("too-large beats too-deep", func(t *testing.T) {
+		fsys := fstest.MapFS{
+			"m/big.tf":  &fstest.MapFile{Data: []byte(strings.Repeat("a", hclconv.MaxFileBytes+1))},
+			"m/deep.tf": &fstest.MapFile{Data: []byte(deepParenValue(200_000))},
+		}
+		res := readSurface(t, fsys, "m")
+		if res.UnknownReason != tfsurface.ReasonModuleFileTooLarge {
+			t.Fatalf("UnknownReason = %q, want %q", res.UnknownReason, tfsurface.ReasonModuleFileTooLarge)
+		}
+	})
+
+	t.Run("too-deep beats syntax-error", func(t *testing.T) {
+		fsys := fstest.MapFS{
+			"m/deep.tf": &fstest.MapFile{Data: []byte(deepParenValue(200_000))},
+			"m/bad.tf": &fstest.MapFile{Data: []byte(`
+output "x" {
+  value = 1
+`)},
+		}
+		res := readSurface(t, fsys, "m")
+		if res.UnknownReason != tfsurface.ReasonModuleFileTooDeep {
+			t.Fatalf("UnknownReason = %q, want %q", res.UnknownReason, tfsurface.ReasonModuleFileTooDeep)
+		}
+	})
+
+	t.Run("syntax-error only, unchanged regression", func(t *testing.T) {
+		fsys := fstest.MapFS{
+			"m/bad.tf": &fstest.MapFile{Data: []byte(`
+output "x" {
+  value = 1
+`)},
+		}
+		res := readSurface(t, fsys, "m")
+		if res.UnknownReason != tfsurface.ReasonSyntaxError {
+			t.Fatalf("UnknownReason = %q, want %q", res.UnknownReason, tfsurface.ReasonSyntaxError)
+		}
+		if len(res.Diagnostics) != 1 {
+			t.Fatalf("len(Diagnostics) = %d, want 1 (%v)", len(res.Diagnostics), res.Diagnostics)
+		}
+	})
 }
