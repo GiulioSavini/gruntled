@@ -50,7 +50,7 @@ EOF
 run_case() {
   local name="$1"
   local copy="$2"
-  local expect="$3" # "zero", or the name of the rule that must fail
+  local expect="$3" # "zero", or a space-separated list of rule names that must fail
   local rc=0
   bash "$copy/scripts/check-architecture.sh" >/tmp/tca-out.$$ 2>/tmp/tca-err.$$ || rc=$?
   if [ "$expect" = zero ]; then
@@ -61,14 +61,22 @@ run_case() {
       exit 1
     fi
   else
-    # A non-zero exit is not enough: the failure must come from the rule
-    # this case targets, or the case proves nothing about that rule.
-    if [ "$rc" -eq 0 ] || ! grep -q -x -F "=== RULE FAILED: ${expect} ===" /tmp/tca-err.$$; then
-      echo "FAIL $name (expected rule ${expect} to fail, got exit $rc)"
+    # A non-zero exit is not enough: the failure must come from every rule
+    # this case targets, or the case proves nothing about those rules.
+    if [ "$rc" -eq 0 ]; then
+      echo "FAIL $name (expected rule(s) '${expect}' to fail, got exit $rc)"
       cat /tmp/tca-out.$$ /tmp/tca-err.$$ >&2
       rm -f /tmp/tca-out.$$ /tmp/tca-err.$$
       exit 1
     fi
+    for rule in $expect; do
+      if ! grep -q -x -F "=== RULE FAILED: ${rule} ===" /tmp/tca-err.$$; then
+        echo "FAIL $name (expected rule ${rule} to fail, got exit $rc)"
+        cat /tmp/tca-out.$$ /tmp/tca-err.$$ >&2
+        rm -f /tmp/tca-out.$$ /tmp/tca-err.$$
+        exit 1
+      fi
+    done
   fi
   echo "PASS $name"
   rm -f /tmp/tca-out.$$ /tmp/tca-err.$$
@@ -309,5 +317,93 @@ package zzprobe
 import _ "github.com/hashicorp/zzprobe"
 EOF
 run_case "hcl-in-infrastructure-allowed" "$copy" zero
+
+# --- layout-unknown-dir: a new top-level internal/<x> dir, code + hole ---
+copy=$(mkcopy)
+mkdir -p "$copy/internal/analysis"
+cat >"$copy/internal/analysis/a.go" <<EOF
+package analysis
+
+import (
+	_ "os"
+	_ "${MODULE}/internal/infrastructure/hclconv"
+)
+EOF
+run_case "layout-unknown-dir" "$copy" "internal-layout infrastructure-importers"
+
+# --- layout-stray-go-file: a .go file directly in internal/ --------------
+copy=$(mkcopy)
+cat >"$copy/internal/zz_probe.go" <<'EOF'
+package internal
+EOF
+run_case "layout-stray-go-file" "$copy" internal-layout
+
+# --- layout-interfaces-allowed: internal/interfaces is reserved, allowed -
+copy=$(mkcopy)
+mkdir -p "$copy/internal/interfaces/zzprobe"
+cat >"$copy/internal/interfaces/zzprobe/p.go" <<'EOF'
+package zzprobe
+
+const X = 1
+EOF
+run_case "layout-interfaces-allowed" "$copy" zero
+
+# --- layout-non-go-dir-allowed: a non-Go directory under internal/ -------
+copy=$(mkcopy)
+mkdir -p "$copy/internal/zznotes"
+cat >"$copy/internal/zznotes/README.md" <<'EOF'
+notes
+EOF
+run_case "layout-non-go-dir-allowed" "$copy" zero
+
+# --- infra-from-testsupport: testsupport package imports infrastructure --
+copy=$(mkcopy)
+mkdir -p "$copy/internal/testsupport/zzprobe"
+cat >"$copy/internal/testsupport/zzprobe/p.go" <<EOF
+package zzprobe
+
+import _ "${MODULE}/internal/infrastructure/hclconv"
+EOF
+run_case "infra-from-testsupport" "$copy" infrastructure-importers
+
+# --- infra-from-tagged-file: same import, but only from a _windows.go ----
+copy=$(mkcopy)
+mkdir -p "$copy/internal/testsupport/zzprobe"
+cat >"$copy/internal/testsupport/zzprobe/p.go" <<'EOF'
+package zzprobe
+EOF
+cat >"$copy/internal/testsupport/zzprobe/zz_windows.go" <<EOF
+package zzprobe
+
+import _ "${MODULE}/internal/infrastructure/hclconv"
+EOF
+run_case "infra-from-tagged-file" "$copy" infrastructure-importers
+
+# --- infra-from-cmd-allowed: cmd/... may import infrastructure -----------
+copy=$(mkcopy)
+cat >"$copy/cmd/gruntled/zz_probe.go" <<EOF
+package main
+
+import _ "${MODULE}/internal/infrastructure/hclconv"
+EOF
+run_case "infra-from-cmd-allowed" "$copy" zero
+
+# --- testsupport-in-prod: prod package imports internal/testsupport ------
+copy=$(mkcopy)
+cat >"$copy/internal/infrastructure/tfsurface/zz_probe.go" <<EOF
+package tfsurface
+
+import _ "${MODULE}/internal/testsupport/synthrepo"
+EOF
+run_case "testsupport-in-prod" "$copy" testsupport-only-in-tests
+
+# --- testsupport-in-tagged-prod: same, but only from a _windows.go -------
+copy=$(mkcopy)
+cat >"$copy/internal/infrastructure/tfsurface/zz_probe_windows.go" <<EOF
+package tfsurface
+
+import _ "${MODULE}/internal/testsupport/synthrepo"
+EOF
+run_case "testsupport-in-tagged-prod" "$copy" testsupport-only-in-tests
 
 echo "all architecture self-tests passed"
