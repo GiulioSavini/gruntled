@@ -44,6 +44,30 @@ func (e *MissingModuleError) Error() string {
 	return "repograph: unit " + strconv.Quote(e.Unit.String()) + " resolves to module " + strconv.Quote(e.Module.String()) + ", which is not in the graph"
 }
 
+// InvalidUnitError is returned by NewRepositoryGraph when units contains a
+// zero-value Unit: a zero Path, or a Status outside the three defined
+// UnitStatus constants. Index is the unit's position in the original,
+// unsorted units slice, so the caller can trace it back to its input.
+type InvalidUnitError struct {
+	Index int
+}
+
+func (e *InvalidUnitError) Error() string {
+	return "repograph: invalid unit at input index " + strconv.Itoa(e.Index) + ": zero value"
+}
+
+// InvalidModuleError is returned by NewRepositoryGraph when modules contains
+// a zero-value Module: a zero Path, or an unknown module (Surface not
+// known) with an empty UnknownReason. Index is the module's position in the
+// original, unsorted modules slice.
+type InvalidModuleError struct {
+	Index int
+}
+
+func (e *InvalidModuleError) Error() string {
+	return "repograph: invalid module at input index " + strconv.Itoa(e.Index) + ": zero value"
+}
+
 // RepositoryGraph is the aggregate root over a repository's units and
 // modules. It normalizes its input to a sorted, deduplicated, defensively
 // copied internal representation at construction time, so that the same
@@ -57,11 +81,24 @@ type RepositoryGraph struct {
 }
 
 // NewRepositoryGraph validates and normalizes units and modules into a
-// RepositoryGraph. It sorts both by Path, rejects duplicate unit or module
-// paths, and rejects a resolved unit whose module is absent from modules.
-// A dependency whose Target is not a unit in the graph is not an error: a
-// future analyzer (GRT002) diagnoses that case, not the aggregate.
+// RepositoryGraph. Before sorting, it rejects any zero-value Unit or Module
+// in the input (input-order index reported via InvalidUnitError /
+// InvalidModuleError). It then sorts both by Path, rejects duplicate unit or
+// module paths, and rejects a resolved unit whose module is absent from
+// modules. A dependency whose Target is not a unit in the graph is not an
+// error: a future analyzer (GRT002) diagnoses that case, not the aggregate.
 func NewRepositoryGraph(units []Unit, modules []Module) (*RepositoryGraph, error) {
+	for i, u := range units {
+		if u.Path().IsZero() || !u.Status().IsValid() {
+			return nil, &InvalidUnitError{Index: i}
+		}
+	}
+	for i, m := range modules {
+		if m.path.IsZero() || (!m.known && m.unknownReason == "") {
+			return nil, &InvalidModuleError{Index: i}
+		}
+	}
+
 	sortedUnits := slices.Clone(units)
 	slices.SortFunc(sortedUnits, func(a, b Unit) int {
 		return a.Path().Compare(b.Path())

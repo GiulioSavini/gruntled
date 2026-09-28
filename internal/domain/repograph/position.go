@@ -44,6 +44,13 @@ func (p Position) Column() int {
 	return p.column
 }
 
+// IsZero reports whether p is the zero value. NewPosition never returns a
+// Position whose file is zero, so a zero file implies p was never
+// constructed by NewPosition.
+func (p Position) IsZero() bool {
+	return p.file.IsZero()
+}
+
 // Compare orders Position values by file, then line, then column.
 func (p Position) Compare(q Position) int {
 	if c := p.file.Compare(q.file); c != 0 {

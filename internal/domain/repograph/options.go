@@ -39,6 +39,19 @@ func (t Tristate) String() string {
 	}
 }
 
+// IsValid reports whether t is one of the three defined Tristate constants.
+// A value outside them can only arise from an explicit conversion such as
+// Tristate(99); the domain refuses to store or report a fact that was never
+// actually observed.
+func (t Tristate) IsValid() bool {
+	switch t {
+	case TristateUnknown, TristateFalse, TristateTrue:
+		return true
+	default:
+		return false
+	}
+}
+
 // TristateOf converts a plain bool into its Tristate equivalent.
 func TristateOf(b bool) Tristate {
 	if b {

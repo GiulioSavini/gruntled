@@ -92,6 +92,54 @@ func mustModule(t *testing.T, path repograph.RepoPath, surface repograph.Surface
 	return m
 }
 
+func TestUnitStatusIsValid(t *testing.T) {
+	valid := []repograph.UnitStatus{repograph.StatusResolved, repograph.StatusModuleUnknown, repograph.StatusConfigUnknown}
+	for _, s := range valid {
+		if !s.IsValid() {
+			t.Errorf("%v.IsValid() = false, want true", s)
+		}
+	}
+	invalid := []repograph.UnitStatus{repograph.UnitStatus(0), repograph.UnitStatus(4)}
+	for _, s := range invalid {
+		if s.IsValid() {
+			t.Errorf("UnitStatus(%d).IsValid() = true, want false", int(s))
+		}
+	}
+}
+
+func TestNewRepositoryGraph_ZeroUnit(t *testing.T) {
+	valid, err := repograph.NewConfigUnknownUnit(repograph.MustRepoPath("units/a"), "reason")
+	if err != nil {
+		t.Fatalf("NewConfigUnknownUnit: unexpected error: %v", err)
+	}
+
+	_, err = repograph.NewRepositoryGraph([]repograph.Unit{valid, {}}, nil)
+	if err == nil {
+		t.Fatalf("NewRepositoryGraph with a zero-value unit: expected error, got nil")
+	}
+	var invalidErr *repograph.InvalidUnitError
+	if !errors.As(err, &invalidErr) {
+		t.Fatalf("expected *InvalidUnitError, got %T: %v", err, err)
+	}
+	if invalidErr.Index != 1 {
+		t.Errorf("InvalidUnitError.Index = %d, want 1", invalidErr.Index)
+	}
+}
+
+func TestNewRepositoryGraph_ZeroModule(t *testing.T) {
+	_, err := repograph.NewRepositoryGraph(nil, []repograph.Module{{}})
+	if err == nil {
+		t.Fatalf("NewRepositoryGraph with a zero-value module: expected error, got nil")
+	}
+	var invalidErr *repograph.InvalidModuleError
+	if !errors.As(err, &invalidErr) {
+		t.Fatalf("expected *InvalidModuleError, got %T: %v", err, err)
+	}
+	if invalidErr.Index != 0 {
+		t.Errorf("InvalidModuleError.Index = %d, want 0", invalidErr.Index)
+	}
+}
+
 func TestNewRepositoryGraph_OrderIndependent(t *testing.T) {
 	g1 := buildThreeUnitGraph(t, []int{0, 1, 2}, []int{0, 1})
 	g2 := buildThreeUnitGraph(t, []int{2, 0, 1}, []int{1, 0})
