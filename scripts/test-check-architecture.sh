@@ -463,4 +463,117 @@ package repograph
 EOF
 run_case "hcl-mention-in-comment-allowed" "$copy" zero
 
+# --- interfaces-infra-dep: presenter imports internal/infrastructure -----
+# infrastructure-importers (Step 7) already forbids the import; the new
+# interfaces-external-deps rule must fire too.
+copy=$(mkcopy)
+mkdir -p "$copy/internal/infrastructure/zzprobe"
+cat >"$copy/internal/infrastructure/zzprobe/p.go" <<'EOF'
+package zzprobe
+
+const X = 1
+EOF
+cat >"$copy/internal/interfaces/presenter/zz_probe.go" <<EOF
+package presenter
+
+import _ "${MODULE}/internal/infrastructure/zzprobe"
+EOF
+run_case "interfaces-infra-dep" "$copy" "interfaces-external-deps infrastructure-importers"
+
+# --- interfaces-testsupport-in-test: presenter test imports testsupport --
+copy=$(mkcopy)
+cat >"$copy/internal/interfaces/presenter/zz_probe_test.go" <<EOF
+package presenter_test
+
+import (
+	_ "${MODULE}/internal/testsupport/synthrepo"
+	"testing"
+)
+
+func TestZZProbe(t *testing.T) {}
+EOF
+run_case "interfaces-testsupport-in-test" "$copy" interfaces-external-deps
+
+# --- interfaces-os: presenter imports os ----------------------------------
+copy=$(mkcopy)
+cat >"$copy/internal/interfaces/presenter/zz_probe.go" <<'EOF'
+package presenter
+
+import _ "os"
+EOF
+run_case "interfaces-os" "$copy" interfaces-stdlib-allowlist
+
+# --- interfaces-windows-file: os imported from a file linux never compiles
+copy=$(mkcopy)
+cat >"$copy/internal/interfaces/presenter/zz_probe_windows.go" <<'EOF'
+package presenter
+
+import _ "os"
+EOF
+run_case "interfaces-windows-file" "$copy" interfaces-platform-neutral
+
+# --- interfaces-vacuous: internal/interfaces exists but holds no packages -
+# Once cmd/gruntled imports the presenter (03-03), compile-gate also fails
+# here, but the guard prints first because it runs in Step 0, and run_case
+# greps for the guard's own line.
+copy=$(mkcopy)
+rm -rf "$copy/internal/interfaces"
+mkdir -p "$copy/internal/interfaces"
+run_case "interfaces-vacuous" "$copy" interfaces-non-vacuous-guard
+
+# --- binary-os-exec: cmd/gruntled links os/exec ---------------------------
+copy=$(mkcopy)
+cat >"$copy/cmd/gruntled/zz_probe.go" <<'EOF'
+package main
+
+import _ "os/exec"
+EOF
+run_case "binary-os-exec" "$copy" binary-no-net-no-exec
+
+# --- binary-net: cmd/gruntled links net -----------------------------------
+copy=$(mkcopy)
+cat >"$copy/cmd/gruntled/zz_probe.go" <<'EOF'
+package main
+
+import _ "net"
+EOF
+run_case "binary-net" "$copy" binary-no-net-no-exec
+
+# --- binary-start-process: os.StartProcess, invisible to an import list ---
+copy=$(mkcopy)
+cat >"$copy/cmd/gruntled/zz_probe.go" <<'EOF'
+package main
+
+import "os"
+
+func zzProbe() { _, _ = os.StartProcess("x", nil, &os.ProcAttr{}) }
+EOF
+run_case "binary-start-process" "$copy" binary-no-net-no-exec
+
+# --- binary-exec-windows-file: os/exec only in a _windows.go file ---------
+# A linux go list never sees this file; only the windows/amd64 iteration of
+# the release-target loop does, so this proves the loop covers non-host
+# targets.
+copy=$(mkcopy)
+cat >"$copy/cmd/gruntled/zz_probe_windows.go" <<'EOF'
+package main
+
+import _ "os/exec"
+EOF
+run_case "binary-exec-windows-file" "$copy" binary-no-net-no-exec
+
+# --- binary-exec-in-test-allowed: test-only os/exec is not in the binary --
+copy=$(mkcopy)
+cat >"$copy/cmd/gruntled/zz_probe_test.go" <<'EOF'
+package main
+
+import (
+	_ "os/exec"
+	"testing"
+)
+
+func TestZZProbe(t *testing.T) {}
+EOF
+run_case "binary-exec-in-test-allowed" "$copy" zero
+
 echo "all architecture self-tests passed"

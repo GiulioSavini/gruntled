@@ -14,6 +14,16 @@
 # (infrastructure-importers); and only _test.go files may import
 # internal/testsupport (testsupport-only-in-tests).
 #
+# Phase 3 adds the presenter and binary rules: internal/interfaces must be
+# non-empty (interfaces-non-vacuous-guard), may import only a pure stdlib
+# allowlist (fmt, io and encoding/json on top of the domain allowlist:
+# interfaces-stdlib-allowlist), must be platform-neutral
+# (interfaces-platform-neutral), and may depend only on internal/domain,
+# internal/application and internal/interfaces (interfaces-external-deps);
+# and the shipped binary, for every release target, links no net, os/exec,
+# plugin or crypto/tls package and no linked non-std file calls
+# os.StartProcess or syscall.ForkExec/Exec (binary-no-net-no-exec).
+#
 # Exit 0 means every rule held. Exit 1 means at least one rule failed; every
 # failing rule prints its own labelled block to stderr before the script
 # exits, so a single run can report more than one violation.
@@ -47,6 +57,17 @@ app_pkg_count=$(printf '%s\n' "$app_pkgs" | grep -c . || true)
 if [ "$app_pkg_count" -lt 1 ]; then
   echo "=== RULE FAILED: application-non-vacuous-guard ===" >&2
   echo "found only ${app_pkg_count} package(s) under ./internal/application/..., expected at least 1." >&2
+  echo "This check would pass vacuously; the path is probably wrong." >&2
+  fail=1
+fi
+
+# interfaces-non-vacuous-guard: at least one interfaces (presenter)
+# package must exist, or every interfaces rule below would pass vacuously.
+interfaces_pkgs=$(go list ./internal/interfaces/... 2>/dev/null || true)
+interfaces_pkg_count=$(printf '%s\n' "$interfaces_pkgs" | grep -c . || true)
+if [ "$interfaces_pkg_count" -lt 1 ]; then
+  echo "=== RULE FAILED: interfaces-non-vacuous-guard ===" >&2
+  echo "found only ${interfaces_pkg_count} package(s) under ./internal/interfaces/..., expected at least 1." >&2
   echo "This check would pass vacuously; the path is probably wrong." >&2
   fail=1
 fi
@@ -95,9 +116,9 @@ fi
 # go list can succeed (rc=0) on code with a syntax error and simply omit it
 # from .Error, so every rule below that depends on go list must be preceded
 # by a real compiler pass.
-if ! go vet ./internal/domain/... ./internal/application/... ./cmd/... >/tmp/check-architecture-vet.$$ 2>&1; then
+if ! go vet ./internal/domain/... ./internal/application/... ./internal/interfaces/... ./cmd/... >/tmp/check-architecture-vet.$$ 2>&1; then
   echo "=== RULE FAILED: compile-gate ===" >&2
-  echo "domain, application or cmd does not compile:" >&2
+  echo "domain, application, interfaces or cmd does not compile:" >&2
   cat /tmp/check-architecture-vet.$$ >&2
   rm -f /tmp/check-architecture-vet.$$
   exit 1
@@ -258,6 +279,21 @@ check_stdlib_allowlist application-stdlib-allowlist ./internal/application/... \
   "$app_allowed" "$domain_test_allowed" "^${module_re}/internal/(domain|application)/" \
   "internal/application (or one of its tests) imports package(s) outside the allowlist. application must not do I/O or printing; error wrapping uses errors and custom error types, not fmt.Errorf. Move the code to internal/infrastructure, or justify extending the allowlist in review:"
 
+# --- Step 2c: interfaces-stdlib-allowlist ----------------------------------
+# Presenters turn domain values into bytes on an io.Writer: the domain
+# allowlist plus fmt, io and encoding/json. They must not touch the
+# filesystem, the network, processes or the environment, so os,
+# path/filepath, io/fs, net, os/exec and syscall stay out. Imports of
+# internal/domain, internal/application and internal/interfaces are exempt
+# here; interfaces-external-deps polices those.
+interfaces_allowed="${domain_allowed}
+fmt
+io
+encoding/json"
+check_stdlib_allowlist interfaces-stdlib-allowlist ./internal/interfaces/... \
+  "$interfaces_allowed" "$domain_test_allowed" "^${module_re}/internal/(domain|application|interfaces)/" \
+  "internal/interfaces (or one of its tests) imports package(s) outside the allowlist. Presenters turn domain values into bytes on an io.Writer; they must not touch the filesystem, the network, processes or the environment (no os, path/filepath, io/fs, net, os/exec, syscall):"
+
 # --- Step 3: platform-neutral -----------------------------------------------
 # Everything above only sees the files that compile for the host platform.
 # A foo_windows.go or a file with a //go:build line is invisible to go list
@@ -267,6 +303,7 @@ goos_re=$(go tool dist list | cut -d/ -f1 | sort -u | paste -sd'|' -)
 goarch_re=$(go tool dist list | cut -d/ -f2 | sort -u | paste -sd'|' -)
 check_platform_neutral domain-platform-neutral internal/domain
 check_platform_neutral application-platform-neutral internal/application
+check_platform_neutral interfaces-platform-neutral internal/interfaces
 
 # --- Step 4: external-deps ---------------------------------------------------
 check_external_deps domain-external-deps ./internal/domain/... \
@@ -275,6 +312,9 @@ check_external_deps domain-external-deps ./internal/domain/... \
 check_external_deps application-external-deps ./internal/application/... \
   "^${module_re}/internal/(domain|application)/" \
   "internal/application transitively depends on package(s) outside domain/application. application must never reach internal/infrastructure or internal/testsupport directly:"
+check_external_deps interfaces-external-deps ./internal/interfaces/... \
+  "^${module_re}/internal/(domain|application|interfaces)/" \
+  "internal/interfaces transitively depends on package(s) outside domain/application/interfaces. Presenters must never reach internal/infrastructure, internal/testsupport, HCL or any third-party library:"
 
 # --- Step 5: binary-links-testsupport --------------------------------------
 cmd_deps=$(go list -deps -f '{{.ImportPath}}' ./cmd/gruntled)
@@ -387,8 +427,64 @@ if [ -n "$ts_violations" ]; then
   fail=1
 fi
 
+# --- Step 9: binary-no-net-no-exec (CLI-04) -----------------------------------
+# The shipped binary must not be able to do network or process I/O. Two
+# halves, both evaluated for EVERY release target, not only the build
+# host: go list only sees the files the current GOOS/GOARCH compiles, so a
+# zz_windows.go importing os/exec is invisible to a linux go list and
+# visible only to the windows/amd64 iteration below. Keep release_targets
+# identical to the release cross-build target list (03-03/03-05).
+#
+# 1. Import deny-list over go list -deps: no net, net/*, os/exec, plugin or
+#    crypto/tls. No -test: test-only deps (testscript) legitimately use
+#    os/exec. -e as in Step 6, so a probe that breaks an unrelated package
+#    does not abort the script under set -e.
+# 2. Source scan for spawners. os.StartProcess lives in os itself, which an
+#    import deny-list cannot forbid (every binary links os), so the non-std
+#    GoFiles of each target are grepped for the qualified identifiers
+#    os.StartProcess and syscall.ForkExec|Exec|StartProcess. Its limits,
+#    stated plainly: it is a textual grep, so it does NOT catch an aliased
+#    import (import o "os"; o.StartProcess), a dot import, golang.org/x/sys
+#    spawners (unix.Exec, windows.CreateProcess), cgo, assembly or
+#    reflection; and it can over-match a comment that names those
+#    identifiers (a conservative false positive, fixed by rewording the
+#    comment). The import deny-list half has no such gap. The self-test
+#    cases binary-os-exec, binary-net, binary-start-process,
+#    binary-exec-windows-file and binary-exec-in-test-allowed pin exactly
+#    what is covered.
+release_targets="linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64"
+bin_violations=""
+for target in $release_targets; do
+  t_goos=${target%/*}
+  t_goarch=${target#*/}
+  t_deps=$(GOOS="$t_goos" GOARCH="$t_goarch" go list -e -deps ./cmd/gruntled)
+  t_forbidden=$(printf '%s\n' "$t_deps" | grep -E '^(net|net/.+|os/exec|plugin|crypto/tls)$' || true)
+  t_spawners=$(
+    GOOS="$t_goos" GOARCH="$t_goarch" go list -e -deps \
+      -f '{{if not .Standard}}{{$d := .Dir}}{{range .GoFiles}}{{$d}}/{{.}}{{"\n"}}{{end}}{{end}}' ./cmd/gruntled |
+      grep -v '^$' |
+      xargs -r grep -l -E '\bos\.StartProcess\b|\bsyscall\.(ForkExec|Exec|StartProcess)\b' || true
+  )
+  if [ -n "$t_forbidden" ]; then
+    bin_violations="${bin_violations}$(printf '%s\n' "$t_forbidden" | sed "s|^|${target}: package |")
+"
+  fi
+  if [ -n "$t_spawners" ]; then
+    bin_violations="${bin_violations}$(printf '%s\n' "$t_spawners" | sed "s|^|${target}: file |")
+"
+  fi
+done
+bin_violations=$(printf '%s\n' "$bin_violations" | grep -v '^$' | sort -u || true)
+if [ -n "$bin_violations" ]; then
+  echo "=== RULE FAILED: binary-no-net-no-exec ===" >&2
+  echo "cmd/gruntled links a network or process-spawning package, or linked non-std code calls os.StartProcess/syscall.ForkExec/Exec, on at least one release target:" >&2
+  printf '%s\n' "$bin_violations" >&2
+  echo "gruntled must make no network calls and spawn no external processes (CLI-04); keep that statically provable." >&2
+  fail=1
+fi
+
 if [ "$fail" -ne 0 ]; then
   exit 1
 fi
 
-echo "architecture: OK (${domain_pkg_count} domain packages, ${app_pkg_count} application packages)"
+echo "architecture: OK (${domain_pkg_count} domain packages, ${app_pkg_count} application packages, ${interfaces_pkg_count} interfaces packages)"
