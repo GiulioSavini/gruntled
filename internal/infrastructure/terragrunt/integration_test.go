@@ -234,10 +234,13 @@ func TestSurfaceUnknownTarget(t *testing.T) {
 func TestWholeBodyRefs(t *testing.T) {
 	fsys := filesFS(map[string]string{
 		// A single leading space shifts the "ééé" line's "d" in
-		// "dependency" to byte column 23 (hclconv_test.go's own
-		// TestPositionNonASCIIPrefixUsesBytes proves the unindented form of
-		// this exact line gives column 22).
-		"inc.hcl": " a = \"ééé\" == \"\" ? dependency.x.outputs.y : \"\"\n",
+		// "dependency" to byte column 17: ' a = ["' is 7 bytes, "ééé" is 6
+		// bytes (3 runes, 2 bytes each), then '", ' is 3 more bytes,
+		// 7+6+3=16 bytes before "dependency" starts, so byte column 17
+		// (1-based). The reference sits in a list literal, not a ternary
+		// branch, so refWalker's lazy-evaluation guard (refs_test.go's
+		// TestExtractRefsLazyEvaluation) does not suppress it.
+		"inc.hcl": " a = [\"ééé\", dependency.x.outputs.y]\n",
 		"u/terragrunt.hcl": `
 include "root" { path = "../inc.hcl" }
 locals {
@@ -291,8 +294,8 @@ terraform {
 			t.Errorf("missing reference %s.%s", k[0], k[1])
 		}
 	}
-	if xyColumn != 23 {
-		t.Errorf("x.y reference column = %d, want 23 (byte column, not grapheme column)", xyColumn)
+	if xyColumn != 17 {
+		t.Errorf("x.y reference column = %d, want 17 (byte column, not grapheme column)", xyColumn)
 	}
 }
 
