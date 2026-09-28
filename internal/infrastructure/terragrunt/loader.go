@@ -53,31 +53,61 @@ func (l *Loader) LoadUnits(ctx context.Context) (ports.LoadResult, error) {
 	})
 
 	cache := newFileCache(l.fsys)
+	located := map[string]bool{}
 	units := make([]ports.UnitConfig, 0, len(entries))
 	for _, e := range entries {
 		if err := ctx.Err(); err != nil {
 			return ports.LoadResult{}, err
 		}
-		units = append(units, l.resolveUnit(cache, e))
+		units = append(units, l.resolveUnit(cache, e, located))
+	}
+
+	// 13. Include-target post-pass (research Pattern 4 / G3): any unit
+	// whose own <dir>/terragrunt.hcl was located by some OTHER unit's
+	// resolveIncludes becomes config-unknown ReasonIncludeTarget, UNLESS it
+	// already has an earlier config-unknown reason of its own (the first
+	// check that applies always wins, consistent with resolveUnit's fixed
+	// order). Its dependencies and references are dropped from this
+	// standalone interpretation; they are still checked, correctly, once
+	// per including unit, since mergeReferences attributes include-file
+	// facts to the including unit, not to the include-target unit itself.
+	for i, u := range units {
+		if u.ConfigUnknownReason != "" {
+			continue
+		}
+		if !located[path.Join(u.Path.String(), "terragrunt.hcl")] {
+			continue
+		}
+		units[i] = ports.UnitConfig{Path: u.Path, ConfigUnknownReason: ReasonIncludeTarget}
 	}
 
 	return ports.LoadResult{Units: units, Diagnostics: cache.syntaxDiagnostics()}, nil
 }
 
 // resolveUnit computes e's ports.UnitConfig against cache, in the fixed
-// order documented inline below: the first check that applies decides the
-// unit's config-unknown or module-unknown state. It never returns a Go
-// error and never panics: a domain constructor failure that "should be
-// impossible" given the checks already performed becomes config-unknown
+// order documented inline below (plus the LoadUnits-level step 13
+// include-target post-pass, which runs after every unit has gone through
+// this function once): the first check that applies decides the unit's
+// config-unknown or module-unknown state. It never returns a Go error and
+// never panics: a domain constructor failure that "should be impossible"
+// given the checks already performed becomes config-unknown
 // ReasonInvalidDependency instead of propagating, so a future change to a
 // domain invariant fails closed here rather than crashing on user input.
-func (l *Loader) resolveUnit(cache *fileCache, e unitEntry) ports.UnitConfig {
+// located accumulates every include path any unit's resolveIncludes
+// resolves to an existing regular file, across the whole LoadUnits call, so
+// step 13 can find every include-target unit afterward.
+func (l *Loader) resolveUnit(cache *fileCache, e unitEntry, located map[string]bool) ports.UnitConfig {
 	unitDir := e.dir
 	unitPath, err := repograph.NewRepoPath(unitDir)
 	if err != nil {
 		// discoverUnits only ever yields clean, repo-relative directories
-		// (path.Dir of a walked file path); this is unreachable in
-		// practice, but fails closed rather than panicking.
+		// (path.Dir of a walked file path). NewRepoPath can only fail here
+		// if a future change to discoverUnits starts yielding an unclean or
+		// escaping directory; the zero UnitConfig this returns is rejected
+		// by indexing.Build's assemble stage (a resolved unit must have a
+		// non-zero Path), which turns it into a whole-load error rather
+		// than silently dropping the unit -- a loud failure, not a silent
+		// one.
 		return ports.UnitConfig{}
 	}
 
@@ -113,7 +143,7 @@ func (l *Loader) resolveUnit(cache *fileCache, e unitEntry) ports.UnitConfig {
 	// existing regular file inside the repo, read and parse it once
 	// (shared across every unit that includes it), and reject a second
 	// level of include.
-	resolved, reason := l.resolveIncludes(cache, unitDir, unitFile, childPF.includes)
+	resolved, reason := l.resolveIncludes(cache, unitDir, unitFile, childPF.includes, located)
 	if reason != "" {
 		return ports.UnitConfig{Path: unitPath, ConfigUnknownReason: reason}
 	}
@@ -154,8 +184,12 @@ func (l *Loader) resolveUnit(cache *fileCache, e unitEntry) ports.UnitConfig {
 
 	// 11. The unit directory overlaying the module's own files, only
 	// meaningful when the module is somewhere other than the unit itself.
+	// A ReadDir failure here (G6) makes the module unknown too, since
+	// whether it overlays is itself unreadable.
 	if moduleUnknownReason == "" && modulePath.Compare(unitPath) != 0 {
-		if unitDirOverlaysModule(l.fsys, unitDir) {
+		if overlays, reason := unitDirOverlaysModule(l.fsys, unitDir); reason != "" {
+			moduleUnknownReason = reason
+		} else if overlays {
 			moduleUnknownReason = ReasonUnitDirOverlaysModule
 		}
 	}
@@ -180,8 +214,14 @@ func (l *Loader) resolveUnit(cache *fileCache, e unitEntry) ports.UnitConfig {
 // resolveIncludes evaluates and resolves unitDir's already
 // structurally-valid include decls, in declaration order. unitFile is the
 // unit's own terragrunt.hcl (an include resolving back to it is
-// self-inclusion, invalid). It returns "" for reason on success.
-func (l *Loader) resolveIncludes(cache *fileCache, unitDir string, unitFile repograph.RepoPath, decls []includeDecl) ([]resolvedInclude, string) {
+// self-inclusion, invalid). located accumulates every include path that
+// stats as an existing regular in-repo file, recorded BEFORE the
+// JSON/nested/syntax checks below: the file is a parent config even when
+// this including unit goes on to fail for an unrelated reason, and
+// over-marking a file as an include target only ever fails toward unknown
+// (research Pattern 4 / G3), it never fabricates a diagnostic. It returns
+// "" for reason on success.
+func (l *Loader) resolveIncludes(cache *fileCache, unitDir string, unitFile repograph.RepoPath, decls []includeDecl, located map[string]bool) ([]resolvedInclude, string) {
 	var resolved []resolvedInclude
 	seenFiles := map[string]bool{}
 
@@ -199,6 +239,16 @@ func (l *Loader) resolveIncludes(cache *fileCache, unitDir string, unitFile repo
 		if statErr != nil || !info.Mode().IsRegular() {
 			return nil, ReasonIncludeNotFound
 		}
+		located[p] = true
+
+		// G5: Terragrunt's own DefaultTerragruntConfigPaths (and
+		// find_in_parent_folders' probe order, mirrored in
+		// pathfuncs.go) prefers terragrunt.hcl.json over terragrunt.hcl.
+		// This domain does not parse JSON Terragrunt configs.
+		if strings.HasSuffix(p, ".json") {
+			return nil, ReasonIncludeJSONUnsupported
+		}
+
 		if seenFiles[p] || p == unitFile.String() {
 			return nil, ReasonInvalidInclude
 		}
@@ -301,8 +351,26 @@ func (l *Loader) resolveDependencies(unitDir string, childRefs []includeRef, byL
 // resolveOneDependency evaluates cpExpr in scope and resolves it against
 // unitDir (always the CHILD unit dir, even when cpExpr is written in an
 // include -- research Pitfall 4), then builds a resolved or unresolved
-// repograph.Dependency. ok is false only on a domain constructor rejection
-// ("should be impossible" after the checks above).
+// repograph.Dependency. There are four outcomes:
+//
+//  1. cpExpr fails closed evaluation, or its evaluated path escapes the
+//     repository: unresolved, ReasonConfigPathDynamic / ReasonConfigPathOutsideRepo.
+//  2. The resolved path is a regular file named terragrunt.stack.hcl, or a
+//     directory holding one (research Pattern 3: Terragrunt's
+//     getTerragruntOutput tries tryGetStackOutput first, so the stack
+//     always wins over a sibling terragrunt.hcl): unresolved,
+//     ReasonConfigPathStack.
+//  3. The resolved path is a regular file with any other name: unresolved,
+//     ReasonConfigPathNondefaultFile (Terragrunt reads THAT file, which may
+//     set a different source than the directory's own terragrunt.hcl).
+//     Named "terragrunt.hcl" itself, it maps to its directory as before.
+//  4. The resulting target directory is not a valid RepoPath (for example a
+//     literal backslash surviving resolvePath as part of a path segment):
+//     unresolved, ReasonConfigPathInvalid. Only this one dependency is
+//     affected; the unit and its sibling dependencies stay resolved (G8).
+//
+// ok is false only on a domain constructor rejection ("should be
+// impossible" after the checks above).
 func (l *Loader) resolveOneDependency(label string, cpExpr hcl.Expression, scope evalScope, unitDir string, pos repograph.Position, opts repograph.DependencyOptions) (repograph.Dependency, bool) {
 	raw, ok := evalPath(cpExpr, scope)
 	if !ok {
@@ -317,12 +385,29 @@ func (l *Loader) resolveOneDependency(label string, cpExpr hcl.Expression, scope
 
 	targetDir := p
 	if info, statErr := fs.Stat(l.fsys, p); statErr == nil && info.Mode().IsRegular() {
-		targetDir = path.Dir(p)
+		switch path.Base(p) {
+		case "terragrunt.hcl":
+			targetDir = path.Dir(p)
+		case "terragrunt.stack.hcl":
+			d, err := repograph.NewUnresolvedDependency(label, ReasonConfigPathStack, pos, opts)
+			return d, err == nil
+		default:
+			d, err := repograph.NewUnresolvedDependency(label, ReasonConfigPathNondefaultFile, pos, opts)
+			return d, err == nil
+		}
 	}
+
 	targetPath, pathErr := repograph.NewRepoPath(targetDir)
 	if pathErr != nil {
-		return repograph.Dependency{}, false
+		d, err := repograph.NewUnresolvedDependency(label, ReasonConfigPathInvalid, pos, opts)
+		return d, err == nil
 	}
+
+	if info, statErr := fs.Stat(l.fsys, path.Join(targetDir, "terragrunt.stack.hcl")); statErr == nil && info.Mode().IsRegular() {
+		d, err := repograph.NewUnresolvedDependency(label, ReasonConfigPathStack, pos, opts)
+		return d, err == nil
+	}
+
 	d, err := repograph.NewDependency(label, targetPath, pos, opts)
 	return d, err == nil
 }

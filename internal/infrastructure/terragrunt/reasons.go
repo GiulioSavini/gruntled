@@ -58,6 +58,32 @@ const (
 	// internal invariant violation this loader never lets escalate to a
 	// crash or a returned error).
 	ReasonInvalidDependency = "invalid-dependency"
+	// ReasonIncludeTarget means this unit's own terragrunt.hcl is a file
+	// some OTHER unit resolved as an include (a parent config, per research
+	// 03-RESEARCH.md Pattern 4). A parent config's path-bearing attributes
+	// and references resolve differently per including unit; analysing it
+	// standalone checks it against the wrong directory (the exact false
+	// GRT001 reproduced at live/terragrunt.hcl:4:21 in the corpus). Its
+	// references are still checked, correctly, once per including unit:
+	// this only removes the parent's own, doubly-wrong self-interpretation.
+	// Catalogue STACK-09 ("included and independently runnable") becomes a
+	// documented false negative. An earlier config-unknown reason on the
+	// same unit is kept (the first check that applies always wins).
+	ReasonIncludeTarget = "include-target"
+	// ReasonIncludeJSONUnsupported means an include's path resolves to a
+	// file ending in ".json" (an explicit "root.hcl.json", or
+	// find_in_parent_folders() probing terragrunt.hcl.json ahead of
+	// terragrunt.hcl, Terragrunt's own DefaultTerragruntConfigPaths order).
+	// This domain does not parse JSON Terragrunt configs.
+	ReasonIncludeJSONUnsupported = "include-json-unsupported"
+	// ReasonInvalidGenerate means a generate block is structurally invalid:
+	// zero or two-or-more labels, or a label duplicated within one
+	// effective file. Matches ReasonInvalidDependency's shape (Terragrunt
+	// itself rejects an unlabeled or multi-labeled generate block, and a
+	// duplicate label within one file). Merging distinct files that both
+	// declare the SAME label is valid (Terragrunt merges by label, highest
+	// precedence wins); only a duplicate WITHIN one file is invalid.
+	ReasonInvalidGenerate = "invalid-generate"
 )
 
 // Module-unknown reasons (ports.UnitConfig.ModuleUnknownReason). A
@@ -93,6 +119,14 @@ const (
 	// directory's files over the module's working copy, so the effective
 	// module surface is not the module directory's surface alone.
 	ReasonUnitDirOverlaysModule = "unit-dir-overlays-module"
+	// ReasonModuleFileUnreadable means the unit directory could not be
+	// listed (fs.ReadDir failed) while checking whether it overlays the
+	// module's own files: whether it does is unknown, so the module itself
+	// must be treated as unknown rather than silently assumed not to
+	// overlay. The string intentionally matches tfsurface's own
+	// module-file-unreadable reason (02-REVIEW G6): both packages face the
+	// identical "can't list this directory" fact about a module.
+	ReasonModuleFileUnreadable = "module-file-unreadable"
 )
 
 // Unresolved-dependency reasons (repograph.NewUnresolvedDependency's reason
@@ -106,4 +140,24 @@ const (
 	// ReasonConfigPathOutsideRepo means the dependency's evaluated
 	// config_path escapes the repository.
 	ReasonConfigPathOutsideRepo = "config-path-outside-repo"
+	// ReasonConfigPathStack means the dependency's resolved target directory
+	// holds terragrunt.stack.hcl (or config_path names that file directly).
+	// Terragrunt's getTerragruntOutput calls tryGetStackOutput first
+	// (research 03-RESEARCH.md Pattern 3): when a stack file is present, the
+	// dependency's outputs come from the stack's nested unit outputs, not
+	// from the unit module this domain resolves, so the target is never a
+	// module. This wins even when the directory also holds a terragrunt.hcl.
+	ReasonConfigPathStack = "config-path-stack"
+	// ReasonConfigPathNondefaultFile means config_path names an existing
+	// regular file other than terragrunt.hcl (or terragrunt.stack.hcl,
+	// which gets ReasonConfigPathStack instead). Terragrunt reads THAT file
+	// as the target unit's config, which may set a different source than
+	// the directory's own terragrunt.hcl, so mapping it to the directory
+	// would be a guess.
+	ReasonConfigPathNondefaultFile = "config-path-nondefault-file"
+	// ReasonConfigPathInvalid means the dependency's resolved target is not
+	// a valid RepoPath (for example a backslash survives resolvePath as
+	// part of a path segment). Only this one dependency becomes unresolved;
+	// its sibling dependencies and the unit itself stay resolved (G8).
+	ReasonConfigPathInvalid = "config-path-invalid"
 )

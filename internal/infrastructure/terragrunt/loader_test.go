@@ -80,6 +80,28 @@ func (f readFailFS) ReadFile(name string) ([]byte, error) {
 	return f.MapFS.ReadFile(name)
 }
 
+// readDirFailFS wraps an fstest.MapFS so that ReadDir(dir) succeeds on the
+// FIRST call (discoverUnits' own walk, which must still find the unit) and
+// fails with fs.ErrPermission on every later call for that same directory,
+// so only a later, targeted ReadDir (research G6's overlay check in
+// unitDirOverlaysModule) observes the failure. A pointer receiver is
+// required to track the per-directory call count.
+type readDirFailFS struct {
+	fstest.MapFS
+	dir   string
+	calls int
+}
+
+func (f *readDirFailFS) ReadDir(name string) ([]fs.DirEntry, error) {
+	if name == f.dir {
+		f.calls++
+		if f.calls > 1 {
+			return nil, &fs.PathError{Op: "readdir", Path: name, Err: fs.ErrPermission}
+		}
+	}
+	return f.MapFS.ReadDir(name)
+}
+
 // allReasonConstants parses reasons.go with go/parser and returns every
 // exported Reason* constant's name and string value, so TestUnknownReasons
 // can assert every one of them has a fixture, with no dead or untested
@@ -135,6 +157,9 @@ type unknownReasonCase struct {
 	fsys   fs.FS
 	unit   string
 	check  func(t *testing.T, uc ports.UnitConfig)
+	// wantNoDiagnostics, when true, additionally asserts LoadResult.Diagnostics
+	// is empty: proves the reason fires with no false GRT100.
+	wantNoDiagnostics bool
 }
 
 func wantConfigUnknown(reason string) func(*testing.T, ports.UnitConfig) {
@@ -533,6 +558,254 @@ dependency "good" { config_path = "../vpc" }
 			unit:  "u",
 			check: wantDepUnresolved("bad", ReasonConfigPathOutsideRepo, "good"),
 		},
+		{
+			name:   "config-path-stack/dir-only-stack",
+			reason: ReasonConfigPathStack,
+			fsys: filesFS(map[string]string{
+				"u/terragrunt.hcl": `
+dependency "bad" { config_path = "../stk" }
+dependency "good" { config_path = "../vpc" }
+`,
+				"stk/terragrunt.stack.hcl": "",
+				"vpc/terragrunt.hcl":       "",
+			}),
+			unit:  "u",
+			check: wantDepUnresolved("bad", ReasonConfigPathStack, "good"),
+		},
+		{
+			name:   "config-path-stack/dir-with-both",
+			reason: ReasonConfigPathStack,
+			fsys: filesFS(map[string]string{
+				"u/terragrunt.hcl": `
+dependency "bad" { config_path = "../stk2" }
+dependency "good" { config_path = "../vpc" }
+`,
+				"stk2/terragrunt.stack.hcl": "",
+				"stk2/terragrunt.hcl":       "",
+				"vpc/terragrunt.hcl":        "",
+			}),
+			unit:  "u",
+			check: wantDepUnresolved("bad", ReasonConfigPathStack, "good"),
+		},
+		{
+			name:   "config-path-stack/file",
+			reason: ReasonConfigPathStack,
+			fsys: filesFS(map[string]string{
+				"u/terragrunt.hcl": `
+dependency "bad" { config_path = "../stk/terragrunt.stack.hcl" }
+dependency "good" { config_path = "../vpc" }
+`,
+				"stk/terragrunt.stack.hcl": "",
+				"vpc/terragrunt.hcl":       "",
+			}),
+			unit:  "u",
+			check: wantDepUnresolved("bad", ReasonConfigPathStack, "good"),
+		},
+		{
+			name:   "config-path-nondefault-file/named-file",
+			reason: ReasonConfigPathNondefaultFile,
+			fsys: filesFS(map[string]string{
+				"u/terragrunt.hcl": `
+dependency "bad" { config_path = "../vpc/alt.hcl" }
+dependency "good" { config_path = "../vpc" }
+`,
+				"vpc/terragrunt.hcl": "",
+				"vpc/alt.hcl":        "",
+			}),
+			unit:  "u",
+			check: wantDepUnresolved("bad", ReasonConfigPathNondefaultFile, "good"),
+		},
+		{
+			name:   "config-path-nondefault-file/json-config",
+			reason: ReasonConfigPathNondefaultFile,
+			fsys: filesFS(map[string]string{
+				"u/terragrunt.hcl": `
+dependency "bad" { config_path = "../vpc/terragrunt.hcl.json" }
+dependency "good" { config_path = "../vpc" }
+`,
+				"vpc/terragrunt.hcl":      "",
+				"vpc/terragrunt.hcl.json": `{}`,
+			}),
+			unit:  "u",
+			check: wantDepUnresolved("bad", ReasonConfigPathNondefaultFile, "good"),
+		},
+		{
+			name:   "config-path-invalid",
+			reason: ReasonConfigPathInvalid,
+			fsys: filesFS(map[string]string{
+				"u/terragrunt.hcl": `
+dependency "bad" { config_path = "..\\vpc" }
+dependency "good" { config_path = "../vpc" }
+`,
+				"vpc/terragrunt.hcl": "",
+			}),
+			unit:  "u",
+			check: wantDepUnresolved("bad", ReasonConfigPathInvalid, "good"),
+		},
+		{
+			name:   "config-path-default-file-regression",
+			reason: ReasonConfigPathOutsideRepo, // regression only; reuses an already-covered reason
+			fsys: filesFS(map[string]string{
+				"u/terragrunt.hcl":   `dependency "vpc" { config_path = "../vpc/terragrunt.hcl" }`,
+				"vpc/terragrunt.hcl": "",
+			}),
+			unit: "u",
+			check: func(t *testing.T, uc ports.UnitConfig) {
+				t.Helper()
+				d, ok := findDep(uc.Dependencies, "vpc")
+				if !ok {
+					t.Fatalf("dependency %q not found", "vpc")
+				}
+				target, ok := d.Target()
+				if !ok || target.String() != "vpc" {
+					t.Fatalf("Target() = (%q, %v), want (%q, true) (config_path naming the default terragrunt.hcl still maps to its directory)", target.String(), ok, "vpc")
+				}
+			},
+		},
+		{
+			name:   "include-target",
+			reason: ReasonIncludeTarget,
+			fsys: filesFS(map[string]string{
+				"r/terragrunt.hcl":   "",
+				"r/c/terragrunt.hcl": `include { path = find_in_parent_folders() }`,
+			}),
+			unit:  "r",
+			check: wantConfigUnknown(ReasonIncludeTarget),
+		},
+		{
+			name:   "include-json-unsupported/explicit",
+			reason: ReasonIncludeJSONUnsupported,
+			fsys: filesFS(map[string]string{
+				"root.hcl.json":    `{}`,
+				"u/terragrunt.hcl": `include "root" { path = "../root.hcl.json" }`,
+			}),
+			unit:              "u",
+			check:             wantConfigUnknown(ReasonIncludeJSONUnsupported),
+			wantNoDiagnostics: true,
+		},
+		{
+			name:   "include-json-unsupported/find-in-parent",
+			reason: ReasonIncludeJSONUnsupported,
+			fsys: filesFS(map[string]string{
+				"p/terragrunt.hcl.json": `{}`,
+				"p/c/terragrunt.hcl":    `include { path = find_in_parent_folders() }`,
+			}),
+			unit:              "p/c",
+			check:             wantConfigUnknown(ReasonIncludeJSONUnsupported),
+			wantNoDiagnostics: true,
+		},
+		{
+			name:   "module-file-unreadable",
+			reason: ReasonModuleFileUnreadable,
+			fsys: &readDirFailFS{
+				MapFS: filesFS(map[string]string{
+					"u/terragrunt.hcl": `terraform { source = "../mod" }`,
+					"mod/main.tf":      `variable "x" {}`,
+				}),
+				dir: "u",
+			},
+			unit:  "u",
+			check: wantModuleUnknown(ReasonModuleFileUnreadable),
+		},
+		{
+			name:   "invalid-generate/no-label",
+			reason: ReasonInvalidGenerate,
+			fsys: filesFS(map[string]string{
+				"u/terragrunt.hcl": `
+generate {
+  path      = "x.tf"
+  if_exists = "overwrite"
+  contents  = ""
+}
+`,
+			}),
+			unit:  "u",
+			check: wantConfigUnknown(ReasonInvalidGenerate),
+		},
+		{
+			name:   "invalid-generate/two-labels",
+			reason: ReasonInvalidGenerate,
+			fsys: filesFS(map[string]string{
+				"u/terragrunt.hcl": `
+generate "a" "b" {
+  path      = "x.tf"
+  if_exists = "overwrite"
+  contents  = ""
+}
+`,
+			}),
+			unit:  "u",
+			check: wantConfigUnknown(ReasonInvalidGenerate),
+		},
+		{
+			name:   "invalid-generate/duplicate-in-file",
+			reason: ReasonInvalidGenerate,
+			fsys: filesFS(map[string]string{
+				"u/terragrunt.hcl": `
+generate "p" {
+  path      = "x.tf"
+  if_exists = "overwrite"
+  contents  = ""
+}
+generate "p" {
+  path      = "y.tf"
+  if_exists = "overwrite"
+  contents  = ""
+}
+`,
+			}),
+			unit:  "u",
+			check: wantConfigUnknown(ReasonInvalidGenerate),
+		},
+		{
+			name:   "invalid-generate/duplicate-in-include",
+			reason: ReasonInvalidGenerate,
+			fsys: filesFS(map[string]string{
+				"root.hcl": `
+generate "p" {
+  path      = "x.tf"
+  if_exists = "overwrite"
+  contents  = ""
+}
+generate "p" {
+  path      = "y.tf"
+  if_exists = "overwrite"
+  contents  = ""
+}
+`,
+				"u/terragrunt.hcl": `include "root" { path = "../root.hcl" }`,
+			}),
+			unit:  "u",
+			check: wantConfigUnknown(ReasonInvalidGenerate),
+		},
+		{
+			name:   "invalid-generate/regression-same-label-child-and-include-is-valid",
+			reason: ReasonInvalidGenerate,
+			fsys: filesFS(map[string]string{
+				"root.hcl": `
+generate "prov" {
+  path      = "provider.tf"
+  if_exists = "overwrite"
+  contents  = "root"
+}
+`,
+				"u/terragrunt.hcl": `
+include "root" { path = "../root.hcl" }
+generate "prov" {
+  path      = "provider.tf"
+  if_exists = "overwrite"
+  contents  = "child"
+}
+`,
+			}),
+			unit: "u",
+			check: func(t *testing.T, uc ports.UnitConfig) {
+				t.Helper()
+				if uc.ConfigUnknownReason != "" || uc.ModuleUnknownReason != "" {
+					t.Fatalf("unit unknown: config=%q module=%q, want fully resolved (child/include same-label generate is a valid merge, child wins)", uc.ConfigUnknownReason, uc.ModuleUnknownReason)
+				}
+			},
+		},
 	}
 
 	covered := map[string]bool{}
@@ -541,6 +814,9 @@ dependency "good" { config_path = "../vpc" }
 			res := loadUnits(t, tc.fsys)
 			uc := unitByPath(t, res, tc.unit)
 			tc.check(t, uc)
+			if tc.wantNoDiagnostics && len(res.Diagnostics) != 0 {
+				t.Fatalf("Diagnostics = %v, want none", res.Diagnostics)
+			}
 		})
 		covered[tc.reason] = true
 	}
