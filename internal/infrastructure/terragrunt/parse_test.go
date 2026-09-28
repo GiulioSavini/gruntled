@@ -2,11 +2,13 @@ package terragrunt
 
 import (
 	"slices"
+	"strings"
 	"testing"
 	"testing/fstest"
 
 	"github.com/GiulioSavini/gruntled/internal/domain/diagnostic"
 	"github.com/GiulioSavini/gruntled/internal/domain/repograph"
+	"github.com/GiulioSavini/gruntled/internal/infrastructure/hclconv"
 )
 
 // --- fileCache: parse-once, missing files, syntax errors -------------------
@@ -111,6 +113,54 @@ func TestFileCacheSyntaxDiagnosticsSortedAndOnlyTouched(t *testing.T) {
 	}
 	if diags[0].Pos().File().String() != "a.hcl" || diags[1].Pos().File().String() != "b.hcl" {
 		t.Fatalf("diagnostics not sorted by path: %s then %s", diags[0].Pos().File().String(), diags[1].Pos().File().String())
+	}
+}
+
+// TestFileCacheLimits proves G7b at the fileCache level: a file over
+// hclconv.MaxFileBytes or nested deeper than hclconv.MaxNestingDepth is
+// never parsed. It gets a limitReason, no readErr, no syntax diagnostic
+// (it is not known to be invalid) and no facts. A file sitting exactly at
+// the depth limit still parses normally.
+func TestFileCacheLimits(t *testing.T) {
+	atLimit := "x = " + strings.Repeat("(", hclconv.MaxNestingDepth) + "dependency.a.outputs.b" + strings.Repeat(")", hclconv.MaxNestingDepth) + "\n"
+	cache := newFileCache(fstest.MapFS{
+		"large.hcl": &fstest.MapFile{Data: []byte(strings.Repeat("#", hclconv.MaxFileBytes+1))},
+		"deep.hcl":  &fstest.MapFile{Data: []byte("x = " + strings.Repeat("(", hclconv.MaxNestingDepth+1) + "1" + strings.Repeat(")", hclconv.MaxNestingDepth+1) + "\n")},
+		"limit.hcl": &fstest.MapFile{Data: []byte(atLimit)},
+	})
+
+	for _, tc := range []struct {
+		file string
+		want string
+	}{
+		{"large.hcl", ReasonConfigTooLarge},
+		{"deep.hcl", ReasonConfigTooDeep},
+	} {
+		pf := cache.get(repograph.MustRepoPath(tc.file))
+		if pf.limitReason != tc.want {
+			t.Fatalf("%s: limitReason = %q, want %q", tc.file, pf.limitReason, tc.want)
+		}
+		if pf.readErr != nil {
+			t.Fatalf("%s: readErr = %v, want nil", tc.file, pf.readErr)
+		}
+		if pf.syntax != nil {
+			t.Fatalf("%s: syntax = %v, want nil", tc.file, pf.syntax)
+		}
+		if len(pf.includes) != 0 || len(pf.terraforms) != 0 || len(pf.deps) != 0 || len(pf.generates) != 0 || len(pf.refs) != 0 {
+			t.Fatalf("%s: facts populated for a refused file", tc.file)
+		}
+	}
+
+	pf := cache.get(repograph.MustRepoPath("limit.hcl"))
+	if pf.limitReason != "" || pf.readErr != nil || pf.syntax != nil {
+		t.Fatalf("limit.hcl: (limitReason %q, readErr %v, syntax %v), want a normal parse", pf.limitReason, pf.readErr, pf.syntax)
+	}
+	if len(pf.refs) != 1 {
+		t.Fatalf("limit.hcl: %d refs, want 1", len(pf.refs))
+	}
+
+	if diags := cache.syntaxDiagnostics(); len(diags) != 0 {
+		t.Fatalf("syntaxDiagnostics() = %v, want none", diags)
 	}
 }
 

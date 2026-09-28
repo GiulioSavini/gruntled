@@ -11,8 +11,9 @@ const (
 	// that file (see fileCache.syntaxDiagnostics).
 	ReasonSyntaxError = "syntax-error"
 	// ReasonUnreadableConfig means the unit's own terragrunt.hcl, or an
-	// include file it resolved to, could not be read (fs.ReadFile failed),
-	// even though it exists per fs.Stat.
+	// include file it resolved to, could not be read (fs.ReadFile, or the
+	// fs.Stat that hclconv.ReadFileLimited does first, failed), even though
+	// it was found by discovery or by the include's own fs.Stat.
 	ReasonUnreadableConfig = "unreadable-config"
 	// ReasonJSONConfigUnsupported means the unit directory holds
 	// terragrunt.hcl.json. Terragrunt itself prefers the JSON variant over
@@ -84,6 +85,18 @@ const (
 	// declare the SAME label is valid (Terragrunt merges by label, highest
 	// precedence wins); only a duplicate WITHIN one file is invalid.
 	ReasonInvalidGenerate = "invalid-generate"
+	// ReasonConfigTooLarge means the unit's own terragrunt.hcl, or an
+	// include file it resolved to, exceeds hclconv.MaxFileBytes. The file
+	// is never parsed: hclsyntax recurses over its input, and the fatal
+	// stack overflow a hostile file can cause cannot be recovered from
+	// (02-REVIEW G7). No GRT100 is emitted, because the file is not known
+	// to be invalid.
+	ReasonConfigTooLarge = "config-too-large"
+	// ReasonConfigTooDeep means the unit's own terragrunt.hcl, or an
+	// include file it resolved to, nests deeper than
+	// hclconv.MaxNestingDepth. The file is never parsed, for the same
+	// reason as ReasonConfigTooLarge, and no GRT100 is emitted.
+	ReasonConfigTooDeep = "config-too-deep"
 )
 
 // Module-unknown reasons (ports.UnitConfig.ModuleUnknownReason). A

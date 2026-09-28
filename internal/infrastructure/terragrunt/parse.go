@@ -70,13 +70,24 @@ type generateDecl struct {
 // below is populated: hclsyntax's partial body on a syntax error could
 // omit real blocks, so analysing it would under-count the file's facts
 // (research Pattern 8), a false-positive risk this project does not take.
+// limitReason non-empty means the file was read (or refused on its size
+// alone) but deliberately not parsed, because it exceeds an hclconv limit
+// (02-REVIEW G7); like readErr, it leaves every fact and syntax unset.
+// Exactly one of readErr, limitReason and syntax is set when the file is
+// unusable.
 type parsedFile struct {
 	path    repograph.RepoPath
 	src     []byte
 	readErr error
 	syntax  *diagnostic.Diagnostic
+	// limitReason is non-empty (ReasonConfigTooLarge or
+	// ReasonConfigTooDeep) when the file was deliberately not parsed
+	// because it exceeds an hclconv limit (02-REVIEW G7). Such a file has
+	// no facts and no syntax diagnostic: it is not known to be invalid.
+	limitReason string
 
-	// Facts, populated only when readErr == nil && syntax == nil. Each
+	// Facts, populated only when readErr == nil, limitReason == "" and
+	// syntax == nil. Each
 	// slice is in source order: body.Blocks is already ordered, and
 	// extractRefs sorts by byte offset.
 	includes   []includeDecl
@@ -135,13 +146,24 @@ func (c *fileCache) syntaxDiagnostics() []diagnostic.Diagnostic {
 }
 
 // parse reads and parses p exactly once. See parsedFile's doc comment for
-// the readErr/syntax/facts contract.
+// the readErr/limitReason/syntax/facts contract.
 func (c *fileCache) parse(p repograph.RepoPath) *parsedFile {
 	pf := &parsedFile{path: p}
 
-	src, err := fs.ReadFile(c.fsys, p.String())
+	// G7: refuse a file over the size cap or the nesting limit before
+	// hclsyntax ever sees it. ReadFileLimited still calls fs.ReadFile at
+	// most once, so parse-once holds.
+	src, err := hclconv.ReadFileLimited(c.fsys, p.String())
+	if errors.Is(err, hclconv.ErrFileTooLarge) {
+		pf.limitReason = ReasonConfigTooLarge
+		return pf
+	}
 	if err != nil {
 		pf.readErr = err
+		return pf
+	}
+	if errors.Is(hclconv.CheckNativeDepth(src), hclconv.ErrNestingTooDeep) {
+		pf.limitReason = ReasonConfigTooDeep
 		return pf
 	}
 	pf.src = src

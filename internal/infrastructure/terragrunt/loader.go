@@ -88,7 +88,10 @@ func (l *Loader) LoadUnits(ctx context.Context) (ports.LoadResult, error) {
 // order documented inline below (plus the LoadUnits-level step 13
 // include-target post-pass, which runs after every unit has gone through
 // this function once): the first check that applies decides the unit's
-// config-unknown or module-unknown state. It never returns a Go error and
+// config-unknown or module-unknown state. A unit file or include file that
+// exceeds an hclconv size or nesting limit is never parsed and makes the
+// unit config-unknown ReasonConfigTooLarge / ReasonConfigTooDeep, never
+// partially known (02-REVIEW G7). It never returns a Go error and
 // never panics: a domain constructor failure that "should be impossible"
 // given the checks already performed becomes config-unknown
 // ReasonInvalidDependency instead of propagating, so a future change to a
@@ -121,7 +124,9 @@ func (l *Loader) resolveUnit(cache *fileCache, e unitEntry, located map[string]b
 		return ports.UnitConfig{Path: unitPath, ConfigUnknownReason: ReasonAutoincludeUnsupported}
 	}
 
-	// 2. Read and parse the unit's own terragrunt.hcl.
+	// 2. Read and parse the unit's own terragrunt.hcl. A read failure wins,
+	// then a file refused for exceeding an hclconv size or nesting limit
+	// (G7: never parsed, no GRT100), then a syntax error.
 	unitFile, err := repograph.NewRepoPath(path.Join(unitDir, "terragrunt.hcl"))
 	if err != nil {
 		return ports.UnitConfig{Path: unitPath, ConfigUnknownReason: ReasonUnreadableConfig}
@@ -129,6 +134,9 @@ func (l *Loader) resolveUnit(cache *fileCache, e unitEntry, located map[string]b
 	childPF := cache.get(unitFile)
 	if childPF.readErr != nil {
 		return ports.UnitConfig{Path: unitPath, ConfigUnknownReason: ReasonUnreadableConfig}
+	}
+	if childPF.limitReason != "" {
+		return ports.UnitConfig{Path: unitPath, ConfigUnknownReason: childPF.limitReason}
 	}
 	if childPF.syntax != nil {
 		return ports.UnitConfig{Path: unitPath, ConfigUnknownReason: ReasonSyntaxError}
@@ -216,7 +224,7 @@ func (l *Loader) resolveUnit(cache *fileCache, e unitEntry, located map[string]b
 // unit's own terragrunt.hcl (an include resolving back to it is
 // self-inclusion, invalid). located accumulates every include path that
 // stats as an existing regular in-repo file, recorded BEFORE the
-// JSON/nested/syntax checks below: the file is a parent config even when
+// JSON/limit/nested/syntax checks below: the file is a parent config even when
 // this including unit goes on to fail for an unrelated reason, and
 // over-marking a file as an include target only ever fails toward unknown
 // (research Pattern 4 / G3), it never fabricates a diagnostic. It returns
@@ -261,6 +269,9 @@ func (l *Loader) resolveIncludes(cache *fileCache, unitDir string, unitFile repo
 		pf := cache.get(file)
 		if pf.readErr != nil {
 			return nil, ReasonUnreadableConfig
+		}
+		if pf.limitReason != "" {
+			return nil, pf.limitReason
 		}
 		if pf.syntax != nil {
 			return nil, ReasonSyntaxError

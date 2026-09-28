@@ -16,6 +16,7 @@ import (
 	"github.com/GiulioSavini/gruntled/internal/application/ports"
 	"github.com/GiulioSavini/gruntled/internal/domain/diagnostic"
 	"github.com/GiulioSavini/gruntled/internal/domain/repograph"
+	"github.com/GiulioSavini/gruntled/internal/infrastructure/hclconv"
 )
 
 // --- shared test helpers ----------------------------------------------
@@ -224,6 +225,20 @@ func wantDepUnresolved(depName, reason string, otherResolved ...string) func(*te
 	}
 }
 
+// oversizeHCL returns a syntactically valid HCL file (a single comment)
+// one byte over hclconv.MaxFileBytes.
+func oversizeHCL() string {
+	return "#" + strings.Repeat("x", hclconv.MaxFileBytes)
+}
+
+// overdeepHCL returns an otherwise valid HCL file whose single attribute
+// nests one level over hclconv.MaxNestingDepth: small, so the row stays
+// cheap, and just deep enough to be refused.
+func overdeepHCL() string {
+	n := hclconv.MaxNestingDepth + 1
+	return "x = " + strings.Repeat("(", n) + "1" + strings.Repeat(")", n) + "\n"
+}
+
 func TestUnknownReasons(t *testing.T) {
 	cases := []unknownReasonCase{
 		{
@@ -255,6 +270,54 @@ func TestUnknownReasons(t *testing.T) {
 			},
 			unit:  "u",
 			check: wantConfigUnknown(ReasonUnreadableConfig),
+		},
+		{
+			name:   "unreadable-config/unit-file-read-error-beats-limits",
+			reason: ReasonUnreadableConfig,
+			fsys: readFailFS{
+				MapFS:    filesFS(map[string]string{"u/terragrunt.hcl": "locals { a = 1 }"}),
+				failFile: "u/terragrunt.hcl",
+			},
+			unit:  "u",
+			check: wantConfigUnknown(ReasonUnreadableConfig),
+		},
+		{
+			name:              "config-too-large/unit-file",
+			reason:            ReasonConfigTooLarge,
+			fsys:              filesFS(map[string]string{"u/terragrunt.hcl": oversizeHCL()}),
+			unit:              "u",
+			check:             wantConfigUnknown(ReasonConfigTooLarge),
+			wantNoDiagnostics: true,
+		},
+		{
+			name:   "config-too-large/include",
+			reason: ReasonConfigTooLarge,
+			fsys: filesFS(map[string]string{
+				"root.hcl":         oversizeHCL(),
+				"u/terragrunt.hcl": `include "root" { path = "../root.hcl" }`,
+			}),
+			unit:              "u",
+			check:             wantConfigUnknown(ReasonConfigTooLarge),
+			wantNoDiagnostics: true,
+		},
+		{
+			name:              "config-too-deep/unit-file",
+			reason:            ReasonConfigTooDeep,
+			fsys:              filesFS(map[string]string{"u/terragrunt.hcl": overdeepHCL()}),
+			unit:              "u",
+			check:             wantConfigUnknown(ReasonConfigTooDeep),
+			wantNoDiagnostics: true,
+		},
+		{
+			name:   "config-too-deep/include",
+			reason: ReasonConfigTooDeep,
+			fsys: filesFS(map[string]string{
+				"root.hcl":         overdeepHCL(),
+				"u/terragrunt.hcl": `include "root" { path = "../root.hcl" }`,
+			}),
+			unit:              "u",
+			check:             wantConfigUnknown(ReasonConfigTooDeep),
+			wantNoDiagnostics: true,
 		},
 		{
 			name:   "json-config-unsupported",

@@ -47,6 +47,8 @@ REQUIREMENTS.md` (PARSE-01..06, GRAPH-01..05), `.planning/research/PITFALLS.md`
 | SRC-11 | Source via `get_env()` with literal default | Yes | Resolve | No |
 | SRC-12 | Source via `get_env()` without default | No | Unknown | No |
 | SRC-13 | Local path resolving to a nonexistent directory | Yes | Report | No |
+| SRC-14 | Malformed or in-file duplicate `generate` block (`invalid-generate`, G9) | No | Unknown | No |
+| SRC-15 | Unit directory unlistable during the overlay check (`module-file-unreadable`, G6) | No | Unknown | No |
 | INC-01 | Basic `include` via `find_in_parent_folders()` | Yes | Resolve | Yes |
 | INC-02 | `include` with explicit literal `path` | Yes | Resolve | Yes |
 | INC-03 | Multiple `include` blocks, distinct labels | Yes | Resolve | Yes |
@@ -59,6 +61,7 @@ REQUIREMENTS.md` (PARSE-01..06, GRAPH-01..05), `.planning/research/PITFALLS.md`
 | INC-10 | `include.path` via `get_env()`, no default | No | Unknown | No |
 | INC-11 | `read_terragrunt_config()` in `locals` (not gating source/config_path) | Yes (structurally) | Resolve (out of scope for the traversal it produces) | No |
 | INC-12 | Parent config with its own `dependency` blocks | Yes | Resolve | No |
+| INC-13 | Include of a `.json` file, explicit or via `find_in_parent_folders()` (`include-json-unsupported`, G5) | No | Unknown | No |
 | DEP-01 | Basic `dependency` with literal `config_path` | Yes | Resolve | Yes |
 | DEP-02 | `config_path` via pure path function(s) | Yes | Resolve | Yes |
 | DEP-03 | `config_path` via ambiguous function composition | No | Unknown | No |
@@ -72,6 +75,8 @@ REQUIREMENTS.md` (PARSE-01..06, GRAPH-01..05), `.planning/research/PITFALLS.md`
 | DEP-11 | Self-referential `config_path = "."` | Yes | Report (no crash) | No |
 | DEP-12 | Reference to an undeclared dependency label | Yes | Report | Yes |
 | DEP-13 | `dependency.X.config_path` inherited from parent via `deep` merge | Yes | Resolve | No |
+| DEP-14 | `config_path` naming a non-default file (`config-path-nondefault-file`, G4) | No | Unknown | No |
+| DEP-15 | `config_path` not a valid repo path, e.g. a backslash (`config-path-invalid`, G8) | No | Unknown | No |
 | OUT-01 | Simple `dependency.x.outputs.y` | Yes | Resolve | Yes |
 | OUT-02 | Map/index access `outputs.y["k"]` or `outputs.y[0]` | Yes (name only) | Resolve | Yes |
 | OUT-03 | Splat `outputs.y[*]` / `outputs.y.*.id` | Yes (name only) | Resolve | No |
@@ -94,8 +99,10 @@ REQUIREMENTS.md` (PARSE-01..06, GRAPH-01..05), `.planning/research/PITFALLS.md`
 | STACK-06 | Ungenerated `terragrunt.stack.hcl` | Yes | Skip, surfaced as a count | No |
 | STACK-07 | Generated `.terragrunt-stack/` with real `terragrunt.hcl` files | Yes | Resolve (ordinary units) | No |
 | STACK-08 | Root config named `root.hcl` vs `terragrunt.hcl` | Yes | Resolve | Yes |
-| STACK-09 | A `terragrunt.hcl` that is both included and independently runnable | Yes | Resolve | No |
+| STACK-09 | A `terragrunt.hcl` that is both included and independently runnable | Yes | Unknown (include-target; documented false negative) | No |
 | STACK-10 | Custom `download_dir` (literal vs env-driven) | Partial | Resolve (literal) / documented gap (env) | No |
+| STACK-11 | Unit or include file over 4 MiB or nested over 1000 levels (`config-too-large` / `config-too-deep`, G7b) | No | Unknown | No |
+| STACK-12 | Module file over 4 MiB or nested over 1000 levels (`module-file-too-large` / `module-file-too-deep`, G7a) | No | Unknown | No |
 
 ---
 
@@ -339,6 +346,41 @@ terraform {
 
 ---
 
+### SRC-14 — Malformed or in-file duplicate `generate` block
+
+```hcl
+generate {                 # no label
+  path     = "x.tf"
+  contents = ""
+}
+generate "a" "b" { ... }   # two labels
+generate "p" { ... }
+generate "p" { ... }       # same label twice in one file
+```
+
+- Static resolution: No. Terragrunt itself rejects all three shapes, so the unit's
+  effective generated files are not known.
+- Behaviour: **Unknown**. The unit is config-unknown `invalid-generate`
+  (`ReasonInvalidGenerate`, gap G9, 02-07). The same label in the child and in an
+  include is still a valid merge (highest precedence wins) and stays resolved.
+- Tests: `TestUnknownReasons` rows `invalid-generate/no-label`, `/two-labels`,
+  `/duplicate-in-file`, `/duplicate-in-include`, plus the
+  `regression-same-label-child-and-include-is-valid` row.
+- Generator: No.
+
+### SRC-15 — Unit directory unlistable during the overlay check
+
+- Static resolution: No. When the source points outside the unit directory, the loader
+  lists the unit directory to see whether its own `.tf` files overlay the module. If that
+  `fs.ReadDir` fails, whether it overlays is unknown.
+- Behaviour: **Unknown**. The unit is module-unknown `module-file-unreadable`
+  (`ReasonModuleFileUnreadable`, gap G6, 02-07). It was previously assumed not to
+  overlay, which could hide real outputs. The string matches tfsurface's own
+  `module-file-unreadable`, used when a kept module file cannot be read.
+- Tests: `TestUnknownReasons` row `module-file-unreadable` (loader, via
+  `readDirFailFS`); tfsurface's `TestReadSurfaceLimitPrecedence` for the reader variant.
+- Generator: No.
+
 ## 2. `include` / `read_terragrunt_config`
 
 ### INC-01 — Basic `include` via `find_in_parent_folders()`
@@ -577,6 +619,24 @@ dependency "shared_kms" {
   parent than real Terragrunt would.
 
 ---
+
+### INC-13 — Include of a `.json` file
+
+```hcl
+include "root" {
+  path = "../root.hcl.json"
+}
+# or: find_in_parent_folders() finding terragrunt.hcl.json ahead of terragrunt.hcl
+```
+
+- Static resolution: No. This domain does not parse JSON Terragrunt configs, and
+  handing a JSON file to the native HCL parser produced a false GRT100.
+- Behaviour: **Unknown**. The including unit is config-unknown
+  `include-json-unsupported` (`ReasonIncludeJSONUnsupported`, gap G5, 02-07), with no
+  GRT100.
+- Tests: `TestUnknownReasons` rows `include-json-unsupported/explicit` and
+  `/find-in-parent` (both assert no diagnostics).
+- Generator: No.
 
 ## 3. `dependency` / `dependencies` blocks
 
@@ -830,6 +890,40 @@ include "root" {
   cross-cutting correctness case rather than a new independent mechanism.
 
 ---
+
+### DEP-14 — `config_path` naming a non-default file
+
+```hcl
+dependency "vpc" {
+  config_path = "../vpc/alt.hcl"
+}
+```
+
+- Static resolution: No. Terragrunt reads THAT file as the target's config, and it may
+  set a different source than the directory's own `terragrunt.hcl`, so mapping it to the
+  directory would be a guess. `config_path = "../vpc/terragrunt.hcl"` still maps to
+  `vpc`.
+- Behaviour: **Unknown**, for that dependency only: unresolved
+  `config-path-nondefault-file` (`ReasonConfigPathNondefaultFile`, gap G4, 02-07).
+- Tests: `TestUnknownReasons` rows `config-path-nondefault-file/named-file` and
+  `/json-config`, plus the default-file regression row.
+- Generator: No.
+
+### DEP-15 — `config_path` that is not a valid repo path
+
+```hcl
+dependency "vpc" {
+  config_path = "..\\vpc"
+}
+```
+
+- Static resolution: No. A backslash survives path resolution as part of a segment,
+  and `repograph.NewRepoPath` rejects the result.
+- Behaviour: **Unknown**, for that dependency only: unresolved `config-path-invalid`
+  (`ReasonConfigPathInvalid`, gap G8, 02-07). Sibling dependencies and the unit itself
+  stay resolved; before G8 the whole unit became config-unknown.
+- Tests: `TestUnknownReasons` row `config-path-invalid` (sibling `good` stays resolved).
+- Generator: No.
 
 ## 4. Output-reference expressions
 
@@ -1246,6 +1340,15 @@ repo/
 - Generator: No — hand fixture only; out-of-scope-by-design feature, not something
   the spec-driven generator should produce as a first-class shape in v0.1.
 
+**Revised by gap G2 (02-07):** the walk-level Skip above still holds, but a
+`dependency` can also point at a stack. A dependency whose `config_path` names a
+directory holding `terragrunt.stack.hcl` (even when it also holds a `terragrunt.hcl`),
+or names a `terragrunt.stack.hcl` file directly, is unresolved `config-path-stack`
+(`ReasonConfigPathStack`) and never a target. Terragrunt's `getTerragruntOutput` tries
+the stack's outputs first (03-RESEARCH Pattern 3), so the dependency's outputs are not
+the directory's unit module's outputs. Tests: `TestUnknownReasons` rows
+`config-path-stack/dir-only-stack`, `/dir-with-both` and `/file`.
+
 ### STACK-07 — Generated `.terragrunt-stack/` with real, materialized `terragrunt.hcl` files
 
 ```
@@ -1328,6 +1431,18 @@ include "platform" {
 - Generator: No — hand fixture only; a valid but unusual combination worth one
   explicit regression test rather than spec-scale generation.
 
+**Revised by gap G3 (02-07):** a `terragrunt.hcl` that other units include is now
+config-unknown `include-target` (`ReasonIncludeTarget`). Its references are still
+checked, once per including unit, because include-file facts are attributed to the
+including unit. Analysing it standalone resolved them against the wrong directory: the
+cds-snc/secret corpus false GRT001 at `live/terragrunt.hcl:4:21` (03-RESEARCH Pattern 4).
+The cost is that a parent config that is ALSO run standalone is never checked on its
+own. That is a documented false negative, accepted under "ten false negatives beat one
+false positive". Tests: `TestUnknownReasons` row `include-target`,
+`TestIncludeTargetCorpusReproduction`, `TestIncludeTargetExplicitPath`,
+`TestIncludeTargetKeepsEarlierConfigUnknownReason` and the env-gated
+`TestIncludeTargetSecretCorpus`.
+
 ### STACK-10 — Custom `download_dir`
 
 ```hcl
@@ -1362,6 +1477,40 @@ TG_DOWNLOAD_DIR=.my-cache terragrunt run-all plan
   environment split is best proven with one targeted case each rather than spec-scale
   coverage.
 
+### STACK-11 — Oversize or overdeep unit or include file
+
+```hcl
+# live/app/terragrunt.hcl, or a root.hcl it includes
+inputs = { x = ((((((( ... 200000 levels ... ))))))) }
+```
+
+- Static resolution: No. hclsyntax parses recursively, and a deeply nested file
+  overflows the goroutine stack. Go cannot recover from that: `fatal error: stack
+  overflow` killed the whole process (02-REVIEW G7).
+- Behaviour: **Unknown**. A unit file or include file larger than
+  `hclconv.MaxFileBytes` (4 MiB) or nested deeper than `hclconv.MaxNestingDepth` (1000)
+  is never parsed. Every unit reading it is config-unknown `config-too-large`
+  (`ReasonConfigTooLarge`) or `config-too-deep` (`ReasonConfigTooDeep`), gap G7b, 02-11.
+  No GRT100 is emitted, because the file is not known to be invalid. A shared include
+  is still read once.
+- Tests: `TestDeepNestingNoCrash`, `TestDeepSharedIncludeNoCrash`,
+  `TestFileCacheLimits`, and `TestUnknownReasons` rows `config-too-large/unit-file`,
+  `/include`, `config-too-deep/unit-file`, `/include`.
+- Generator: No; inputs are generated in the test, never committed.
+
+### STACK-12 — Oversize or overdeep module file
+
+- Static resolution: No, for the same reason as STACK-11, on the module side.
+- Behaviour: **Unknown**. A kept module file (`.tf`, `.tf.json`, `.tofu`,
+  `.tofu.json`) over the same limits makes the module's surface unknown
+  `module-file-too-large` or `module-file-too-deep` (tfsurface
+  `ReasonModuleFileTooLarge` / `ReasonModuleFileTooDeep`, gap G7a, 02-10), with no
+  diagnostic. A reference into that module is not checked.
+- Tests: tfsurface `TestReadSurfaceDeepNestingNoCrash`, `TestReadSurfaceDeepJSONNoCrash`,
+  `TestReadSurfaceOversizeFile`, `TestReadSurfaceLimitPrecedence`; end to end,
+  terragrunt `TestDeepModuleFileEndToEnd`.
+- Generator: No.
+
 ---
 
 ## Cross-cutting notes for implementation
@@ -1390,3 +1539,26 @@ TG_DOWNLOAD_DIR=.my-cache terragrunt run-all plan
   either a normal resolved edge or an `unknown` marker — so that Phase 3 (or a later
   v2 `GRT00x`) can decide how and whether to surface it. Losing this information
   during Phase 2 graph construction cannot be recovered later without re-parsing.
+
+### Gap closure (02-06..02-11)
+
+The 02-REVIEW gaps and the plan that closed each:
+
+- G1 (lazy-evaluation reference guard: unselected ternary branch, short-circuited
+  `&&`/`||`, `for` body): 02-06. OUT-09/OUT-10 reversals above.
+- G2 (stack target, `config-path-stack`): 02-07. STACK-06 revision.
+- G3 (include-target units, `include-target`): 02-07. STACK-09 revision.
+- G4 (non-default config file, `config-path-nondefault-file`): 02-07. DEP-14.
+- G5 (JSON include, `include-json-unsupported`): 02-07. INC-13.
+- G6 (overlay ReadDir failure, `module-file-unreadable`): 02-07. SRC-15.
+- G7a (module file size/depth, `module-file-too-large` / `module-file-too-deep`): 02-10.
+  STACK-12.
+- G7b (unit/include file size/depth, `config-too-large` / `config-too-deep`): 02-11.
+  STACK-11.
+- G8 (invalid config_path, `config-path-invalid`): 02-07. DEP-15.
+- G9 (malformed generate, `invalid-generate`): 02-07. SRC-14.
+- G10 (two-input fuzz target over root.hcl and the dependency's module file): 02-11.
+- G11 (wrong loader.go comment): 02-07.
+- G12 (zero values invalid everywhere in repograph): 02-08.
+- G13, G14 (architecture check: unpoliced `internal/*` dirs, build-constrained
+  files): 02-09.
