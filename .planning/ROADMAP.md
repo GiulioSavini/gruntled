@@ -58,7 +58,7 @@ Plans:
   3. A unit resolves to its module correctly both when `terraform.source` is present (local path) and when it is absent (the unit's own directory); a unit whose source is remote or dynamically computed is classified as remote/unresolvable without any network access
   4. Given a `dependency` block, gruntled resolves it through both hops — to the target unit, then from that unit to its module — and extracts that module's `variable` and `output` names correctly even when the unit's directory differs from the module's directory
   5. A unit hitting any construct it cannot resolve offline (remote source, unquoted/dynamic constructs it can't evaluate) is marked `unknown` rather than analyzed further; invalid HCL (including a file saved mid-edit) produces a diagnostic instead of a crash; `.terragrunt-cache`, `.terraform`, vendored module directories and symlinks are never walked into
-**Plans**: 5 plans (sequential waves 1-5: each wave needs the previous one's API, arch rules must land before any infrastructure package, and only 02-03 touches go.mod)
+**Plans**: 11 plans (02-01..02-05 in sequential waves 1-5; gap closure 02-06..02-11 in two waves: 02-06..02-10 parallel, then 02-11)
 
 Plans:
 - [x] 02-01-PLAN.md — Domain: config-unknown / module-unknown units, unknown-surface modules, unresolved dependencies, DependencyOptions (DIAG-03 facts), diagnostic Key with Unit
@@ -66,6 +66,14 @@ Plans:
 - [x] 02-03-PLAN.md — hcl/v2 + leaf adapters: byte-column positions and GRT100, offline source classifier, six path functions with closed evaluation, module surface reader
 - [x] 02-04-PLAN.md — Terragrunt structure: unit discovery walk (skip rules, symlinks), whole-body reference extraction, parse-once cache with dependency facts
 - [x] 02-05-PLAN.md — Terragrunt loader: include merge, path evaluation, source classification, unknown catalogue; end-to-end integration (two-hop, parse-once, determinism, synthrepo oracle, corpus smoke) and fuzz
+
+Gap closure (from 02-REVIEW.md G1..G14; wave 1 = 02-06..02-10 in parallel with disjoint files, wave 2 = 02-11):
+- [ ] 02-06-PLAN.md — G1: lazy-evaluation guard (ternary branches, &&/||, for body) in reference extraction; OUT-09/OUT-10 reversal
+- [ ] 02-07-PLAN.md — G2-G6, G8, G9, G11: stack targets, include-target units, non-default/invalid config_path, JSON includes, overlay ReadDir failure, malformed generate blocks
+- [ ] 02-08-PLAN.md — G12: zero values invalid everywhere in repograph (positions, options, entries, graph units/modules)
+- [ ] 02-09-PLAN.md — G13, G14: internal-layout, infrastructure-importers, testsupport-only-in-tests rules, and a source-level HCL import scan for build-constrained files
+- [ ] 02-10-PLAN.md — G7a: hclconv size cap and nesting-depth pre-scan; tfsurface refuses oversize/overdeep module files
+- [ ] 02-11-PLAN.md — G7b, G10: unit/include size and depth limits, two-input loader fuzz, edge-case catalogue update (STACK-09 and new reasons)
 
 ### Phase 3: GRT001 Diagnostic & CLI
 **Goal**: `gruntled check` runs end-to-end against a repository on disk and reports `GRT001`/`GRT100` diagnostics that are correct, deterministic, and safe to script against in CI.
@@ -96,10 +104,12 @@ Plans:
   3. After a deliberate output rename or deletion is injected into the corpus, `gruntled check` reports every reference broken by it
   4. `terragrunt hcl validate` is run against the same mutated corpus and confirmed not to report the injected breakage, evidencing the gap `GRT001` closes
   5. A reproducible benchmark shows `gruntled check` faster than `terragrunt hcl validate` on the same repository
-**Plans**: TBD
+**Plans**: 3 plans in 2 waves (wave 1 runs 04-01 and 04-02 in parallel with disjoint files; 04-03 needs both; assumes Phase 3 and the Phase 2 gap-closure plans are executed; corpus and terragrunt tests are env-gated and never in CI)
 
 Plans:
-- [ ] 04-01: TBD
+- [ ] 04-01-PLAN.md — VALID-02 golden tests: 10 hand-written txtar fixture repos with hand-computed, self-checked exact diagnostic sets, plus full-scale synthrepo trees (400-600 units) against Manifest.Expected
+- [ ] 04-02-PLAN.md — VALID-03/04/05 on the pinned primary corpus: zero diagnostics unmutated, exact textual-oracle match for a rename (8 refs) and a deletion (3 refs) on scratch copies, and plain `terragrunt hcl validate` (hash-pinned v1.1.6) confirmed not to report either
+- [ ] 04-03-PLAN.md — VALID-06 process-vs-process benchmark (warm-up, 21 interleaved samples, medians), a full experiment run, and the committed docs/validation.md results record with a doc-pin drift guard
 
 ## Progress
 
@@ -111,7 +121,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | 1. Domain Foundation & Test Substrate | 3/3 | Complete    | 2026-09-25 |
 | 2. Parsing & Graph Construction | 4/5 | In Progress|  |
 | 3. GRT001 Diagnostic & CLI | 0/5 | Planned | - |
-| 4. Real-Repo Validation Experiment | 0/TBD | Not started | - |
+| 4. Real-Repo Validation Experiment | 0/3 | Planned | - |
 
 ---
 *Roadmap created: 2026-09-01*

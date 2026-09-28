@@ -55,8 +55,24 @@ GRAPH-0x row maps to at least one automated `go test -run` command in a plan tas
 | 02-05-T1 | 02-05 | 5 | PARSE-01..05, GRAPH-01..04 | unit (table, catalogue coverage) | `go test -count=1 ./internal/infrastructure/terragrunt -run 'TestUnknownReasons\|TestLoader\|TestInclude\|TestSource\|TestDependency\|TestStructuralOnly'` | ❌ W0 (creates) | ⬜ pending |
 | 02-05-T2 | 02-05 | 5 | GRAPH-01..05, PARSE-03, PARSE-05 | integration (MapFS, os.Root, synthrepo) | `go test -count=1 ./internal/infrastructure/terragrunt -run 'TestTwoHop\|TestModuleUnknownBlastRadius\|TestSurfaceUnknownTarget\|TestWholeBodyRefs\|TestSyntaxEndToEnd\|TestParseOnce\|TestSynthrepoOracle\|TestDeterministic\|TestCorpusSmoke'` | ❌ W0 (creates) | ⬜ pending |
 | 02-05-T3 | 02-05 | 5 | PARSE-05 | fuzz seeds | `go test -count=1 ./internal/infrastructure/terragrunt -run FuzzLoadUnits` | ❌ W0 (creates) | ⬜ pending |
+| 02-06-T1 | 02-06 | GC-1 | PARSE-01, PARSE-04 (G1) | unit (table) | `go test -count=1 ./internal/infrastructure/terragrunt -run 'TestExtractRefs'` | ✅ extend | ⬜ pending |
+| 02-06-T2 | 02-06 | GC-1 | PARSE-01 (G1) | integration + catalogue | `go test -count=1 ./internal/infrastructure/terragrunt -run TestWholeBodyRefs && grep -q "Reversed by gap G1" .planning/phases/02-parsing-graph-construction/02-TERRAGRUNT-EDGECASES.md` | ✅ extend | ⬜ pending |
+| 02-07-T1 | 02-07 | GC-1 | GRAPH-04, PARSE-04 (G2, G4, G8) | unit (table) | `go test -count=1 ./internal/infrastructure/terragrunt -run 'TestUnknownReasons\|TestDependency'` | ✅ extend | ⬜ pending |
+| 02-07-T2 | 02-07 | GC-1 | PARSE-03, PARSE-04 (G3, G5, G11) | unit + integration (exact corpus reproduction) | `go test -count=1 ./internal/infrastructure/terragrunt -run 'TestIncludeTarget\|TestUnknownReasons\|TestInclude'` | ❌ W0 (creates include_target_test.go) | ⬜ pending |
+| 02-07-T3 | 02-07 | GC-1 | GRAPH-01, PARSE-04 (G6, G9) | unit (table) | `go test -count=1 ./internal/infrastructure/terragrunt -run TestUnknownReasons` | ✅ extend | ⬜ pending |
+| 02-08-T1 | 02-08 | GC-1 | GRAPH-04, PARSE-04 (G12) | unit (table) | `go test -count=1 ./internal/domain/repograph -run 'TestTristateIsValid\|TestPositionIsZero\|TestNewDependency\|TestNewUnresolvedDependency\|TestUnitConstructors' && go test -count=1 ./...` | ✅ extend | ⬜ pending |
+| 02-08-T2 | 02-08 | GC-1 | GRAPH-04 (G12) | unit (table) | `go test -count=1 ./internal/domain/repograph -run 'TestUnitStatusIsValid\|TestNewRepositoryGraph'` | ✅ extend | ⬜ pending |
+| 02-09-T1 | 02-09 | GC-1 | ARCH-01 (G13) | script self-test | `bash scripts/check-architecture.sh && bash scripts/test-check-architecture.sh` | ✅ extend | ⬜ pending |
+| 02-09-T2 | 02-09 | GC-1 | ARCH-01 (G14) | script self-test | `bash scripts/check-architecture.sh && bash scripts/test-check-architecture.sh` | ✅ extend | ⬜ pending |
+| 02-10-T1 | 02-10 | GC-1 | PARSE-05 (G7a) | unit (table, generated inputs) | `go test -count=1 ./internal/infrastructure/hclconv -run 'TestReadFileLimited\|TestCheckNativeDepth\|TestCheckJSONDepth'` | ❌ W0 (creates limits_test.go) | ⬜ pending |
+| 02-10-T2 | 02-10 | GC-1 | GRAPH-05, PARSE-05 (G7a) | unit (crash regression) | `go test -count=1 ./internal/infrastructure/tfsurface -run 'TestReadSurfaceDeep\|TestReadSurfaceOversize\|TestReadSurfaceAtDepthLimit\|TestReadSurfaceLimitPrecedence'` | ✅ extend | ⬜ pending |
+| 02-11-T1 | 02-11 | GC-2 | PARSE-03, PARSE-05 (G7b) | unit + integration (crash regression) | `go test -count=1 ./internal/infrastructure/terragrunt -run 'TestDeep\|TestFileCacheLimits\|TestUnknownReasons\|TestLoaderParseOnce\|TestParseOnce'` | ❌ W0 (creates limits_test.go) | ⬜ pending |
+| 02-11-T2 | 02-11 | GC-2 | PARSE-05 (G10) | fuzz seeds (+ 60 s local fuzz) | `go test -count=1 ./internal/infrastructure/terragrunt -run FuzzLoadUnits` | ✅ extend | ⬜ pending |
+| 02-11-T3 | 02-11 | GC-2 | PARSE-04 (catalogue) | doc grep | the reason-grep loop in 02-11-PLAN Task 3 `<verify>` | ✅ extend | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+
+*Gap closure (02-REVIEW.md G1..G14): wave GC-1 = 02-06, 02-07, 02-08, 02-09, 02-10 in parallel with disjoint files; wave GC-2 = 02-11 (after 02-06, 02-07, 02-10). G7 is split: G7a (module files, 02-10) and G7b (unit/include files, 02-11). Every other gap maps to exactly one task above.*
 
 ---
 
@@ -75,7 +91,9 @@ No separate Wave 0 plan: every test file is created by the task that needs it (R
 
 | Behavior | Requirement | Why Manual | Test Instructions |
 |----------|-------------|------------|-------------------|
-| Corpus smoke: 65 units, 0 config-unknown, 22 refs | GRAPH-04/05 | needs a cloned public repo | `GRUNTLED_CORPUS=<clone> go test ./internal/infrastructure/terragrunt -run TestCorpusSmoke -count=1` (lives in infrastructure: the application layer may not import os) |
+| Corpus smoke: 65 units, 3 config-unknown, 22 refs (corrected in 02-05) | GRAPH-04/05 | needs a cloned public repo | `GRUNTLED_CORPUS=<clone> go test ./internal/infrastructure/terragrunt -run TestCorpusSmoke -count=1` (lives in infrastructure: the application layer may not import os) |
+| Secondary corpus (cds-snc/secret @ 341e8a95): parent config include-target, 0 missing outputs | PARSE-03, GRAPH-04 (G3) | needs a cloned public repo | `GRUNTLED_CORPUS_SECRET=<clone> go test ./internal/infrastructure/terragrunt -run TestIncludeTargetSecretCorpus -count=1` |
+| Loader fuzz session, two inputs, 60 s, no crasher | PARSE-05 (G10) | too long for the sampling loop | `go test -run '^$' -fuzz '^FuzzLoadUnits$' -fuzztime 60s ./internal/infrastructure/terragrunt` |
 
 ---
 
