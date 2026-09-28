@@ -3,6 +3,13 @@
 // Position and the synthrepo manifest both count bytes, while hcl.Pos.Column
 // counts grapheme clusters: recomputing from the byte offset is therefore
 // mandatory, never hcl.Pos.Column itself.
+//
+// hclconv is also where the input limits guarding hcl's recursive parsers
+// live (limits.go): hclsyntax.ParseConfig and hcl/json.Parse both recurse
+// over their input, and Go cannot recover from the fatal stack overflow a
+// deeply nested or oversize file can cause (02-REVIEW G7). Both HCL
+// adapters in this module apply the same MaxFileBytes and MaxNestingDepth
+// limits, so they live here rather than in either adapter.
 package hclconv
 
 import (
