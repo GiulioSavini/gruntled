@@ -76,6 +76,14 @@ const (
 	// terragrunt.hcl, Terragrunt's own DefaultTerragruntConfigPaths order).
 	// This domain does not parse JSON Terragrunt configs.
 	ReasonIncludeJSONUnsupported = "include-json-unsupported"
+	// ReasonInvalidGenerate means a generate block is structurally invalid:
+	// zero or two-or-more labels, or a label duplicated within one
+	// effective file. Matches ReasonInvalidDependency's shape (Terragrunt
+	// itself rejects an unlabeled or multi-labeled generate block, and a
+	// duplicate label within one file). Merging distinct files that both
+	// declare the SAME label is valid (Terragrunt merges by label, highest
+	// precedence wins); only a duplicate WITHIN one file is invalid.
+	ReasonInvalidGenerate = "invalid-generate"
 )
 
 // Module-unknown reasons (ports.UnitConfig.ModuleUnknownReason). A
@@ -111,6 +119,14 @@ const (
 	// directory's files over the module's working copy, so the effective
 	// module surface is not the module directory's surface alone.
 	ReasonUnitDirOverlaysModule = "unit-dir-overlays-module"
+	// ReasonModuleFileUnreadable means the unit directory could not be
+	// listed (fs.ReadDir failed) while checking whether it overlays the
+	// module's own files: whether it does is unknown, so the module itself
+	// must be treated as unknown rather than silently assumed not to
+	// overlay. The string intentionally matches tfsurface's own
+	// module-file-unreadable reason (02-REVIEW G6): both packages face the
+	// identical "can't list this directory" fact about a module.
+	ReasonModuleFileUnreadable = "module-file-unreadable"
 )
 
 // Unresolved-dependency reasons (repograph.NewUnresolvedDependency's reason

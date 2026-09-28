@@ -80,6 +80,28 @@ func (f readFailFS) ReadFile(name string) ([]byte, error) {
 	return f.MapFS.ReadFile(name)
 }
 
+// readDirFailFS wraps an fstest.MapFS so that ReadDir(dir) succeeds on the
+// FIRST call (discoverUnits' own walk, which must still find the unit) and
+// fails with fs.ErrPermission on every later call for that same directory,
+// so only a later, targeted ReadDir (research G6's overlay check in
+// unitDirOverlaysModule) observes the failure. A pointer receiver is
+// required to track the per-directory call count.
+type readDirFailFS struct {
+	fstest.MapFS
+	dir   string
+	calls int
+}
+
+func (f *readDirFailFS) ReadDir(name string) ([]fs.DirEntry, error) {
+	if name == f.dir {
+		f.calls++
+		if f.calls > 1 {
+			return nil, &fs.PathError{Op: "readdir", Path: name, Err: fs.ErrPermission}
+		}
+	}
+	return f.MapFS.ReadDir(name)
+}
+
 // allReasonConstants parses reasons.go with go/parser and returns every
 // exported Reason* constant's name and string value, so TestUnknownReasons
 // can assert every one of them has a fixture, with no dead or untested
@@ -671,6 +693,118 @@ dependency "good" { config_path = "../vpc" }
 			unit:              "p/c",
 			check:             wantConfigUnknown(ReasonIncludeJSONUnsupported),
 			wantNoDiagnostics: true,
+		},
+		{
+			name:   "module-file-unreadable",
+			reason: ReasonModuleFileUnreadable,
+			fsys: &readDirFailFS{
+				MapFS: filesFS(map[string]string{
+					"u/terragrunt.hcl": `terraform { source = "../mod" }`,
+					"mod/main.tf":      `variable "x" {}`,
+				}),
+				dir: "u",
+			},
+			unit:  "u",
+			check: wantModuleUnknown(ReasonModuleFileUnreadable),
+		},
+		{
+			name:   "invalid-generate/no-label",
+			reason: ReasonInvalidGenerate,
+			fsys: filesFS(map[string]string{
+				"u/terragrunt.hcl": `
+generate {
+  path      = "x.tf"
+  if_exists = "overwrite"
+  contents  = ""
+}
+`,
+			}),
+			unit:  "u",
+			check: wantConfigUnknown(ReasonInvalidGenerate),
+		},
+		{
+			name:   "invalid-generate/two-labels",
+			reason: ReasonInvalidGenerate,
+			fsys: filesFS(map[string]string{
+				"u/terragrunt.hcl": `
+generate "a" "b" {
+  path      = "x.tf"
+  if_exists = "overwrite"
+  contents  = ""
+}
+`,
+			}),
+			unit:  "u",
+			check: wantConfigUnknown(ReasonInvalidGenerate),
+		},
+		{
+			name:   "invalid-generate/duplicate-in-file",
+			reason: ReasonInvalidGenerate,
+			fsys: filesFS(map[string]string{
+				"u/terragrunt.hcl": `
+generate "p" {
+  path      = "x.tf"
+  if_exists = "overwrite"
+  contents  = ""
+}
+generate "p" {
+  path      = "y.tf"
+  if_exists = "overwrite"
+  contents  = ""
+}
+`,
+			}),
+			unit:  "u",
+			check: wantConfigUnknown(ReasonInvalidGenerate),
+		},
+		{
+			name:   "invalid-generate/duplicate-in-include",
+			reason: ReasonInvalidGenerate,
+			fsys: filesFS(map[string]string{
+				"root.hcl": `
+generate "p" {
+  path      = "x.tf"
+  if_exists = "overwrite"
+  contents  = ""
+}
+generate "p" {
+  path      = "y.tf"
+  if_exists = "overwrite"
+  contents  = ""
+}
+`,
+				"u/terragrunt.hcl": `include "root" { path = "../root.hcl" }`,
+			}),
+			unit:  "u",
+			check: wantConfigUnknown(ReasonInvalidGenerate),
+		},
+		{
+			name:   "invalid-generate/regression-same-label-child-and-include-is-valid",
+			reason: ReasonInvalidGenerate,
+			fsys: filesFS(map[string]string{
+				"root.hcl": `
+generate "prov" {
+  path      = "provider.tf"
+  if_exists = "overwrite"
+  contents  = "root"
+}
+`,
+				"u/terragrunt.hcl": `
+include "root" { path = "../root.hcl" }
+generate "prov" {
+  path      = "provider.tf"
+  if_exists = "overwrite"
+  contents  = "child"
+}
+`,
+			}),
+			unit: "u",
+			check: func(t *testing.T, uc ports.UnitConfig) {
+				t.Helper()
+				if uc.ConfigUnknownReason != "" || uc.ModuleUnknownReason != "" {
+					t.Fatalf("unit unknown: config=%q module=%q, want fully resolved (child/include same-label generate is a valid merge, child wins)", uc.ConfigUnknownReason, uc.ModuleUnknownReason)
+				}
+			},
 		},
 	}
 
