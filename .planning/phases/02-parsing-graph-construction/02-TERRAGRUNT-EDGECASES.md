@@ -80,8 +80,8 @@ REQUIREMENTS.md` (PARSE-01..06, GRAPH-01..05), `.planning/research/PITFALLS.md`
 | OUT-06 | `lookup(dependency.x.outputs, "y", default)` | Yes, if key is a literal | Resolve | No |
 | OUT-07 | Whole-object `dependency.x.outputs` (no attr) | Yes (nothing to check) | Resolve (no-op) | No |
 | OUT-08 | Dynamic key `outputs[local.k]` | No | Unknown | No |
-| OUT-09 | Reference in a `for` expression | Yes | Resolve | No |
-| OUT-10 | Reference in a ternary (both branches) | Yes | Resolve (both) | No |
+| OUT-09 | Reference in a `for` expression | Yes | Resolve (collection); no reference from body/key/condition (lazy: gap G1) | No |
+| OUT-10 | Reference in a ternary (both branches) | Yes | No reference (lazy: gap G1) | No |
 | OUT-11 | Reference inside `locals`, not `inputs` | Yes | Resolve | Yes |
 | OUT-12 | Reference to output on a dependency inherited via `include` | Yes | Resolve | No |
 | OUT-13 | Reference to output on a dependency with `skip_outputs = true` | Yes | Resolve | No |
@@ -993,6 +993,17 @@ inputs = {
 - Generator: No — hand fixture only; same extraction mechanism as OUT-01, different
   surrounding syntax, worth one explicit AST-shape test.
 
+**Reversed by gap G1 (02-06):** the row above covers only the `for` expression's
+COLLECTION (the part after `in`), which HCL always evaluates and always surfaces
+diagnostics for, so a reference there stays a Reference. A reference in the `for`
+body's key, value or `if`-condition is different: hclsyntax runs those sub-expressions
+once per source element, so zero times when the collection is empty at plan time, and a
+missing output there need not be a runtime error. `refWalker` (refs.go) now suppresses
+those three positions the same way it suppresses `try()`/`can()`, and
+`TestExtractRefsLazyEvaluation` (refs_test.go) proves it, including the `%{ for }`
+template-directive form (parses to `*hclsyntax.TemplateJoinExpr` wrapping the same
+`*hclsyntax.ForExpr`).
+
 ### OUT-10 — Reference inside a ternary (both branches)
 
 ```hcl
@@ -1013,6 +1024,29 @@ inputs = {
   run at apply time — gruntled never knows which branch runs, and correctly does not
   need to.
 - Generator: No — hand fixture only.
+
+**Reversed by gap G1 (02-06):** this row's "eagerly evaluates both branches" premise
+was wrong at the diagnostics layer. hclsyntax's `ConditionalExpr.Value` (v2.24.0 and
+v2.25.0) does evaluate both `TrueResult` and `FalseResult` internally to compute
+`trueVal`/`falseVal`, but it appends only the selected branch's diagnostics
+(`trueDiags` or `falseDiags`) to the result; the other branch's are discarded even when
+it references a missing output. try()/can() already established that gruntled treats
+"HCL will not surface this as a runtime error" as "not a Reference" — the same
+zero-false-positives rule now applies to both ternary branches, condition excepted (the
+condition is always evaluated and its diagnostics always surface, so a reference there
+is still a Reference). `refWalker` suppresses `ConditionalExpr.TrueResult` and
+`.FalseResult` the same way it suppresses a `try()`/`can()` argument.
+`TestExtractRefsLazyEvaluation` (refs_test.go) and the flipped OUT-10 row in
+`TestExtractRefsShapes` prove it, including the `%{ if }` template-directive form
+(parses to the same `*hclsyntax.ConditionalExpr`).
+
+**Also gap G1: `&&`/`||` short-circuiting.** `hclsyntax.BinaryOpExpr` with
+`Op == OpLogicalAnd` or `OpLogicalOr` uses a `ShortCircuit` evaluation that returns only
+the controlling operand's diagnostics: `false && dependency.x.outputs.missing` and
+`dependency.x.outputs.missing && false` both drop the reference operand's diagnostics
+regardless of which side it is on. A reference in either operand of `&&` or `||` is
+therefore NOT a Reference (same fail-silent treatment; any other `BinaryOpExpr`, such as
+arithmetic or comparison, is unaffected and stays checked).
 
 ### OUT-11 — Reference inside `locals`, not `inputs`
 
