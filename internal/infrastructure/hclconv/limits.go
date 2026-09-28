@@ -2,6 +2,7 @@ package hclconv
 
 import (
 	"errors"
+	"io"
 	"io/fs"
 
 	"github.com/hashicorp/hcl/v2"
@@ -38,6 +39,11 @@ const (
 // MaxFileBytes.
 var ErrFileTooLarge = errors.New("hclconv: file exceeds MaxFileBytes")
 
+// ErrNotRegularFile is returned (wrapped in an *fs.PathError) by
+// ReadFileLimited when name is not a regular file: a FIFO, socket, device
+// or directory.
+var ErrNotRegularFile = errors.New("hclconv: not a regular file")
+
 // ErrNestingTooDeep is returned by CheckNativeDepth and CheckJSONDepth when
 // src's nesting exceeds MaxNestingDepth.
 var ErrNestingTooDeep = errors.New("hclconv: nesting exceeds MaxNestingDepth")
@@ -48,21 +54,46 @@ var ErrNestingTooDeep = errors.New("hclconv: nesting exceeds MaxNestingDepth")
 // overflow a hostile or generated file can cause, so the only defence is
 // refusing to parse it in the first place.
 //
-// fs.Stat is checked first, so an obviously oversize file is never read
-// into memory; a Stat error is returned as-is. fs.ReadFile is then called
-// exactly once — callers that need to prove a file is read at most once
-// may rely on that — and its result is checked again in case Stat
-// under-reported the size, which no fs.FS is required to avoid.
+// It also refuses anything that is not a regular file, with
+// ErrNotRegularFile, BEFORE opening it (02-REVIEW G18): opening a FIFO for
+// reading blocks until a writer appears, so one FIFO named like a config
+// or module file used to hang the whole process. fs.Stat is checked
+// first, so a non-regular or obviously oversize file is never opened; a
+// Stat error is returned as-is. The file is then opened exactly once —
+// callers that need to prove a file is read at most once may rely on that
+// — its open handle is checked to be regular again, and it is read
+// through io.LimitReader(f, MaxFileBytes+1), so memory stays bounded even
+// when Stat under-reported the size (no fs.FS is required to avoid that)
+// or the file grew in between; more than MaxFileBytes read is
+// ErrFileTooLarge.
+//
+// Residual: a regular file swapped for a FIFO between the Stat and the
+// Open could still block in Open, because fs.FS has no non-blocking open.
+// That needs someone racing gruntled on its own checkout.
 func ReadFileLimited(fsys fs.FS, name string) ([]byte, error) {
 	info, err := fs.Stat(fsys, name)
 	if err != nil {
 		return nil, err
 	}
+	if !info.Mode().IsRegular() {
+		return nil, &fs.PathError{Op: "read", Path: name, Err: ErrNotRegularFile}
+	}
 	if info.Size() > MaxFileBytes {
 		return nil, ErrFileTooLarge
 	}
 
-	src, err := fs.ReadFile(fsys, name)
+	f, err := fsys.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	if info, err := f.Stat(); err != nil {
+		return nil, err
+	} else if !info.Mode().IsRegular() {
+		return nil, &fs.PathError{Op: "read", Path: name, Err: ErrNotRegularFile}
+	}
+
+	src, err := io.ReadAll(io.LimitReader(f, MaxFileBytes+1))
 	if err != nil {
 		return nil, err
 	}

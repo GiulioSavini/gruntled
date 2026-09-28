@@ -64,14 +64,23 @@ func findDep(deps []repograph.Dependency, name string) (repograph.Dependency, bo
 	return repograph.Dependency{}, false
 }
 
-// readFailFS wraps an fstest.MapFS so that ReadFile fails for exactly one
-// named file, while Stat (promoted, unmodified, from the embedded MapFS)
-// still succeeds: this exercises ReasonUnreadableConfig, which requires a
-// file that fs.Stat can see but fs.ReadFile cannot read (a dangling symlink
-// would instead hit ReasonIncludeNotFound at the Stat step).
+// readFailFS wraps an fstest.MapFS so that opening or reading exactly one
+// named file fails, while Stat (promoted, unmodified, from the embedded
+// MapFS) still succeeds: this exercises ReasonUnreadableConfig, which
+// requires a file that fs.Stat can see but that cannot be read (a dangling
+// symlink would instead hit ReasonIncludeNotFound at the Stat step). Both
+// Open and ReadFile fail, because hclconv.ReadFileLimited reads through
+// Open (02-12); overriding ReadFile alone would silently stop injecting.
 type readFailFS struct {
 	fstest.MapFS
 	failFile string
+}
+
+func (f readFailFS) Open(name string) (fs.File, error) {
+	if name == f.failFile {
+		return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrPermission}
+	}
+	return f.MapFS.Open(name)
 }
 
 func (f readFailFS) ReadFile(name string) ([]byte, error) {

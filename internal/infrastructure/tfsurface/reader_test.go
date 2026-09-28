@@ -221,14 +221,23 @@ func TestReadSurfaceContextCancelled(t *testing.T) {
 
 // --- G7: module-file size cap and nesting-depth guard ----------------------
 
-// readFailFS wraps an fstest.MapFS so that ReadFile fails for exactly one
-// named file, while Stat (promoted, unmodified, from the embedded MapFS)
-// still succeeds: this exercises ReasonModuleFileUnreadable without
+// readFailFS wraps an fstest.MapFS so that opening or reading exactly one
+// named file fails, while Stat (promoted, unmodified, from the embedded
+// MapFS) still succeeds: this exercises ReasonModuleFileUnreadable without
 // needing a real dangling or escaping symlink (realfs_test.go covers
-// those).
+// those). Both Open and ReadFile fail, because hclconv.ReadFileLimited
+// reads through Open (02-12); overriding ReadFile alone would silently
+// stop injecting the failure.
 type readFailFS struct {
 	fstest.MapFS
 	failFile string
+}
+
+func (f readFailFS) Open(name string) (fs.File, error) {
+	if name == f.failFile {
+		return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrPermission}
+	}
+	return f.MapFS.Open(name)
 }
 
 func (f readFailFS) ReadFile(name string) ([]byte, error) {
@@ -236,6 +245,24 @@ func (f readFailFS) ReadFile(name string) ([]byte, error) {
 		return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrPermission}
 	}
 	return f.MapFS.ReadFile(name)
+}
+
+// TestReadSurfaceNonRegularModuleFile (02-REVIEW G18): a kept module file
+// that is a named pipe (or any other non-regular file) is never opened,
+// and makes the surface unknown module-file-unreadable.
+func TestReadSurfaceNonRegularModuleFile(t *testing.T) {
+	for _, mode := range []fs.FileMode{fs.ModeNamedPipe, fs.ModeSocket, fs.ModeDevice} {
+		t.Run(mode.String(), func(t *testing.T) {
+			fsys := fstest.MapFS{
+				"mod/main.tf": &fstest.MapFile{Data: []byte(`output "a" { value = 1 }`)},
+				"mod/pipe.tf": &fstest.MapFile{Data: []byte(`output "b" { value = 1 }`), Mode: mode},
+			}
+			res := readSurface(t, fsys, "mod")
+			if res.UnknownReason != tfsurface.ReasonModuleFileUnreadable {
+				t.Fatalf("UnknownReason = %q, want %q", res.UnknownReason, tfsurface.ReasonModuleFileUnreadable)
+			}
+		})
+	}
 }
 
 // deepParenValue returns an `output "x" { value = ... }` block whose value

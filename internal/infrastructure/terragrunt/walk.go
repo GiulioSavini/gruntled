@@ -44,6 +44,13 @@ var skipDirNames = map[string]bool{
 // own, so the fs.ModeSymlink guard below is what keeps a symlinked
 // terragrunt.hcl from being counted as a unit file.
 //
+// Nor does it count a terragrunt.hcl or terragrunt.hcl.json that is not a
+// regular file (a FIFO, socket or device, 02-REVIEW G18): opening a FIFO
+// for reading blocks until a writer appears. Skipping one is safe: a
+// dependency on that directory then targets a path that is not a unit, so
+// RepositoryGraph.DependencyTarget finds no target and no reference into
+// it is ever checked (03-01 row 4b gives it no diagnostic either).
+//
 // .terragrunt-stack IS walked on purpose: PROJECT.md is authoritative over
 // research/PITFALLS.md §6 here, Terragrunt's own unit discovery includes
 // it, and once rendered its generated units are ordinary terragrunt.hcl
@@ -76,6 +83,11 @@ func discoverUnits(fsys fs.FS) ([]unitEntry, error) {
 			if p != "." && skipDirNames[d.Name()] {
 				return fs.SkipDir
 			}
+			return nil
+		}
+		if !d.Type().IsRegular() {
+			// A FIFO, socket or device named terragrunt.hcl is never a
+			// unit (02-REVIEW G18): reading a FIFO blocks forever.
 			return nil
 		}
 

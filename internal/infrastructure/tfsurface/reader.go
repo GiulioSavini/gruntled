@@ -5,7 +5,8 @@
 // The reader never under-counts silently: anything it cannot read
 // completely makes the whole surface unknown, because an under-counted
 // surface is a GRT001 false positive. A file with a syntax error, an
-// unreadable file (an escaping or dangling symlink), an oversize file, an
+// unreadable file (an escaping or dangling symlink, or a FIFO, socket or
+// device, which is never opened), an oversize file, an
 // overly deeply nested file, or an invalid block (a label-less output, for
 // example) each make the surface unknown rather than being skipped and
 // letting the remaining files stand in for it. In order of precedence when
@@ -54,8 +55,9 @@ const (
 	// OpenTofu precedence are applied.
 	ReasonNoTerraformFiles = "no-terraform-files"
 	// ReasonModuleFileUnreadable means a kept file could not be read: it
-	// is a broken or escaping symlink, or fs.Stat/fs.ReadFile otherwise
-	// failed.
+	// is a broken or escaping symlink, it is not a regular file (a FIFO,
+	// socket or device, which is never opened: 02-REVIEW G18), or
+	// fs.Stat or the read otherwise failed.
 	ReasonModuleFileUnreadable = "module-file-unreadable"
 	// ReasonModuleFileTooLarge means a kept file exceeds
 	// hclconv.MaxFileBytes. It is never parsed: hclsyntax.ParseConfig and
@@ -64,8 +66,10 @@ const (
 	// G7).
 	ReasonModuleFileTooLarge = "module-file-too-large"
 	// ReasonModuleFileTooDeep means a kept file's bracket, quote, heredoc,
-	// template or unary-operator nesting exceeds hclconv.MaxNestingDepth.
-	// It is never parsed, for the same reason as ReasonModuleFileTooLarge.
+	// template, unary-operator or pending-ternary nesting exceeds
+	// hclconv.MaxNestingDepth, or one of its expressions chains more than
+	// hclconv.MaxExpressionChain operators (02-REVIEW G17). It is never
+	// parsed, for the same reason as ReasonModuleFileTooLarge.
 	ReasonModuleFileTooDeep = "module-file-too-deep"
 	// ReasonSyntaxError means a kept file has invalid HCL or JSON syntax.
 	// Its partial body is never analyzed.
@@ -135,6 +139,13 @@ func (r *Reader) ReadSurface(ctx context.Context, module repograph.RepoPath) (po
 		}
 		if info.IsDir() {
 			continue // a directory whose name happens to match a module extension
+		}
+		if !info.Mode().IsRegular() {
+			// A FIFO, socket or device (02-REVIEW G18): opening a FIFO
+			// blocks until a writer appears, so it is never opened. fs.Stat
+			// follows in-repo symlinks, so a link to a regular file passes.
+			unreadable = true
+			continue
 		}
 
 		src, readErr := hclconv.ReadFileLimited(r.fsys, rel)

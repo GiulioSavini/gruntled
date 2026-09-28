@@ -32,11 +32,18 @@ type zeroSizeInfo struct{ fs.FileInfo }
 
 func (zeroSizeInfo) Size() int64 { return 0 }
 
-// countingReadFS wraps an fstest.MapFS and counts ReadFile calls, so a
-// test can assert ReadFileLimited calls fs.ReadFile at most once.
+// countingReadFS wraps an fstest.MapFS and counts Open calls (and
+// ReadFile calls, should anything use that path), so a test can assert
+// ReadFileLimited opens a file exactly once, or not at all when it
+// refuses the file at Stat.
 type countingReadFS struct {
 	fstest.MapFS
 	reads int
+}
+
+func (f *countingReadFS) Open(name string) (fs.File, error) {
+	f.reads++
+	return f.MapFS.Open(name)
 }
 
 func (f *countingReadFS) ReadFile(name string) ([]byte, error) {
@@ -95,18 +102,86 @@ func TestReadFileLimited(t *testing.T) {
 		}
 	})
 
-	t.Run("success path reads exactly once", func(t *testing.T) {
+	t.Run("success path opens exactly once", func(t *testing.T) {
 		fsys := &countingReadFS{MapFS: fstest.MapFS{
 			"f.tf": &fstest.MapFile{Data: []byte(`a = 1`)},
 		}}
-		if _, err := hclconv.ReadFileLimited(fsys, "f.tf"); err != nil {
+		src, err := hclconv.ReadFileLimited(fsys, "f.tf")
+		if err != nil {
 			t.Fatalf("ReadFileLimited: unexpected error: %v", err)
 		}
+		if string(src) != "a = 1" {
+			t.Fatalf("src = %q, want %q", src, "a = 1")
+		}
 		if fsys.reads != 1 {
-			t.Fatalf("ReadFile calls = %d, want 1", fsys.reads)
+			t.Fatalf("Open+ReadFile calls = %d, want 1", fsys.reads)
+		}
+	})
+
+	// 02-REVIEW G18: opening a FIFO for reading blocks until a writer
+	// appears, so a non-regular file is refused at Stat, before any Open.
+	for _, mode := range []fs.FileMode{fs.ModeNamedPipe, fs.ModeDevice, fs.ModeSocket, fs.ModeCharDevice | fs.ModeDevice} {
+		t.Run("non-regular "+mode.String()+" refused before opening", func(t *testing.T) {
+			fsys := &countingReadFS{MapFS: fstest.MapFS{
+				"f.tf": &fstest.MapFile{Data: []byte(`a = 1`), Mode: mode},
+			}}
+			_, err := hclconv.ReadFileLimited(fsys, "f.tf")
+			if !errors.Is(err, hclconv.ErrNotRegularFile) {
+				t.Fatalf("err = %v, want ErrNotRegularFile", err)
+			}
+			if fsys.reads != 0 {
+				t.Fatalf("Open+ReadFile calls = %d, want 0 (refused at Stat)", fsys.reads)
+			}
+		})
+	}
+
+	t.Run("Stat says regular but the open handle does not", func(t *testing.T) {
+		fsys := openModeFS{
+			MapFS: fstest.MapFS{"f.tf": &fstest.MapFile{Data: []byte(`a = 1`)}},
+			mode:  fs.ModeNamedPipe,
+		}
+		_, err := hclconv.ReadFileLimited(fsys, "f.tf")
+		if !errors.Is(err, hclconv.ErrNotRegularFile) {
+			t.Fatalf("err = %v, want ErrNotRegularFile", err)
 		}
 	})
 }
+
+// openModeFS reports f.tf as a regular file through Stat but hands out an
+// open file whose own Stat reports mode: the file was swapped between the
+// Stat pre-check and Open.
+type openModeFS struct {
+	fstest.MapFS
+	mode fs.FileMode
+}
+
+func (f openModeFS) Open(name string) (fs.File, error) {
+	file, err := f.MapFS.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	return modeFile{File: file, mode: f.mode}, nil
+}
+
+type modeFile struct {
+	fs.File
+	mode fs.FileMode
+}
+
+func (m modeFile) Stat() (fs.FileInfo, error) {
+	info, err := m.File.Stat()
+	if err != nil {
+		return nil, err
+	}
+	return modeInfo{FileInfo: info, mode: m.mode}, nil
+}
+
+type modeInfo struct {
+	fs.FileInfo
+	mode fs.FileMode
+}
+
+func (m modeInfo) Mode() fs.FileMode { return m.mode }
 
 // --- CheckNativeDepth: rejects ---------------------------------------------
 

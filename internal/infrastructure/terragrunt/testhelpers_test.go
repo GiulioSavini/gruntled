@@ -36,12 +36,16 @@ func filesFS(files map[string]string) fstest.MapFS {
 	return m
 }
 
-// countingFS wraps an fs.FS and records how many times ReadFile was called
-// for each name, so a parse-once test can assert every file was read at
-// most once no matter how many distinct callers ask for it. Stat, ReadDir,
-// ReadLink and Lstat delegate to inner (through the fs package's generic
-// helpers, or directly for the two symlink-aware methods, which io/fs has
-// no generic helper for); Open delegates directly.
+// countingFS wraps an fs.FS and records how many times each name was
+// opened or passed to ReadFile, so a parse-once test can assert every file
+// was read at most once no matter how many distinct callers ask for it.
+// hclconv.ReadFileLimited reads through Open (02-12), so Open is where
+// reads are counted now; ReadFile is still counted in case anything reads
+// that way. Stat, ReadDir, ReadLink and Lstat delegate to inner (through
+// the fs package's generic helpers, or directly for the two symlink-aware
+// methods, which io/fs has no generic helper for) and are not counted:
+// fs.Stat, fs.ReadDir and fs.WalkDir use the StatFS/ReadDirFS methods and
+// never call Open, so only file reads are counted.
 type countingFS struct {
 	inner fs.FS
 
@@ -54,8 +58,11 @@ func newCountingFS(inner fs.FS) *countingFS {
 	return &countingFS{inner: inner, reads: map[string]int{}}
 }
 
-// Open delegates to inner.
+// Open increments reads[name] and delegates to inner.
 func (c *countingFS) Open(name string) (fs.File, error) {
+	c.mu.Lock()
+	c.reads[name]++
+	c.mu.Unlock()
 	return c.inner.Open(name)
 }
 
@@ -95,7 +102,7 @@ func (c *countingFS) Lstat(name string) (fs.FileInfo, error) {
 	return rl.Lstat(name)
 }
 
-// count returns how many times ReadFile was called for name.
+// count returns how many times name was opened or read with ReadFile.
 func (c *countingFS) count(name string) int {
 	c.mu.Lock()
 	defer c.mu.Unlock()

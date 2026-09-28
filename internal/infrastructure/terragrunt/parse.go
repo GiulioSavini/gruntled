@@ -151,8 +151,9 @@ func (c *fileCache) parse(p repograph.RepoPath) *parsedFile {
 	pf := &parsedFile{path: p}
 
 	// G7: refuse a file over the size cap or the nesting limit before
-	// hclsyntax ever sees it. ReadFileLimited still calls fs.ReadFile at
-	// most once, so parse-once holds.
+	// hclsyntax ever sees it. ReadFileLimited opens the file at most once
+	// (and never opens a non-regular one, 02-REVIEW G18), so parse-once
+	// holds.
 	src, err := hclconv.ReadFileLimited(c.fsys, p.String())
 	if errors.Is(err, hclconv.ErrFileTooLarge) {
 		pf.limitReason = ReasonConfigTooLarge
