@@ -40,15 +40,15 @@ created: 2026-09-25
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
 | 3-01-01 | 01 | 1 | DIAG-01, DIAG-03 | unit (table, hand-built graphs) | `go test -count=1 ./internal/domain/analysis -run 'TestDIAG03\|TestUnknownOutputs' && bash scripts/check-architecture.sh` | ❌ W0 (created in task, TDD) | ⬜ pending |
 | 3-01-02 | 01 | 1 | DIAG-01, DIAG-02 | unit (fakes) | `go test -count=1 ./internal/application/... && bash scripts/check-architecture.sh` | ❌ W0 (created in task, TDD) | ⬜ pending |
-| 3-01-03 | 01 | 1 | DIAG-03 | unit (table) | `go test -count=1 ./internal/infrastructure/... -run TestDependencyOptions` | ✅ parse_test.go (rows updated) | ⬜ pending |
+| 3-01-03 | 01 | 1 | DIAG-03 | unit (table) + doc grep | `go test -count=1 ./internal/infrastructure/... -run TestDependencyOptions && grep -q 'otherwise the deprecated' internal/domain/repograph/options.go` | ✅ parse_test.go (rows updated), options.go (doc only) | ⬜ pending |
 | 3-02-01 | 02 | 1 | CLI-01, CLI-03, DIAG-04 | unit (golden strings) | `go test -count=1 ./internal/interfaces/...` | ❌ W0 (created in task, TDD) | ⬜ pending |
-| 3-02-02 | 02 | 1 | CLI-04 (+ layering) | script self-test | `bash scripts/check-architecture.sh && bash scripts/test-check-architecture.sh` | ✅ extend | ⬜ pending |
+| 3-02-02 | 02 | 1 | CLI-04 (+ layering) | script self-test (binary rule looped over all 5 release targets; binary-exec-windows-file case) | `bash scripts/check-architecture.sh && bash scripts/test-check-architecture.sh` | ✅ extend | ⬜ pending |
 | 3-04-01 | 04 | 1 | CLI-02, DIAG-03 | doc grep | `grep -c -F -x '  3  analysis could not run: path missing, not a directory or unreadable, or an internal failure' docs/cli.md` | ❌ created in task | ⬜ pending |
 | 3-04-02 | 04 | 1 | DIAG-03 (decision record) | doc grep | `grep -q 'mock_outputs never suppresses GRT001' .planning/PROJECT.md && grep -q 'stdlib \`flag\`' .planning/PROJECT.md` | ✅ edit | ⬜ pending |
 | 3-03-01 | 03 | 2 | CLI-01, CLI-02 | e2e (in-process + testscript) | `go test -count=1 ./cmd/gruntled -run 'TestRunExitCodes\|TestRunStdoutWriteFailure\|TestScripts/(usage\|exitcodes\|flags_after_path)' && bash scripts/check-architecture.sh` | ❌ W0 (created in task) | ⬜ pending |
 | 3-03-02 | 03 | 2 | DIAG-01, DIAG-02, DIAG-03, DIAG-04 | e2e (testscript txtar) | `go test -count=1 ./cmd/gruntled -run TestScripts` | ❌ W0 (created in task) | ⬜ pending |
 | 3-05-01 | 05 | 3 | DIAG-01, CLI-03, CLI-05, DIAG-04, CLI-02 | e2e (Go, synthrepo) | `go test -count=1 ./cmd/gruntled -run 'TestOracle\|TestDeterministicAcrossCheckouts\|TestNoWrites\|TestMutationDiff\|TestHelpMatchesDocs'` | ❌ W0 (created in task) | ⬜ pending |
-| 3-05-02 | 05 | 3 | CLI-01 (docs), phase gate | corpus run | `go run ./cmd/gruntled check /tmp/iso20022` (exit 0, empty stdout) | ✅ corpus clone at /tmp/iso20022 | ⬜ pending |
+| 3-05-02 | 05 | 3 | CLI-01 (docs), phase gate | corpus run | built binary on `$HOME/.cache/gruntled-phase4/corpus/primary` at e6c55d1: exit 0 + empty stdout; role_name renamed in iac.src/s3_runtime/state.tf only: exit 1 + exactly 8 GRT001 lines with the mock suffix (full command in 03-05 Task 2) | ✅ pinned corpus clone (Phase 2) | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -60,7 +60,7 @@ DIAG-03 silent-row coverage (zero false positives): rows 1, 2a/2b, 3a/3b, 4a/4b,
 
 Every task creates its own tests TDD-first in the same task. There are no separate Wave 0 stubs.
 
-- [ ] Phase 2 gap-closure plans (lazy-evaluation guard, stack-target guard, include-target units) are merged and green before Wave 1 starts
+- [ ] Hard gate: ALL Phase 2 gap-closure plans 02-06, 02-07, 02-08, 02-09, 02-10 and 02-11 are merged to master and green before Wave 1 starts (`for p in 06 07 08 09 10 11; do test -f .planning/phases/02-parsing-graph-construction/02-$p-SUMMARY.md || exit 1; done`). 02-09 reshaped scripts/check-architecture.sh (03-02 builds on it) and 02-11 edits terragrunt/parse_test.go (03-01 Task 3 edits it too)
 - [ ] `internal/domain/analysis/grt001_test.go`: hand-built graph helper (3-01-01)
 - [ ] `internal/application/checking/check_test.go`: hand-written fakes (3-01-02)
 - [ ] `internal/interfaces/presenter/presenter_test.go` (3-02-01)
