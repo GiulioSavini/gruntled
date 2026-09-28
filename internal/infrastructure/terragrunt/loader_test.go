@@ -533,6 +533,110 @@ dependency "good" { config_path = "../vpc" }
 			unit:  "u",
 			check: wantDepUnresolved("bad", ReasonConfigPathOutsideRepo, "good"),
 		},
+		{
+			name:   "config-path-stack/dir-only-stack",
+			reason: ReasonConfigPathStack,
+			fsys: filesFS(map[string]string{
+				"u/terragrunt.hcl": `
+dependency "bad" { config_path = "../stk" }
+dependency "good" { config_path = "../vpc" }
+`,
+				"stk/terragrunt.stack.hcl": "",
+				"vpc/terragrunt.hcl":       "",
+			}),
+			unit:  "u",
+			check: wantDepUnresolved("bad", ReasonConfigPathStack, "good"),
+		},
+		{
+			name:   "config-path-stack/dir-with-both",
+			reason: ReasonConfigPathStack,
+			fsys: filesFS(map[string]string{
+				"u/terragrunt.hcl": `
+dependency "bad" { config_path = "../stk2" }
+dependency "good" { config_path = "../vpc" }
+`,
+				"stk2/terragrunt.stack.hcl": "",
+				"stk2/terragrunt.hcl":       "",
+				"vpc/terragrunt.hcl":        "",
+			}),
+			unit:  "u",
+			check: wantDepUnresolved("bad", ReasonConfigPathStack, "good"),
+		},
+		{
+			name:   "config-path-stack/file",
+			reason: ReasonConfigPathStack,
+			fsys: filesFS(map[string]string{
+				"u/terragrunt.hcl": `
+dependency "bad" { config_path = "../stk/terragrunt.stack.hcl" }
+dependency "good" { config_path = "../vpc" }
+`,
+				"stk/terragrunt.stack.hcl": "",
+				"vpc/terragrunt.hcl":       "",
+			}),
+			unit:  "u",
+			check: wantDepUnresolved("bad", ReasonConfigPathStack, "good"),
+		},
+		{
+			name:   "config-path-nondefault-file/named-file",
+			reason: ReasonConfigPathNondefaultFile,
+			fsys: filesFS(map[string]string{
+				"u/terragrunt.hcl": `
+dependency "bad" { config_path = "../vpc/alt.hcl" }
+dependency "good" { config_path = "../vpc" }
+`,
+				"vpc/terragrunt.hcl": "",
+				"vpc/alt.hcl":        "",
+			}),
+			unit:  "u",
+			check: wantDepUnresolved("bad", ReasonConfigPathNondefaultFile, "good"),
+		},
+		{
+			name:   "config-path-nondefault-file/json-config",
+			reason: ReasonConfigPathNondefaultFile,
+			fsys: filesFS(map[string]string{
+				"u/terragrunt.hcl": `
+dependency "bad" { config_path = "../vpc/terragrunt.hcl.json" }
+dependency "good" { config_path = "../vpc" }
+`,
+				"vpc/terragrunt.hcl":      "",
+				"vpc/terragrunt.hcl.json": `{}`,
+			}),
+			unit:  "u",
+			check: wantDepUnresolved("bad", ReasonConfigPathNondefaultFile, "good"),
+		},
+		{
+			name:   "config-path-invalid",
+			reason: ReasonConfigPathInvalid,
+			fsys: filesFS(map[string]string{
+				"u/terragrunt.hcl": `
+dependency "bad" { config_path = "..\\vpc" }
+dependency "good" { config_path = "../vpc" }
+`,
+				"vpc/terragrunt.hcl": "",
+			}),
+			unit:  "u",
+			check: wantDepUnresolved("bad", ReasonConfigPathInvalid, "good"),
+		},
+		{
+			name:   "config-path-default-file-regression",
+			reason: ReasonConfigPathOutsideRepo, // regression only; reuses an already-covered reason
+			fsys: filesFS(map[string]string{
+				"u/terragrunt.hcl":   `dependency "vpc" { config_path = "../vpc/terragrunt.hcl" }`,
+				"vpc/terragrunt.hcl": "",
+			}),
+			unit: "u",
+			check: func(t *testing.T, uc ports.UnitConfig) {
+				t.Helper()
+				d, ok := findDep(uc.Dependencies, "vpc")
+				if !ok {
+					t.Fatalf("dependency %q not found", "vpc")
+				}
+				target, ok := d.Target()
+				if !ok || target.String() != "vpc" {
+					t.Fatalf("Target() = (%q, %v), want (%q, true) (config_path naming the default terragrunt.hcl still maps to its directory)", target.String(), ok, "vpc")
+				}
+			},
+		},
 	}
 
 	covered := map[string]bool{}

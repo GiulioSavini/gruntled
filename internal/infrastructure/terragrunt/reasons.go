@@ -106,4 +106,24 @@ const (
 	// ReasonConfigPathOutsideRepo means the dependency's evaluated
 	// config_path escapes the repository.
 	ReasonConfigPathOutsideRepo = "config-path-outside-repo"
+	// ReasonConfigPathStack means the dependency's resolved target directory
+	// holds terragrunt.stack.hcl (or config_path names that file directly).
+	// Terragrunt's getTerragruntOutput calls tryGetStackOutput first
+	// (research 03-RESEARCH.md Pattern 3): when a stack file is present, the
+	// dependency's outputs come from the stack's nested unit outputs, not
+	// from the unit module this domain resolves, so the target is never a
+	// module. This wins even when the directory also holds a terragrunt.hcl.
+	ReasonConfigPathStack = "config-path-stack"
+	// ReasonConfigPathNondefaultFile means config_path names an existing
+	// regular file other than terragrunt.hcl (or terragrunt.stack.hcl,
+	// which gets ReasonConfigPathStack instead). Terragrunt reads THAT file
+	// as the target unit's config, which may set a different source than
+	// the directory's own terragrunt.hcl, so mapping it to the directory
+	// would be a guess.
+	ReasonConfigPathNondefaultFile = "config-path-nondefault-file"
+	// ReasonConfigPathInvalid means the dependency's resolved target is not
+	// a valid RepoPath (for example a backslash survives resolvePath as
+	// part of a path segment). Only this one dependency becomes unresolved;
+	// its sibling dependencies and the unit itself stay resolved (G8).
+	ReasonConfigPathInvalid = "config-path-invalid"
 )
