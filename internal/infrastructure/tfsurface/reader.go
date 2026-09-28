@@ -1,6 +1,8 @@
 // Package tfsurface implements ports.SurfaceReader: it reads a module
 // directory's declared variable and output names from its .tf, .tf.json,
-// .tofu and .tofu.json files.
+// .tofu and .tofu.json files. A .tf/.tofu pair of the same name is read as
+// a union of both files, since which binary (Terraform or OpenTofu) runs
+// the module is unknown statically (02-REVIEW G20).
 //
 // The reader never under-counts silently: anything it cannot read
 // completely makes the whole surface unknown, because an under-counted
@@ -51,8 +53,8 @@ const (
 	// (or is not a directory) in the repository.
 	ReasonModuleDirNotFound = "module-dir-not-found"
 	// ReasonNoTerraformFiles means the directory exists but contains no
-	// .tf, .tf.json, .tofu or .tofu.json file after ignored names and
-	// OpenTofu precedence are applied.
+	// .tf, .tf.json, .tofu or .tofu.json file after ignored names are
+	// applied.
 	ReasonNoTerraformFiles = "no-terraform-files"
 	// ReasonModuleFileUnreadable means a kept file could not be read: it
 	// is a broken or escaping symlink, it is not a regular file (a FIFO,
@@ -231,44 +233,28 @@ func parseModuleFile(name, rel string, src []byte) (hcl.Body, hcl.Diagnostics) {
 }
 
 // keepModuleFiles filters entries down to the module files this reader
-// considers, in the order ReadDir returned them (lexical): names ending in
-// .tf, .tf.json, .tofu or .tofu.json, minus Terraform's ignored names
-// (prefix ".", suffix "~", or "#...#") and minus any .tf/.tf.json file that
-// has a same-named .tofu/.tofu.json sibling (OpenTofu precedence).
+// considers, in the order ReadDir returned them (lexical): every name
+// ending in .tf, .tf.json, .tofu or .tofu.json, minus Terraform's ignored
+// names (prefix ".", suffix "~", or "#...#").
+//
+// A .tf/.tofu pair is read as a union. Terraform ignores .tofu files, and
+// OpenTofu ignores x.tf (x.tf.json) when x.tofu (x.tofu.json) exists, but
+// gruntled cannot know statically which binary runs the module. The union
+// of both views can only over-count declared names, which never produces
+// a false GRT001, while either single view can under-count (02-REVIEW
+// G20). A broken file in either view makes the whole surface unknown, as
+// any broken kept file does.
 func keepModuleFiles(entries []fs.DirEntry) []string {
-	type candidate struct {
-		name, ext, base string
-	}
-	var candidates []candidate
-	tofuBases := map[string]bool{}
-	tofuJSONBases := map[string]bool{}
+	var kept []string
 	for _, e := range entries {
 		name := e.Name()
 		if isIgnoredFileName(name) {
 			continue
 		}
-		ext, ok := moduleExt(name)
-		if !ok {
+		if !isModuleFileName(name) {
 			continue
 		}
-		base := strings.TrimSuffix(name, ext)
-		candidates = append(candidates, candidate{name: name, ext: ext, base: base})
-		switch ext {
-		case ".tofu":
-			tofuBases[base] = true
-		case ".tofu.json":
-			tofuJSONBases[base] = true
-		}
-	}
-	kept := make([]string, 0, len(candidates))
-	for _, c := range candidates {
-		if c.ext == ".tf" && tofuBases[c.base] {
-			continue
-		}
-		if c.ext == ".tf.json" && tofuJSONBases[c.base] {
-			continue
-		}
-		kept = append(kept, c.name)
+		kept = append(kept, name)
 	}
 	return kept
 }
@@ -288,21 +274,15 @@ func isIgnoredFileName(name string) bool {
 	return false
 }
 
-// moduleExt returns the module file extension category of name, checked
-// most-specific first so ".tf.json"/".tofu.json" are never mistaken for
-// plain ".tf"/".tofu".
-func moduleExt(name string) (ext string, ok bool) {
-	switch {
-	case strings.HasSuffix(name, ".tf.json"):
-		return ".tf.json", true
-	case strings.HasSuffix(name, ".tofu.json"):
-		return ".tofu.json", true
-	case strings.HasSuffix(name, ".tf"):
-		return ".tf", true
-	case strings.HasSuffix(name, ".tofu"):
-		return ".tofu", true
+// isModuleFileName reports whether name ends in one of the module file
+// extensions: .tf, .tf.json, .tofu or .tofu.json.
+func isModuleFileName(name string) bool {
+	for _, ext := range []string{".tf", ".tf.json", ".tofu", ".tofu.json"} {
+		if strings.HasSuffix(name, ext) {
+			return true
+		}
 	}
-	return "", false
+	return false
 }
 
 // sortedDiags returns ds in the domain's canonical diagnostic order.

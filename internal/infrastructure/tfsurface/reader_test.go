@@ -9,6 +9,7 @@ import (
 	"testing/fstest"
 
 	"github.com/GiulioSavini/gruntled/internal/application/ports"
+	"github.com/GiulioSavini/gruntled/internal/domain/diagnostic"
 	"github.com/GiulioSavini/gruntled/internal/domain/repograph"
 	"github.com/GiulioSavini/gruntled/internal/infrastructure/hclconv"
 	"github.com/GiulioSavini/gruntled/internal/infrastructure/tfsurface"
@@ -77,22 +78,68 @@ func TestReadSurfaceMixedTfAndJSONUnion(t *testing.T) {
 	assertSurface(t, res, nil, []string{"a", "b"})
 }
 
-func TestReadSurfaceOpenTofuPrecedence(t *testing.T) {
+// TestReadSurfaceTfTofuUnion (02-REVIEW G20): OpenTofu ignores foo.tf
+// when foo.tofu exists and Terraform ignores .tofu files, but which binary
+// runs the module is unknown statically, so both views are read.
+func TestReadSurfaceTfTofuUnion(t *testing.T) {
 	fsys := fstest.MapFS{
 		"mod/foo.tf":   &fstest.MapFile{Data: []byte(`output "a" { value = 1 }`)},
 		"mod/foo.tofu": &fstest.MapFile{Data: []byte(`output "b" { value = 1 }`)},
 	}
 	res := readSurface(t, fsys, "mod")
-	assertSurface(t, res, nil, []string{"b"})
+	assertSurface(t, res, nil, []string{"a", "b"})
 }
 
-func TestReadSurfaceOpenTofuJSONPrecedence(t *testing.T) {
+func TestReadSurfaceTfTofuJSONUnion(t *testing.T) {
 	fsys := fstest.MapFS{
 		"mod/x.tf.json":   &fstest.MapFile{Data: []byte(`{"output": {"a": {"value": 1}}}`)},
 		"mod/x.tofu.json": &fstest.MapFile{Data: []byte(`{"output": {"b": {"value": 1}}}`)},
 	}
 	res := readSurface(t, fsys, "mod")
-	assertSurface(t, res, nil, []string{"b"})
+	assertSurface(t, res, nil, []string{"a", "b"})
+}
+
+// TestReadSurfaceTfTofuG20Repro is the reviewer's repro: a reference to
+// id must not be reported missing because outputs.tofu exists.
+func TestReadSurfaceTfTofuG20Repro(t *testing.T) {
+	fsys := fstest.MapFS{
+		"mod/outputs.tf":   &fstest.MapFile{Data: []byte("output \"id\" {\n  value = 1\n}\n")},
+		"mod/outputs.tofu": &fstest.MapFile{Data: []byte("output \"other\" {\n  value = 2\n}\n")},
+	}
+	res := readSurface(t, fsys, "mod")
+	assertSurface(t, res, nil, []string{"id", "other"})
+	if !res.Surface.HasOutput("id") {
+		t.Fatal(`HasOutput("id") = false, want true`)
+	}
+}
+
+// TestReadSurfaceTfTofuShadowedSyntaxError: the .tf half of a pair is read
+// now, so its syntax error makes the surface unknown, with a GRT100.
+func TestReadSurfaceTfTofuShadowedSyntaxError(t *testing.T) {
+	fsys := fstest.MapFS{
+		"mod/foo.tofu": &fstest.MapFile{Data: []byte(`output "b" { value = 1 }`)},
+		"mod/foo.tf":   &fstest.MapFile{Data: []byte("output \"a\" {\n  value = 1\n")},
+	}
+	res := readSurface(t, fsys, "mod")
+	if res.UnknownReason != tfsurface.ReasonSyntaxError {
+		t.Fatalf("UnknownReason = %q, want %q", res.UnknownReason, tfsurface.ReasonSyntaxError)
+	}
+	if len(res.Diagnostics) != 1 {
+		t.Fatalf("len(Diagnostics) = %d, want 1 (%v)", len(res.Diagnostics), res.Diagnostics)
+	}
+	d := res.Diagnostics[0]
+	if d.Code() != diagnostic.CodeSyntaxError || d.Key().File != "mod/foo.tf" {
+		t.Fatalf("diagnostic = (%s, %s), want (%s, mod/foo.tf)", d.Code(), d.Key().File, diagnostic.CodeSyntaxError)
+	}
+}
+
+func TestReadSurfaceTfTofuVariablesUnion(t *testing.T) {
+	fsys := fstest.MapFS{
+		"mod/foo.tf":   &fstest.MapFile{Data: []byte(`variable "v" {}`)},
+		"mod/foo.tofu": &fstest.MapFile{Data: []byte(`variable "w" {}`)},
+	}
+	res := readSurface(t, fsys, "mod")
+	assertSurface(t, res, []string{"v", "w"}, nil)
 }
 
 func TestReadSurfaceOverrideDedup(t *testing.T) {
