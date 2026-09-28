@@ -135,8 +135,9 @@ error — this needs an explicit, tested decision.
 
 ## Constraints
 
-- **Tech stack**: Go 1.24. `hashicorp/hcl/v2`, `spf13/cobra`. `fsnotify` when the
-  daemon arrives. No cloud SDKs.
+- **Tech stack**: Go 1.27. `hashicorp/hcl/v2`, stdlib `flag` (not cobra: cobra/pflag
+  link `net` into the binary, which breaks the static no-network proof). `fsnotify` when
+  the daemon arrives. No cloud SDKs.
 - **Scope**: Terragrunt only. `.tf` parsing limited to module surface extraction.
 - **No external processes, no network** at runtime. If the imported Terragrunt library
   would execute `run_cmd` or read the environment, that path must be disabled and the
@@ -167,6 +168,8 @@ error — this needs an explicit, tested decision.
 | Impacted only when module surface changes | Reporting twelve units because a comment changed destroys trust in the signal | — Pending |
 | Open the repository once M1 passes its test | If the experiment fails, nothing was published and nothing needs explaining | — Pending |
 | Name: gruntled | Memorable, ownable, no relevant collision, and the joke carries the README | — Pending |
+| mock_outputs never suppresses GRT001, and severity stays error | With merge-with-state, a renamed output silently falls back to the mock value at `apply`, which is exactly the bug gruntled exists to catch. Mock facts only enrich the message. `enabled = false`, `skip_outputs = true` or any non-literal value for either keeps GRT001 silent, because Terragrunt then never reads the module's outputs. Suppressing would also make the Phase 4 mutation run report 0/8 on the primary corpus | ✓ Locked (Phase 3) |
+| stdlib flag instead of cobra for v0.1 | One subcommand. cobra/pflag link `net`, `net/url` and `net/netip` plus `text/template`, while the stdlib keeps `binary-no-net-no-exec` a one-line CI proof. Revisit when v2 adds several subcommands | ✓ Locked (Phase 3) |
 
 ## Success Criteria for v0.1
 
@@ -195,4 +198,4 @@ files are parsed once and shared from day one, so `gruntled check` should alread
 import-the-library plan.
 
 ---
-*Last updated: 2026-09-01 after research — parser decision reversed, corpus identified, success criterion made mutation-based*
+*Last updated: 2026-09-25 after Phase 3 planning: DIAG-03 rule, stdlib flag*
