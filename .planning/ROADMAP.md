@@ -26,7 +26,7 @@ phase fails, the idea is wrong and that is learned in one milestone.
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Domain Foundation & Test Substrate** - Pure domain types (HCL-free, CI-enforced) plus a deterministic synthetic Terragrunt repo generator that every later phase uses for fixtures (completed 2026-09-25)
-- [x] **Phase 2: Parsing & Graph Construction** - Walk a real Terragrunt repository, resolve units to modules, and build a correctly-resolved `RepositoryGraph` without evaluating any expression value (completed 2026-09-25)
+- [ ] **Phase 2: Parsing & Graph Construction** - Walk a real Terragrunt repository, resolve units to modules, and build a correctly-resolved `RepositoryGraph` without evaluating any expression value (11/11 plans executed; awaiting verification)
 - [ ] **Phase 3: GRT001 Diagnostic & CLI** - `gruntled check` runs end-to-end, reporting correct, deterministic diagnostics with documented exit codes and no side effects
 - [ ] **Phase 4: Real-Repo Validation Experiment** - The falsifiable claim is settled: zero false positives and every injected mutation caught on a real public corpus, faster than `terragrunt hcl validate`
 
@@ -68,12 +68,12 @@ Plans:
 - [x] 02-05-PLAN.md — Terragrunt loader: include merge, path evaluation, source classification, unknown catalogue; end-to-end integration (two-hop, parse-once, determinism, synthrepo oracle, corpus smoke) and fuzz
 
 Gap closure (from 02-REVIEW.md G1..G14; wave 1 = 02-06..02-10 in parallel with disjoint files, wave 2 = 02-11):
-- [ ] 02-06-PLAN.md — G1: lazy-evaluation guard (ternary branches, &&/||, for body) in reference extraction; OUT-09/OUT-10 reversal
-- [ ] 02-07-PLAN.md — G2-G6, G8, G9, G11: stack targets, include-target units, non-default/invalid config_path, JSON includes, overlay ReadDir failure, malformed generate blocks
-- [ ] 02-08-PLAN.md — G12: zero values invalid everywhere in repograph (positions, options, entries, graph units/modules)
-- [ ] 02-09-PLAN.md — G13, G14: internal-layout, infrastructure-importers, testsupport-only-in-tests rules, and a source-level HCL import scan for build-constrained files
-- [ ] 02-10-PLAN.md — G7a: hclconv size cap and nesting-depth pre-scan; tfsurface refuses oversize/overdeep module files
-- [ ] 02-11-PLAN.md — G7b, G10: unit/include size and depth limits, two-input loader fuzz, edge-case catalogue update (STACK-09 and new reasons)
+- [x] 02-06-PLAN.md — G1: lazy-evaluation guard (ternary branches, &&/||, for body) in reference extraction; OUT-09/OUT-10 reversal
+- [x] 02-07-PLAN.md — G2-G6, G8, G9, G11: stack targets, include-target units, non-default/invalid config_path, JSON includes, overlay ReadDir failure, malformed generate blocks
+- [x] 02-08-PLAN.md — G12: zero values invalid everywhere in repograph (positions, options, entries, graph units/modules)
+- [x] 02-09-PLAN.md — G13, G14: internal-layout, infrastructure-importers, testsupport-only-in-tests rules, and a source-level HCL import scan for build-constrained files
+- [x] 02-10-PLAN.md — G7a: hclconv size cap and nesting-depth pre-scan; tfsurface refuses oversize/overdeep module files
+- [x] 02-11-PLAN.md — G7b, G10: unit/include size and depth limits, two-input loader fuzz, edge-case catalogue update (STACK-09 and new reasons)
 
 ### Phase 3: GRT001 Diagnostic & CLI
 **Goal**: `gruntled check` runs end-to-end against a repository on disk and reports `GRT001`/`GRT100` diagnostics that are correct, deterministic, and safe to script against in CI.
@@ -120,9 +120,9 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Domain Foundation & Test Substrate | 3/3 | Complete    | 2026-09-25 |
-| 2. Parsing & Graph Construction | 4/5 | In Progress|  |
+| 2. Parsing & Graph Construction | 11/11 | Verifying | - |
 | 3. GRT001 Diagnostic & CLI | 0/5 | Planned | - |
-| 4. Real-Repo Validation Experiment | 0/3 | Planned | - |
+| 4. Real-Repo Validation Experiment | 0/4 | Planned | - |
 
 ---
 *Roadmap created: 2026-09-01*
