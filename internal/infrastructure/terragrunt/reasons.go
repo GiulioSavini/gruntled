@@ -11,8 +11,9 @@ const (
 	// that file (see fileCache.syntaxDiagnostics).
 	ReasonSyntaxError = "syntax-error"
 	// ReasonUnreadableConfig means the unit's own terragrunt.hcl, or an
-	// include file it resolved to, could not be read (fs.ReadFile failed),
-	// even though it exists per fs.Stat.
+	// include file it resolved to, could not be read (fs.ReadFile, or the
+	// fs.Stat that hclconv.ReadFileLimited does first, failed), even though
+	// it was found by discovery or by the include's own fs.Stat.
 	ReasonUnreadableConfig = "unreadable-config"
 	// ReasonJSONConfigUnsupported means the unit directory holds
 	// terragrunt.hcl.json. Terragrunt itself prefers the JSON variant over
