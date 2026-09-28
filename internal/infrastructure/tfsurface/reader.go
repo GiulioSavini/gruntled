@@ -5,11 +5,19 @@
 // The reader never under-counts silently: anything it cannot read
 // completely makes the whole surface unknown, because an under-counted
 // surface is a GRT001 false positive. A file with a syntax error, an
-// unreadable file (an escaping or dangling symlink) or an invalid block
-// (a label-less output, for example) each make the surface unknown rather
-// than being skipped and letting the remaining files stand in for it. In
-// order of precedence when several apply: module-file-unreadable >
-// syntax-error > invalid-module-block > no-terraform-files.
+// unreadable file (an escaping or dangling symlink), an oversize file, an
+// overly deeply nested file, or an invalid block (a label-less output, for
+// example) each make the surface unknown rather than being skipped and
+// letting the remaining files stand in for it. In order of precedence when
+// several apply: module-file-unreadable > module-file-too-large >
+// module-file-too-deep > syntax-error > invalid-module-block >
+// no-terraform-files.
+//
+// A kept file is never handed to hclsyntax.ParseConfig or hcljson.Parse
+// without first passing hclconv's size cap and nesting-depth pre-scan
+// (02-REVIEW G7): both parsers recurse over their input, and Go cannot
+// recover from the fatal stack overflow a hostile or generated file can
+// cause, so refusing to parse is the only defence.
 //
 // In-repo file symlinks ARE followed (research Pitfall 1: the primary
 // corpus symlinks global.tf into all 65 of its module directories), through
@@ -20,6 +28,7 @@ package tfsurface
 
 import (
 	"context"
+	"errors"
 	"io/fs"
 	"path"
 	"strings"
@@ -48,6 +57,16 @@ const (
 	// is a broken or escaping symlink, or fs.Stat/fs.ReadFile otherwise
 	// failed.
 	ReasonModuleFileUnreadable = "module-file-unreadable"
+	// ReasonModuleFileTooLarge means a kept file exceeds
+	// hclconv.MaxFileBytes. It is never parsed: hclsyntax.ParseConfig and
+	// hcljson.Parse both recurse over their input, and their recursion
+	// cannot be recovered from on a hostile or generated file (02-REVIEW
+	// G7).
+	ReasonModuleFileTooLarge = "module-file-too-large"
+	// ReasonModuleFileTooDeep means a kept file's bracket, quote, heredoc,
+	// template or unary-operator nesting exceeds hclconv.MaxNestingDepth.
+	// It is never parsed, for the same reason as ReasonModuleFileTooLarge.
+	ReasonModuleFileTooDeep = "module-file-too-deep"
 	// ReasonSyntaxError means a kept file has invalid HCL or JSON syntax.
 	// Its partial body is never analyzed.
 	ReasonSyntaxError = "syntax-error"
@@ -96,9 +115,9 @@ func (r *Reader) ReadSurface(ctx context.Context, module repograph.RepoPath) (po
 	}
 
 	var (
-		diags                               []diagnostic.Diagnostic
-		vars, outs                          = map[string]struct{}{}, map[string]struct{}{}
-		unreadable, syntaxErr, invalidBlock bool
+		diags                                                  []diagnostic.Diagnostic
+		vars, outs                                             = map[string]struct{}{}, map[string]struct{}{}
+		unreadable, tooLarge, tooDeep, syntaxErr, invalidBlock bool
 	)
 
 	for _, name := range kept {
@@ -118,10 +137,25 @@ func (r *Reader) ReadSurface(ctx context.Context, module repograph.RepoPath) (po
 			continue // a directory whose name happens to match a module extension
 		}
 
-		src, readErr := fs.ReadFile(r.fsys, rel)
+		src, readErr := hclconv.ReadFileLimited(r.fsys, rel)
 		if readErr != nil {
-			unreadable = true
+			if errors.Is(readErr, hclconv.ErrFileTooLarge) {
+				tooLarge = true
+			} else {
+				unreadable = true
+			}
 			continue
+		}
+
+		var depthErr error
+		if strings.HasSuffix(name, ".json") {
+			depthErr = hclconv.CheckJSONDepth(src)
+		} else {
+			depthErr = hclconv.CheckNativeDepth(src)
+		}
+		if depthErr != nil {
+			tooDeep = true
+			continue // never hand a hostile nesting to a recursive parser
 		}
 
 		body, pdiags := parseModuleFile(name, rel, src)
@@ -153,6 +187,10 @@ func (r *Reader) ReadSurface(ctx context.Context, module repograph.RepoPath) (po
 	switch {
 	case unreadable:
 		return ports.SurfaceResult{UnknownReason: ReasonModuleFileUnreadable}, nil
+	case tooLarge:
+		return ports.SurfaceResult{UnknownReason: ReasonModuleFileTooLarge}, nil
+	case tooDeep:
+		return ports.SurfaceResult{UnknownReason: ReasonModuleFileTooDeep}, nil
 	case syntaxErr:
 		return ports.SurfaceResult{UnknownReason: ReasonSyntaxError, Diagnostics: sortedDiags(diags)}, nil
 	case invalidBlock:

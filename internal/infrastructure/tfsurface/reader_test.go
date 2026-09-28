@@ -298,9 +298,13 @@ func TestReadSurfaceOversizeFile(t *testing.T) {
 
 // TestReadSurfaceAtDepthLimitStillReads proves a module file at exactly
 // hclconv.MaxNestingDepth still parses normally: the bound is inclusive.
+// The output block's own enclosing braces count as one nesting level (as
+// CheckNativeDepth's own boundary test at package hclconv proves in
+// isolation), so the value nests one fewer paren to land the WHOLE file
+// exactly at the limit.
 func TestReadSurfaceAtDepthLimitStillReads(t *testing.T) {
 	fsys := fstest.MapFS{
-		"m/main.tf": &fstest.MapFile{Data: []byte(deepParenValue(hclconv.MaxNestingDepth))},
+		"m/main.tf": &fstest.MapFile{Data: []byte(deepParenValue(hclconv.MaxNestingDepth - 1))},
 	}
 	res := readSurface(t, fsys, "m")
 	assertSurface(t, res, nil, []string{"x"})
