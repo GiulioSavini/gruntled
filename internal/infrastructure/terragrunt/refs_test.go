@@ -90,7 +90,7 @@ func TestExtractRefsShapes(t *testing.T) {
 		{"OUT-07 whole object attribute", `inputs = dependency.vpc.outputs` + "\n", nil},
 		{"OUT-08 dynamic index key", `a = dependency.vpc.outputs[local.k]` + "\n", nil},
 		{"OUT-09 for expression", `a = [for s in dependency.vpc.outputs.subnet_ids : s]` + "\n", []wantRef{{"vpc", "subnet_ids"}}},
-		{"OUT-10 both ternary branches", `a = local.x ? dependency.nat.outputs.gw : dependency.igw.outputs.gw` + "\n", []wantRef{{"nat", "gw"}, {"igw", "gw"}}},
+		{"OUT-10 ternary branches are lazy", `a = local.x ? dependency.nat.outputs.gw : dependency.igw.outputs.gw` + "\n", nil},
 		{"OUT-14 merge on whole outputs", `a = merge(dependency.vpc.outputs, {a = 1})` + "\n", nil},
 		{"expansion dependency (dynamic key)", `a = dependency.aurora["web"].outputs.id` + "\n", nil},
 		{"bare dependency", `a = dependency.x` + "\n", nil},
@@ -168,9 +168,11 @@ func TestExtractRefsTemplatesAndHeredocs(t *testing.T) {
 // TestExtractRefsNonASCIIColumn is research Pitfall 2: the column must be
 // counted in bytes, never in grapheme clusters, so a non-ASCII prefix on
 // the same line shifts the reported column past what a rune count would
-// give.
+// give. The reference sits in a list literal, not a ternary branch, so the
+// lazy-evaluation guard (TestExtractRefsLazyEvaluation) does not suppress
+// it.
 func TestExtractRefsNonASCIIColumn(t *testing.T) {
-	src := `a = "ééé" == "" ? dependency.x.outputs.y : ""` + "\n"
+	src := `a = ["ééé", dependency.x.outputs.y]` + "\n"
 	idx := strings.Index(src, "dependency")
 	if idx < 0 {
 		t.Fatalf("test source does not contain \"dependency\": %q", src)
@@ -212,5 +214,71 @@ func TestExtractRefsOrderIsSourceOrderAcrossRuns(t *testing.T) {
 	for run := 0; run < 20; run++ {
 		refs := mustExtractRefs(t, src)
 		assertRefPairs(t, refs, want)
+	}
+}
+
+// TestExtractRefsLazyEvaluation is 03-RESEARCH.md's Pattern 2: HCL evaluates
+// a ternary's unselected branch, a short-circuited &&/|| operand, and a for
+// expression's key/value/if once per element (so zero times over an empty
+// collection) without surfacing their diagnostics. A reference in one of
+// those positions must NOT be reported, exactly like the try()/can() guard.
+// The ternary condition and the for collection are always evaluated and
+// stay checked. Template directives (%{ if }, %{ for }) parse to the same
+// node types, so the same rows prove the guard covers them too.
+func TestExtractRefsLazyEvaluation(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+		want []wantRef
+	}{
+		{"ternary: condition and both branches are local -> nothing", `a = local.c ? dependency.x.outputs.t : dependency.y.outputs.f` + "\n", nil},
+		{"ternary: dependency condition with literal branches -> condition ref only", `a = dependency.c.outputs.flag ? 1 : 2` + "\n", []wantRef{{"c", "flag"}}},
+		{"ternary: dependency condition, ref in true branch -> condition ref only", `a = dependency.c.outputs.flag ? dependency.x.outputs.t : null` + "\n", []wantRef{{"c", "flag"}}},
+		{"&&: ref on RHS is short-circuited away", `a = local.b && dependency.x.outputs.v` + "\n", nil},
+		{"&&: ref on LHS is short-circuited away", `a = dependency.x.outputs.v && local.b` + "\n", nil},
+		{"||: ref on RHS is short-circuited away", `a = local.b || dependency.x.outputs.v` + "\n", nil},
+		{"||: ref on LHS is short-circuited away", `a = dependency.x.outputs.v || local.b` + "\n", nil},
+		{"unary negation is not lazy", `a = !dependency.x.outputs.v` + "\n", []wantRef{{"x", "v"}}},
+		{"arithmetic is not lazy", `a = dependency.x.outputs.n + 1` + "\n", []wantRef{{"x", "n"}}},
+		{"for: collection stays checked", `a = [for s in dependency.x.outputs.list : s]` + "\n", []wantRef{{"x", "list"}}},
+		{"for: value expression is lazy", `a = [for s in local.l : dependency.x.outputs.v]` + "\n", nil},
+		{"for: key expression is lazy", `a = {for k, v in local.m : dependency.x.outputs.k => v}` + "\n", nil},
+		{"for: if-condition is lazy", `a = [for s in local.l : s if dependency.x.outputs.ok]` + "\n", nil},
+		{"for: collection checked, key and value lazy", `a = {for k, v in dependency.x.outputs.m : k => dependency.y.outputs.z}` + "\n", []wantRef{{"x", "m"}}},
+		{"template %{ if }: both branches lazy", `a = "%{ if local.c }${dependency.x.outputs.t}%{ else }${dependency.y.outputs.f}%{ endif }"` + "\n", nil},
+		{"template %{ if }: condition ref stays checked", `a = "%{ if dependency.c.outputs.flag }x%{ endif }"` + "\n", []wantRef{{"c", "flag"}}},
+		{"template %{ for }: body is lazy", `a = "%{ for s in local.l }${dependency.x.outputs.v}%{ endfor }"` + "\n", nil},
+		{"template %{ for }: collection stays checked", `a = "%{ for s in dependency.x.outputs.l }${s}%{ endfor }"` + "\n", []wantRef{{"x", "l"}}},
+		{"try() nested inside a lazy branch stays suppressed", `a = local.c ? try(dependency.x.outputs.t, null) : null` + "\n", nil},
+		{"sibling ref after a lazy ternary is still checked", `a = [local.c ? dependency.x.outputs.t : null, dependency.y.outputs.after]` + "\n", []wantRef{{"y", "after"}}},
+		{"nested ternary inside a lazy branch stays lazy", `a = local.c ? (local.d ? dependency.x.outputs.t : null) : null` + "\n", nil},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			refs := mustExtractRefs(t, tc.src)
+			assertRefPairs(t, refs, tc.want)
+		})
+	}
+}
+
+// TestExtractRefsLazySiblingAttributesKeepPosition proves the lazy-range
+// stack is popped correctly across sibling attributes: a ref suppressed
+// inside one attribute's ternary must not leak suppression into, or miss,
+// an unguarded ref with the identical shape on the next line.
+func TestExtractRefsLazySiblingAttributesKeepPosition(t *testing.T) {
+	src := "a = local.c ? dependency.x.outputs.t : null\n" +
+		"b = dependency.x.outputs.t\n"
+	refs := mustExtractRefs(t, src)
+	if len(refs) != 1 {
+		t.Fatalf("got %d refs, want 1: %s", len(refs), dumpRefs(refs))
+	}
+	if got := refs[0].Dependency(); got != "x" {
+		t.Fatalf("refs[0].Dependency() = %q, want %q", got, "x")
+	}
+	if got := refs[0].Output(); got != "t" {
+		t.Fatalf("refs[0].Output() = %q, want %q", got, "t")
+	}
+	if got := refs[0].Pos().Line(); got != 2 {
+		t.Fatalf("refs[0].Pos().Line() = %d, want 2 (the unguarded sibling, not the lazy branch on line 1)", got)
 	}
 }
