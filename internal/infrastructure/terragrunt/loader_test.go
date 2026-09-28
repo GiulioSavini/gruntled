@@ -135,6 +135,9 @@ type unknownReasonCase struct {
 	fsys   fs.FS
 	unit   string
 	check  func(t *testing.T, uc ports.UnitConfig)
+	// wantNoDiagnostics, when true, additionally asserts LoadResult.Diagnostics
+	// is empty: proves the reason fires with no false GRT100.
+	wantNoDiagnostics bool
 }
 
 func wantConfigUnknown(reason string) func(*testing.T, ports.UnitConfig) {
@@ -637,6 +640,38 @@ dependency "good" { config_path = "../vpc" }
 				}
 			},
 		},
+		{
+			name:   "include-target",
+			reason: ReasonIncludeTarget,
+			fsys: filesFS(map[string]string{
+				"r/terragrunt.hcl":   "",
+				"r/c/terragrunt.hcl": `include { path = find_in_parent_folders() }`,
+			}),
+			unit:  "r",
+			check: wantConfigUnknown(ReasonIncludeTarget),
+		},
+		{
+			name:   "include-json-unsupported/explicit",
+			reason: ReasonIncludeJSONUnsupported,
+			fsys: filesFS(map[string]string{
+				"root.hcl.json":    `{}`,
+				"u/terragrunt.hcl": `include "root" { path = "../root.hcl.json" }`,
+			}),
+			unit:              "u",
+			check:             wantConfigUnknown(ReasonIncludeJSONUnsupported),
+			wantNoDiagnostics: true,
+		},
+		{
+			name:   "include-json-unsupported/find-in-parent",
+			reason: ReasonIncludeJSONUnsupported,
+			fsys: filesFS(map[string]string{
+				"p/terragrunt.hcl.json": `{}`,
+				"p/c/terragrunt.hcl":    `include { path = find_in_parent_folders() }`,
+			}),
+			unit:              "p/c",
+			check:             wantConfigUnknown(ReasonIncludeJSONUnsupported),
+			wantNoDiagnostics: true,
+		},
 	}
 
 	covered := map[string]bool{}
@@ -645,6 +680,9 @@ dependency "good" { config_path = "../vpc" }
 			res := loadUnits(t, tc.fsys)
 			uc := unitByPath(t, res, tc.unit)
 			tc.check(t, uc)
+			if tc.wantNoDiagnostics && len(res.Diagnostics) != 0 {
+				t.Fatalf("Diagnostics = %v, want none", res.Diagnostics)
+			}
 		})
 		covered[tc.reason] = true
 	}
