@@ -11,15 +11,21 @@ import (
 	"github.com/GiulioSavini/gruntled/internal/infrastructure/tfsurface"
 )
 
-// FuzzLoadUnits fuzzes the loader's per-unit terragrunt.hcl body against a
-// fixed surrounding repository: a shared root.hcl, the fuzzed unit
-// live/app (with a module that declares output "o"), and a plain
-// live/vpc unit (with a module that declares output "id") a dependency
-// block could point at. No input, however malformed, may panic, return a
-// Go error (per-file and per-unit problems are never errors, only unknown
-// reasons and diagnostics), name a file outside the fixture in a
-// diagnostic, or produce a reference whose position falls outside its own
-// file's actual bytes.
+// FuzzLoadUnits fuzzes two inputs against a fixed surrounding repository:
+// body, the fuzzed unit live/app's own terragrunt.hcl (live/app has a
+// module declaring output "o"), and shared, written to BOTH root.hcl and
+// live/vpc/main.tf. live/vpc is a plain unit a dependency block can point
+// at. The shared input reaches code the single-input target never did
+// (02-REVIEW G10): include parsing and merging when body includes
+// root.hcl through find_in_parent_folders("root.hcl"), dependencies and
+// references declared in an include, and the module surface reader for
+// the dependency target's main.tf.
+//
+// No input pair, however malformed, may panic, return a Go error
+// (per-file and per-unit problems are never errors, only unknown reasons
+// and diagnostics), name a file outside the fixture in a diagnostic, or
+// produce a reference whose position falls outside its own file's actual
+// bytes, whether that file is live/app/terragrunt.hcl or root.hcl.
 func FuzzLoadUnits(f *testing.F) {
 	seeds := []string{
 		// A valid unit: include + dependency + an inputs reference.
@@ -210,23 +216,60 @@ locals {
 }
 `,
 	}
+	// defaultShared is the shared input every single-input seed above ran
+	// with before G10: valid as root.hcl, and valid in main.tf too (a bare
+	// attribute, which the module surface reader ignores).
+	const defaultShared = "inputs = {}\n"
 	for _, s := range seeds {
-		f.Add(s)
+		f.Add(s, defaultShared)
 	}
 
-	f.Fuzz(func(t *testing.T, body string) {
+	// Seed pairs whose body always reaches root.hcl (and so the shared
+	// input) through an include, depends on live/vpc (whose main.tf is
+	// the shared input too) and references it.
+	const sharedBody = `include "root" {
+  path = find_in_parent_folders("root.hcl")
+}
+
+dependency "vpc" {
+  config_path = "../vpc"
+}
+
+inputs = {
+  id = dependency.vpc.outputs.id
+}
+`
+	sharedSeeds := []string{
+		// A valid module; root.hcl with an output block is still valid HCL.
+		"output \"id\" {\n  value = 1\n}\n",
+		// An include-declared dependency and reference.
+		"dependency \"db\" {\n  config_path = \"../db\"\n}\ninputs = { x = dependency.db.outputs.y }\n",
+		// Mid-edit syntax error in a shared file: GRT100 for root.hcl and
+		// for live/vpc/main.tf.
+		"locals {",
+		// Over the nesting limit, yet only about 4 KB.
+		"x = " + strings.Repeat("(", 2000) + "1" + strings.Repeat(")", 2000) + "\n",
+		// A nested include.
+		"include \"x\" {\n  path = \"other.hcl\"\n}\n",
+		// Non-UTF-8 bytes.
+		"\xff\xfe",
+		// A generate block whose contents declare an output.
+		"generate \"g\" {\n  path = \"o.tf\"\n  contents = \"output \\\"z\\\" {}\"\n}\n",
+	}
+	for _, sh := range sharedSeeds {
+		f.Add(sharedBody, sh)
+	}
+
+	f.Fuzz(func(t *testing.T, body, shared string) {
 		repo := fstest.MapFS{
-			"root.hcl":                {Data: []byte("inputs = {}\n")},
+			"root.hcl":                {Data: []byte(shared)},
 			"live/app/terragrunt.hcl": {Data: []byte(body)},
 			"live/app/main.tf": {Data: []byte(`output "o" {
   value = 1
 }
 `)},
 			"live/vpc/terragrunt.hcl": {Data: []byte("")},
-			"live/vpc/main.tf": {Data: []byte(`output "id" {
-  value = 1
-}
-`)},
+			"live/vpc/main.tf":        {Data: []byte(shared)},
 		}
 
 		res, err := indexing.Build(context.Background(), NewLoader(repo), tfsurface.NewReader(repo))
@@ -249,14 +292,18 @@ locals {
 		if !ok || appUnit.Status() == repograph.StatusConfigUnknown {
 			return
 		}
-		lines := strings.Split(body, "\n")
+		files := map[string][]string{
+			"live/app/terragrunt.hcl": strings.Split(body, "\n"),
+			"root.hcl":                strings.Split(shared, "\n"),
+		}
 		for _, ref := range appUnit.References() {
 			pos := ref.Pos()
-			if pos.File().String() != "live/app/terragrunt.hcl" {
+			lines, ok := files[pos.File().String()]
+			if !ok {
 				continue
 			}
 			if pos.Line() < 1 || pos.Line() > len(lines) {
-				t.Fatalf("reference position out of range: %s (body has %d lines)", pos, len(lines))
+				t.Fatalf("reference position out of range: %s (file has %d lines)", pos, len(lines))
 			}
 			lineLen := len(lines[pos.Line()-1])
 			if pos.Column() < 1 || pos.Column() > lineLen+1 {
