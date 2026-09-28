@@ -26,7 +26,7 @@ phase fails, the idea is wrong and that is learned in one milestone.
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Domain Foundation & Test Substrate** - Pure domain types (HCL-free, CI-enforced) plus a deterministic synthetic Terragrunt repo generator that every later phase uses for fixtures (completed 2026-09-25)
-- [ ] **Phase 2: Parsing & Graph Construction** - Walk a real Terragrunt repository, resolve units to modules, and build a correctly-resolved `RepositoryGraph` without evaluating any expression value (11/11 plans executed; awaiting verification)
+- [ ] **Phase 2: Parsing & Graph Construction** - Walk a real Terragrunt repository, resolve units to modules, and build a correctly-resolved `RepositoryGraph` without evaluating any expression value (11/14 plans executed; gap cycle 1 planned: 02-12..02-14)
 - [ ] **Phase 3: GRT001 Diagnostic & CLI** - `gruntled check` runs end-to-end, reporting correct, deterministic diagnostics with documented exit codes and no side effects
 - [ ] **Phase 4: Real-Repo Validation Experiment** - The falsifiable claim is settled: zero false positives and every injected mutation caught on a real public corpus, faster than `terragrunt hcl validate`
 
@@ -58,7 +58,7 @@ Plans:
   3. A unit resolves to its module correctly both when `terraform.source` is present (local path) and when it is absent (the unit's own directory); a unit whose source is remote or dynamically computed is classified as remote/unresolvable without any network access
   4. Given a `dependency` block, gruntled resolves it through both hops — to the target unit, then from that unit to its module — and extracts that module's `variable` and `output` names correctly even when the unit's directory differs from the module's directory
   5. A unit hitting any construct it cannot resolve offline (remote source, unquoted/dynamic constructs it can't evaluate) is marked `unknown` rather than analyzed further; invalid HCL (including a file saved mid-edit) produces a diagnostic instead of a crash; `.terragrunt-cache`, `.terraform`, vendored module directories and symlinks are never walked into
-**Plans**: 11 plans (02-01..02-05 in sequential waves 1-5; gap closure 02-06..02-11 in two waves: 02-06..02-10 parallel, then 02-11)
+**Plans**: 14 plans (02-01..02-05 in sequential waves 1-5; gap closure 02-06..02-11 in two waves: 02-06..02-10 parallel, then 02-11; gap cycle 1 02-12..02-14 in two waves: 02-12 and 02-14 parallel, then 02-13)
 
 Plans:
 - [x] 02-01-PLAN.md — Domain: config-unknown / module-unknown units, unknown-surface modules, unresolved dependencies, DependencyOptions (DIAG-03 facts), diagnostic Key with Unit
@@ -74,6 +74,11 @@ Gap closure (from 02-REVIEW.md G1..G14; wave 1 = 02-06..02-10 in parallel with d
 - [x] 02-09-PLAN.md — G13, G14: internal-layout, infrastructure-importers, testsupport-only-in-tests rules, and a source-level HCL import scan for build-constrained files
 - [x] 02-10-PLAN.md — G7a: hclconv size cap and nesting-depth pre-scan; tfsurface refuses oversize/overdeep module files
 - [x] 02-11-PLAN.md — G7b, G10: unit/include size and depth limits, two-input loader fuzz, edge-case catalogue update (STACK-09 and new reasons)
+
+Gap cycle 1 (from 02-REVIEW.md Round 2, G15..G22, and 02-VERIFICATION.md; wave 1 = 02-12 and 02-14 in parallel with disjoint files, wave 2 = 02-13, which shares loader_test.go with 02-12):
+- [ ] 02-12-PLAN.md — G17, G18, G20: ternary- and chain-aware nesting pre-scan, non-regular files never block, .tf/.tofu union surface
+- [ ] 02-13-PLAN.md — G15, G16, G19: include targets by canonical path, parents of failing/dynamic includers marked include-target, conservative generate output detector, catalogue for G15..G22
+- [ ] 02-14-PLAN.md — G21, G22: go/parser import scanner replaces the awk scan, single-module rule (requires 03-02 merged)
 
 ### Phase 3: GRT001 Diagnostic & CLI
 **Goal**: `gruntled check` runs end-to-end against a repository on disk and reports `GRT001`/`GRT100` diagnostics that are correct, deterministic, and safe to script against in CI.
@@ -120,7 +125,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Domain Foundation & Test Substrate | 3/3 | Complete    | 2026-09-25 |
-| 2. Parsing & Graph Construction | 11/11 | Verifying | - |
+| 2. Parsing & Graph Construction | 11/14 | Gap closure | - |
 | 3. GRT001 Diagnostic & CLI | 0/5 | Planned | - |
 | 4. Real-Repo Validation Experiment | 0/4 | Planned | - |
 

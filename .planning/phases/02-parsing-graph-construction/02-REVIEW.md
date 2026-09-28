@@ -88,3 +88,90 @@ or test FIRST, then the fix. Zero false positives is the goal, so every fix fail
 - Architect N1 (explicit state enum in the UnitConfig DTO) and N2 (a single `TargetSurface`
   graph query). Phase 3 plan 03-01 already encodes the two-level check in the analyzer.
   Revisit if a second analyzer appears.
+
+---
+
+# Round 2 — Confirmed Gaps After 02-06..02-11 (input for gap cycle 1: 02-12..02-14)
+
+Sources: 02-VERIFICATION.md (2026-09-28, the partial G3 truth) plus a second
+verifier/code-review/architect pass. Every item below was reproduced by a reviewer in a
+throwaway copy. As in round 1, each fix needs a failing test or fixture first, and every
+fix fails toward unknown. G15/G16 are one reviewer finding (F1) split into its two
+mechanisms. Plan mapping: G17, G18, G20 go to 02-12; G15, G16, G19 go to 02-13 (which
+also owns the catalogue); G21, G22 go to 02-14.
+
+## False-positive sources (blockers first)
+
+- **G15 [blocker]: include-target guard keyed by the lexical path.** loader.go
+  resolveIncludes records `located[p] = true` with the lexical include path, and step 13
+  looks up `<unit dir>/terragrunt.hcl`. An include that reaches the parent through an
+  in-repo symlink (`../../link/terragrunt.hcl` with `link -> parent`, a symlinked
+  directory, or a symlinked file) records `live/link/terragrunt.hcl`, so the real parent
+  stays resolved and is analysed standalone, which gives the false GRT001 of
+  TestIncludeTargetCorpusReproduction. Fix: compare canonical in-repo paths (resolve
+  every symlink inside the repo through fs.ReadLinkFS). A link that escapes the repo, or
+  one that cannot be resolved, fails closed. Test: a real-FS fixture (t.TempDir +
+  os.Symlink + os.OpenRoot, like realfs_test.go). File: loader.go. Plan 02-13.
+- **G16 [blocker]: a parent is only marked when its includer resolves.** `located` is
+  written only after the includer passes the JSON check, read/syntax, validateIncludeDecls
+  and evalPath. Reproductions, all against the TestIncludeTargetCorpusReproduction
+  fixture, leave the parent `live` resolved and bring back its false GRT001:
+  - the child includes `"${get_repo_root()}/live/terragrunt.hcl"` (an unsupported
+    function, so the path is dynamic);
+  - the same with `get_path_to_repo_root()`;
+  - the child uses `find_in_parent_folders()` and also has a syntax error somewhere else.
+  Fix direction (fail closed): when a unit's includes cannot be known (steps 1-2),
+  mark every ancestor-directory unit as include-target, since that is the reach of
+  find_in_parent_folders. When the include blocks are parsed, evaluate every decl for
+  marking even if the unit itself fails (steps 3-4). A dynamic path whose target is not
+  confined to ancestors needs a stronger rule: the executor evaluates it and the
+  residual goes in the catalogue. Coverage on the primary corpus must not drop (65
+  units, 3 config-unknown, 22 refs); measure it. File: loader.go. Plan 02-13.
+- **G19 [major, false positive]: generate output detector is a line regex.**
+  merge.go:279 `(?m)^\s*output\b|"output"\s*:` misses `/* generated */ output "id" {
+  value = 1 }` (and any output block that doesn't start its line) in literal generate
+  contents. The module surface is under-counted and GRT001 fires falsely. Fix: the most
+  conservative rule that keeps the primary corpus unchanged (it has no generate blocks).
+  File: merge.go. Plan 02-13.
+- **G20 [major, false positive]: OpenTofu precedence drops x.tf when x.tofu exists.**
+  tfsurface/reader.go:254. Terraform ignores `.tofu` files, and which binary runs is
+  unknown statically, so dropping either view under-counts. Repro: outputs.tf declares
+  `id`, outputs.tofu declares `other`, and a reference to `id` is reported missing. Fix:
+  take the union of both views (over-counting outputs is safe). File:
+  tfsurface/reader.go. Plan 02-12.
+
+## Robustness
+
+- **G17 [blocker]: CheckNativeDepth ignores ternary nesting.** hclsyntax
+  parseTernaryConditional recurses through ParseExpression for BOTH the true and the
+  false branch. `strings.Repeat("1?", n)+"1"+strings.Repeat(":1", n)` and the else-chain
+  `strings.Repeat("a?b:", 1_000_000)+"1"` (4,000,019 bytes, under the 4 MiB cap) both
+  die with an unrecoverable fatal stack overflow. A naive push-on-`?`/pop-on-`:` misses
+  the else-chain, where depth would stay at 1. Related, same pass: a 2M-long `+` chain
+  does not crash but peaks at about 2.2 GB and builds a 2M-deep left-leaning AST that
+  every later recursive walk descends. Files: hclconv/limits.go, with regressions in
+  hclconv, terragrunt/limits_test.go and tfsurface. Plan 02-12.
+- **G18 [major]: a non-regular file hangs the process.** walk.go discoverUnits accepts a
+  FIFO named terragrunt.hcl, and tfsurface only skips directories. hclconv.ReadFileLimited
+  trusts Stat().Size() and then fs.ReadFile blocks forever on the FIFO. Fix:
+  ReadFileLimited requires a regular file and reads through io.LimitReader, plus
+  regular-file checks in discoverUnits and tfsurface. Test with syscall.Mkfifo behind a
+  unix build tag. Files: hclconv/limits.go, terragrunt/walk.go, tfsurface/reader.go.
+  Plan 02-12.
+
+## Architecture check holes
+
+- **G21 [minor]: the source-level import scan is an awk heuristic.** In a `_windows.go`
+  file, `import ( /* x */ _ "github.com/hashicorp/hcl/v2" )` and `import ( _ "fmt"; _
+  "github.com/hashicorp/hcl/v2" )` both get past scan_import_lines. Fix: a small Go
+  helper (go/parser ImportsOnly over every .go file regardless of build constraints,
+  pruning the dirs the go tool ignores) that the script runs with `go run`. It lives
+  outside internal/ and is never linked into cmd/gruntled. Both probes go into the
+  self-test. Files: scripts/check-architecture.sh, scripts/test-check-architecture.sh, the
+  helper. Plan 02-14.
+- **G22 [minor]: nested go.mod bypass.** `internal/domain/zz/go.mod` (module path under
+  internal/domain), with require+replace in the root go.mod, lets the domain import `os`
+  while the check prints OK. go list ./internal/domain/... never enters the nested module,
+  and domain-external-deps' allow regex matches its path. Fix: fail on any go.mod other
+  than the root (pruning dot/underscore dirs), and on any required or replaced module
+  whose path is under the main module path. Add a self-test case. Plan 02-14.
