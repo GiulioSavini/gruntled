@@ -23,6 +23,15 @@ const (
 	// least 12x headroom under it, and no hand-written HCL nests anywhere
 	// near 1000.
 	MaxNestingDepth = 1000
+
+	// MaxExpressionChain is the largest number of binary-operator, `.` and
+	// `[` links one expression may chain. hclsyntax parses such a chain in
+	// a loop, so it never overflows the parser itself, but it builds a
+	// left-leaning AST as deep as the chain, and every later recursive walk
+	// (reference extraction, Variables) descends it: a 2M-long `+` chain
+	// peaked at about 2.2 GB (02-REVIEW G17). A realistic expression chains
+	// a few dozen links.
+	MaxExpressionChain = 10_000
 )
 
 // ErrFileTooLarge is returned by ReadFileLimited when a file exceeds
@@ -64,9 +73,45 @@ func ReadFileLimited(fsys fs.FS, name string) ([]byte, error) {
 }
 
 // CheckNativeDepth reports ErrNestingTooDeep when src's HCL native syntax
-// (.hcl, .tf, .tofu) nests brackets, quotes, heredocs, template
-// interpolations or unary (!, -) operator runs deeper than
-// MaxNestingDepth (02-REVIEW G7).
+// (.hcl, .tf, .tofu) would drive hclsyntax's recursive-descent parser, or
+// the recursive walks over the AST it builds, too deep (02-REVIEW G7,
+// G17). Three things add up to the depth it compares with
+// MaxNestingDepth:
+//
+//   - bracket, quote, heredoc and template nesting: every open brace,
+//     bracket, paren, quote, heredoc, `${` and `%{` is one level until its
+//     matching closer;
+//   - runs of unary operators (`!`, `-`), each one level;
+//   - pending ternary `?` tokens. hclsyntax's parseTernaryConditional parses
+//     the condition with parseBinaryOps and then BOTH the true and the
+//     false branch with ParseExpression, which re-enters
+//     parseTernaryConditional, so every `?` is one level of Go recursion
+//     that is released only when the whole conditional expression ends.
+//     That happens at a comma, at the closer of the bracket the `?` sits
+//     in, or at a newline when newlines are significant there: in a body
+//     (the file itself and block bodies) and in an object constructor that
+//     is not a for-expression (parseObjectCons peeks for the `for` keyword
+//     with newlines off). Parens, brackets, function arguments, template
+//     sequences and for-expressions all ignore newlines. A line comment
+//     ending in a newline counts as that newline, as the parser's peeker
+//     turns it into one. Pending `?` are therefore counted per bracket
+//     frame and reset only at those release points; a `:` never releases
+//     one. Popping on `:` instead would be wrong: in the else-chain
+//     `a?b:a?b:...1` every `:` is followed by another `?`, so a
+//     push-on-`?`/pop-on-`:` count stays at 1 while the parser recurses
+//     once per `?`, and a 4 MB else-chain killed the process with a fatal
+//     stack overflow.
+//
+// Separately, a frame whose chain count, the binary operators, `.` and `[`
+// since its last release point, exceeds MaxExpressionChain is refused too
+// (the long-chain half of G17). A `[` counts as one link of the enclosing
+// frame, covering postfix index chains `x[a][a]...`, before it opens its
+// own frame.
+//
+// Every tie goes to over-counting: over-counting only costs an
+// unnecessary "too deep" verdict (an unknown unit or module, never a false
+// GRT001), while under-counting could hand a hostile file to the
+// recursive parser, which Go cannot recover from.
 //
 // It lexes src with hclsyntax.LexConfig — HCL's own tokenizer, exact by
 // construction and never itself recursive — instead of a hand-written byte
@@ -77,69 +122,150 @@ func ReadFileLimited(fsys fs.FS, name string) ([]byte, error) {
 // hostile file back into the recursive parser, which is exactly the crash
 // this function exists to prevent. Lex diagnostics are ignored: the parser
 // reports syntax errors later, and nothing here changes whether src is
-// safe to hand to it.
+// safe to hand to it. Lexing materialises every token of src, so the
+// memory peak of a MaxFileBytes file of one-byte tokens remains (see
+// MaxFileBytes); the chain cap removes the deep AST and its walks, not
+// that peak.
 func CheckNativeDepth(src []byte) error {
 	toks, _ := hclsyntax.LexConfig(src, "", hcl.InitialPos)
 
-	var stack []hclsyntax.TokenType
-	run := 0
-	for _, t := range toks {
+	// frames[0] is the file body, where newlines are significant.
+	frames := []depthFrame{{open: hclsyntax.TokenNil, newlines: true}}
+	run := 0     // current run of unary operators
+	pending := 0 // pending `?` summed over every frame
+	for i, t := range toks {
+		top := &frames[len(frames)-1]
 		switch t.Type {
 		case hclsyntax.TokenOBrace, hclsyntax.TokenOBrack, hclsyntax.TokenOParen,
 			hclsyntax.TokenOQuote, hclsyntax.TokenOHeredoc,
 			hclsyntax.TokenTemplateInterp, hclsyntax.TokenTemplateControl:
-			stack = append(stack, t.Type)
+			if t.Type == hclsyntax.TokenOBrack {
+				top.chain++ // x[a]: one postfix link of the enclosing frame
+				if top.chain > MaxExpressionChain {
+					return ErrNestingTooDeep
+				}
+			}
+			newlines := t.Type == hclsyntax.TokenOBrace && !forFollows(toks[i+1:])
+			frames = append(frames, depthFrame{open: t.Type, newlines: newlines})
 			run = 0
 		case hclsyntax.TokenCBrace:
-			stack = popMatching(stack, hclsyntax.TokenOBrace)
+			frames, pending = popFrame(frames, pending, hclsyntax.TokenOBrace)
 			run = 0
 		case hclsyntax.TokenCBrack:
-			stack = popMatching(stack, hclsyntax.TokenOBrack)
+			frames, pending = popFrame(frames, pending, hclsyntax.TokenOBrack)
 			run = 0
 		case hclsyntax.TokenCParen:
-			stack = popMatching(stack, hclsyntax.TokenOParen)
+			frames, pending = popFrame(frames, pending, hclsyntax.TokenOParen)
 			run = 0
 		case hclsyntax.TokenCQuote:
-			stack = popMatching(stack, hclsyntax.TokenOQuote)
+			frames, pending = popFrame(frames, pending, hclsyntax.TokenOQuote)
 			run = 0
 		case hclsyntax.TokenCHeredoc:
-			stack = popMatching(stack, hclsyntax.TokenOHeredoc)
+			frames, pending = popFrame(frames, pending, hclsyntax.TokenOHeredoc)
 			run = 0
 		case hclsyntax.TokenTemplateSeqEnd:
-			stack = popMatching(stack, hclsyntax.TokenTemplateInterp, hclsyntax.TokenTemplateControl)
+			frames, pending = popFrame(frames, pending, hclsyntax.TokenTemplateInterp, hclsyntax.TokenTemplateControl)
 			run = 0
-		case hclsyntax.TokenBang, hclsyntax.TokenMinus:
+		case hclsyntax.TokenQuestion:
+			top.questions++
+			pending++
+			run = 0
+		case hclsyntax.TokenMinus:
+			// Binary or unary: counted both ways, over-counting either.
+			top.chain++
 			run++
+		case hclsyntax.TokenBang:
+			run++
+		case hclsyntax.TokenPlus, hclsyntax.TokenStar, hclsyntax.TokenSlash,
+			hclsyntax.TokenPercent, hclsyntax.TokenAnd, hclsyntax.TokenOr,
+			hclsyntax.TokenEqualOp, hclsyntax.TokenNotEqual,
+			hclsyntax.TokenLessThan, hclsyntax.TokenLessThanEq,
+			hclsyntax.TokenGreaterThan, hclsyntax.TokenGreaterThanEq,
+			hclsyntax.TokenDot:
+			top.chain++
+			run = 0
+		case hclsyntax.TokenComma:
+			pending = top.release(pending)
+			run = 0
 		case hclsyntax.TokenNewline, hclsyntax.TokenComment:
-			// Depth-neutral: a run of unary operators may wrap across a
-			// line break, and a comment carries no nesting of its own.
+			// A run of unary operators may wrap across a line break, and a
+			// comment carries no nesting of its own, so neither resets run.
+			if top.newlines && (t.Type == hclsyntax.TokenNewline || endsInNewline(t.Bytes)) {
+				pending = top.release(pending)
+			}
 		default:
 			run = 0
 		}
-		if len(stack)+run > MaxNestingDepth {
+		if len(frames)-1+run+pending > MaxNestingDepth {
+			return ErrNestingTooDeep
+		}
+		if frames[len(frames)-1].chain > MaxExpressionChain {
 			return ErrNestingTooDeep
 		}
 	}
 	return nil
 }
 
-// popMatching pops stack's top element and returns the shortened slice
-// when it is one of want, and returns stack unchanged otherwise. A
-// mismatched or unmatched closing token is therefore never popped:
-// over-counting depth only costs an unnecessary "too deep" verdict, but
-// under-counting could let a hostile file reach the recursive parser, so
-// ties always go to over-counting.
-func popMatching(stack []hclsyntax.TokenType, want ...hclsyntax.TokenType) []hclsyntax.TokenType {
-	if len(stack) == 0 {
-		return stack
+// depthFrame is one open bracket, quote, heredoc or template sequence in
+// CheckNativeDepth's scan (the file body is the base frame).
+type depthFrame struct {
+	// open is the token type that opened the frame (TokenNil for the base).
+	open hclsyntax.TokenType
+	// newlines is true when a newline ends an expression in this frame.
+	newlines bool
+	// questions is the number of `?` pending in this frame.
+	questions int
+	// chain is the number of operator/`.`/`[` links since the frame's last
+	// release point.
+	chain int
+}
+
+// release resets f's counts at a release point (a comma, or a significant
+// newline) and returns pending minus the `?` it held.
+func (f *depthFrame) release(pending int) int {
+	pending -= f.questions
+	f.questions = 0
+	f.chain = 0
+	return pending
+}
+
+// popFrame pops the top frame when it was opened by one of want, taking
+// its pending `?` and chain count with it, and returns frames unchanged
+// otherwise. A mismatched or unmatched closing token therefore never pops
+// (and the base frame never is): over-counting depth only costs an
+// unnecessary "too deep" verdict, but under-counting could let a hostile
+// file reach the recursive parser, so ties always go to over-counting.
+func popFrame(frames []depthFrame, pending int, want ...hclsyntax.TokenType) ([]depthFrame, int) {
+	if len(frames) == 1 {
+		return frames, pending
 	}
-	top := stack[len(stack)-1]
+	top := frames[len(frames)-1]
 	for _, w := range want {
-		if top == w {
-			return stack[:len(stack)-1]
+		if top.open == w {
+			return frames[:len(frames)-1], pending - top.questions
 		}
 	}
-	return stack
+	return frames, pending
+}
+
+// forFollows reports whether the first token of rest, skipping newlines
+// and comments, is the `for` keyword, which makes the brace before it a
+// for-expression (mirroring parseObjectCons).
+func forFollows(rest hclsyntax.Tokens) bool {
+	for _, t := range rest {
+		switch t.Type {
+		case hclsyntax.TokenNewline, hclsyntax.TokenComment:
+			continue
+		}
+		return t.Type == hclsyntax.TokenIdent && string(t.Bytes) == "for"
+	}
+	return false
+}
+
+// endsInNewline reports whether a comment token's bytes end in '\n', as a
+// `#` or `//` line comment's do.
+func endsInNewline(b []byte) bool {
+	return len(b) > 0 && b[len(b)-1] == '\n'
 }
 
 // CheckJSONDepth reports ErrNestingTooDeep when src's JSON object/array

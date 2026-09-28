@@ -2,6 +2,7 @@ package tfsurface_test
 
 import (
 	"context"
+	"fmt"
 	"io/fs"
 	"strings"
 	"testing"
@@ -368,4 +369,45 @@ output "x" {
 			t.Fatalf("len(Diagnostics) = %d, want 1 (%v)", len(res.Diagnostics), res.Diagnostics)
 		}
 	})
+}
+
+// --- G17: ternary nesting and long operator chains -------------------------
+
+// ternaryAlwaysOnN matches the terragrunt package's always-on G17 size:
+// the largest ternary count that keeps the file within 1 MiB. No ternary
+// file that small crashes hclsyntax (the 02-12 probe put the crash point
+// between 500k and 600k levels), so this asserts refusal.
+const ternaryAlwaysOnN = (1<<20 - 64) / 4
+
+func TestReadSurfaceDeepTernary(t *testing.T) {
+	shapes := map[string]func(int) string{
+		"true-chain": func(n int) string { return strings.Repeat("1?", n) + "1" + strings.Repeat(":1", n) },
+		"else-chain": func(n int) string { return strings.Repeat("a?b:", n) + "1" },
+	}
+	for name, chain := range shapes {
+		for _, n := range []int{hclconv.MaxNestingDepth + 1, ternaryAlwaysOnN} {
+			t.Run(fmt.Sprintf("%s n=%d", name, n), func(t *testing.T) {
+				fsys := fstest.MapFS{
+					"mod/main.tf": &fstest.MapFile{Data: []byte("output \"x\" {\n  value = " + chain(n) + "\n}\n")},
+				}
+				res := readSurface(t, fsys, "mod")
+				if res.UnknownReason != tfsurface.ReasonModuleFileTooDeep {
+					t.Fatalf("UnknownReason = %q, want %q", res.UnknownReason, tfsurface.ReasonModuleFileTooDeep)
+				}
+				if len(res.Diagnostics) != 0 {
+					t.Fatalf("Diagnostics = %v, want none", res.Diagnostics)
+				}
+			})
+		}
+	}
+}
+
+func TestReadSurfaceLongChain(t *testing.T) {
+	fsys := fstest.MapFS{
+		"mod/main.tf": &fstest.MapFile{Data: []byte("output \"x\" {\n  value = " + strings.Repeat("1+", hclconv.MaxExpressionChain+1) + "1\n}\n")},
+	}
+	res := readSurface(t, fsys, "mod")
+	if res.UnknownReason != tfsurface.ReasonModuleFileTooDeep {
+		t.Fatalf("UnknownReason = %q, want %q", res.UnknownReason, tfsurface.ReasonModuleFileTooDeep)
+	}
 }
