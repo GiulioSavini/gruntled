@@ -26,7 +26,7 @@ phase fails, the idea is wrong and that is learned in one milestone.
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Domain Foundation & Test Substrate** - Pure domain types (HCL-free, CI-enforced) plus a deterministic synthetic Terragrunt repo generator that every later phase uses for fixtures (completed 2026-09-25)
-- [ ] **Phase 2: Parsing & Graph Construction** - Walk a real Terragrunt repository, resolve units to modules, and build a correctly-resolved `RepositoryGraph` without evaluating any expression value (11/14 plans executed; gap cycle 1 planned: 02-12..02-14)
+- [x] **Phase 2: Parsing & Graph Construction** - Walk a real Terragrunt repository, resolve units to modules, and build a correctly-resolved `RepositoryGraph` without evaluating any expression value (14/14 plans, verified passed) (completed 2026-09-29)
 - [ ] **Phase 3: GRT001 Diagnostic & CLI** - `gruntled check` runs end-to-end, reporting correct, deterministic diagnostics with documented exit codes and no side effects
 - [ ] **Phase 4: Real-Repo Validation Experiment** - The falsifiable claim is settled: zero false positives and every injected mutation caught on a real public corpus, faster than `terragrunt hcl validate`
 
@@ -76,9 +76,9 @@ Gap closure (from 02-REVIEW.md G1..G14; wave 1 = 02-06..02-10 in parallel with d
 - [x] 02-11-PLAN.md — G7b, G10: unit/include size and depth limits, two-input loader fuzz, edge-case catalogue update (STACK-09 and new reasons)
 
 Gap cycle 1 (from 02-REVIEW.md Round 2, G15..G22, and 02-VERIFICATION.md; wave 1 = 02-12 and 02-14 in parallel with disjoint files, wave 2 = 02-13, which shares loader_test.go with 02-12):
-- [ ] 02-12-PLAN.md — G17, G18, G20: ternary- and chain-aware nesting pre-scan, non-regular files never block, .tf/.tofu union surface
-- [ ] 02-13-PLAN.md — G15, G16, G19: include targets by canonical path, parents of failing/dynamic includers marked include-target, conservative generate output detector, catalogue for G15..G22
-- [ ] 02-14-PLAN.md — G21, G22: go/parser import scanner replaces the awk scan, single-module rule (requires 03-02 merged)
+- [x] 02-12-PLAN.md — G17, G18, G20: ternary- and chain-aware nesting pre-scan, non-regular files never block, .tf/.tofu union surface
+- [x] 02-13-PLAN.md — G15, G16, G19: include targets by canonical path, parents of failing/dynamic includers marked include-target, conservative generate output detector, catalogue for G15..G22
+- [x] 02-14-PLAN.md — G21, G22: go/parser import scanner replaces the awk scan, single-module rule (requires 03-02 merged)
 
 ### Phase 3: GRT001 Diagnostic & CLI
 **Goal**: `gruntled check` runs end-to-end against a repository on disk and reports `GRT001`/`GRT100` diagnostics that are correct, deterministic, and safe to script against in CI.
@@ -125,7 +125,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Domain Foundation & Test Substrate | 3/3 | Complete    | 2026-09-25 |
-| 2. Parsing & Graph Construction | 11/14 | Gap closure | - |
+| 2. Parsing & Graph Construction | 11/14 | Complete    | 2026-09-29 |
 | 3. GRT001 Diagnostic & CLI | 0/5 | Planned | - |
 | 4. Real-Repo Validation Experiment | 0/4 | Planned | - |
 
