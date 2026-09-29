@@ -104,8 +104,8 @@ than staying quiet.
 ## Status
 
 v0.1 is being built as a falsifiable experiment, in four phases (see
-[`.planning/ROADMAP.md`](.planning/ROADMAP.md)). Phases 1 and 2 are complete,
-Phase 3 is nearly done, Phase 4 hasn't started.
+[`.planning/ROADMAP.md`](.planning/ROADMAP.md)). Phases 1-3 are complete,
+Phase 4 hasn't started.
 
 **Works today, tested:**
 - `gruntled check [--format text|json] [path]`, end to end: it opens the
@@ -124,9 +124,9 @@ Phase 3 is nearly done, Phase 4 hasn't started.
 - The deterministic synthetic Terragrunt repository generator
   (`internal/testsupport/synthrepo`), including deliberate mutation
   injection with an exact expected-diagnostics oracle.
-
-**Still to do in Phase 3:** end-to-end tests of the determinism, no-writes
-and oracle guarantees through the binary.
+- End-to-end tests through the CLI: the synthetic oracle is matched exactly,
+  output is byte-identical across checkout paths and working directories,
+  and a read-only repository is left untouched.
 
 **Not built yet:**
 - The real-repository validation experiment: zero false positives and every
