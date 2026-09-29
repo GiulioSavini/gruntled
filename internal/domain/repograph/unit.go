@@ -21,21 +21,73 @@ type Dependency struct {
 	resolved         bool
 	unresolvedReason string
 	pos              Position
+	pathPos          Position
+	state            TargetState
 	opts             DependencyOptions
+}
+
+// TargetState is what the loader observed at a resolved dependency
+// target's directory. The zero value, TargetUnknown, means nothing was
+// observed and analyzers must stay silent about the target.
+type TargetState int
+
+const (
+	// TargetUnknown means the target's state was not (or could not be)
+	// determined. It is the zero value on purpose.
+	TargetUnknown TargetState = iota
+	// TargetDirMissing means the target directory does not exist.
+	TargetDirMissing
+	// TargetNoConfig means the target directory exists but holds no unit
+	// configuration file.
+	TargetNoConfig
+	// TargetHasConfig means the target directory holds a unit
+	// configuration file.
+	TargetHasConfig
+)
+
+// String renders the state as "unknown", "dir-missing", "no-config" or
+// "has-config".
+func (s TargetState) String() string {
+	switch s {
+	case TargetUnknown:
+		return "unknown"
+	case TargetDirMissing:
+		return "dir-missing"
+	case TargetNoConfig:
+		return "no-config"
+	case TargetHasConfig:
+		return "has-config"
+	default:
+		return "TargetState(" + strconv.Itoa(int(s)) + ")"
+	}
+}
+
+// IsValid reports whether s is one of the four defined TargetState
+// constants.
+func (s TargetState) IsValid() bool {
+	switch s {
+	case TargetUnknown, TargetDirMissing, TargetNoConfig, TargetHasConfig:
+		return true
+	default:
+		return false
+	}
 }
 
 // validateDependencyCommon checks the fields NewDependency and
 // NewUnresolvedDependency both validate: a non-empty name, a non-zero
-// position, and that every Tristate option field is one of the defined
+// position and config_path position, and that every Tristate option field is one of the defined
 // states. A value outside those states can only come from a forged
 // conversion like Tristate(99); storing it would let a later query report a
 // fact that was never actually observed.
-func validateDependencyCommon(name string, pos Position, opts DependencyOptions) error {
+func validateDependencyCommon(name string, pos, pathPos Position, opts DependencyOptions) error {
 	if name == "" {
 		return errors.New("repograph: invalid dependency: name must not be empty")
 	}
 	if pos.IsZero() {
 		return errors.New("repograph: invalid dependency " + strconv.Quote(name) + ": position must not be zero")
+	}
+	if pathPos.IsZero() {
+		return errors.New("repograph: invalid dependency " + strconv.Quote(name) + ": config_path position must not be zero")
 	}
 	if !opts.Enabled.IsValid() {
 		return errors.New("repograph: invalid dependency " + strconv.Quote(name) + ": invalid option Enabled: " + strconv.Itoa(int(opts.Enabled)))
@@ -50,30 +102,35 @@ func validateDependencyCommon(name string, pos Position, opts DependencyOptions)
 }
 
 // NewDependency validates its arguments and returns a resolved Dependency.
-// name must be non-empty, target and pos must be non-zero, and every
+// name must be non-empty; target, pos (the block) and pathPos (the
+// config_path value, or the block when the attribute has no position of its
+// own) must be non-zero; state must be a defined TargetState; and every
 // Tristate field of opts must be a defined Tristate value.
-func NewDependency(name string, target RepoPath, pos Position, opts DependencyOptions) (Dependency, error) {
-	if err := validateDependencyCommon(name, pos, opts); err != nil {
+func NewDependency(name string, target RepoPath, pos, pathPos Position, state TargetState, opts DependencyOptions) (Dependency, error) {
+	if err := validateDependencyCommon(name, pos, pathPos, opts); err != nil {
 		return Dependency{}, err
 	}
 	if target.IsZero() {
 		return Dependency{}, errors.New("repograph: invalid dependency " + strconv.Quote(name) + ": target must not be zero")
 	}
-	return Dependency{name: name, target: target, resolved: true, pos: pos, opts: opts}, nil
+	if !state.IsValid() {
+		return Dependency{}, errors.New("repograph: invalid dependency " + strconv.Quote(name) + ": invalid target state: " + strconv.Itoa(int(state)))
+	}
+	return Dependency{name: name, target: target, resolved: true, pos: pos, pathPos: pathPos, state: state, opts: opts}, nil
 }
 
 // NewUnresolvedDependency validates its arguments and returns a Dependency
 // whose target could not be determined. name and reason must be non-empty,
-// pos must be non-zero, and every Tristate field of opts must be a defined
-// Tristate value.
-func NewUnresolvedDependency(name, reason string, pos Position, opts DependencyOptions) (Dependency, error) {
-	if err := validateDependencyCommon(name, pos, opts); err != nil {
+// pos and pathPos must be non-zero, and every Tristate field of opts must be
+// a defined Tristate value. Its TargetState is always TargetUnknown.
+func NewUnresolvedDependency(name, reason string, pos, pathPos Position, opts DependencyOptions) (Dependency, error) {
+	if err := validateDependencyCommon(name, pos, pathPos, opts); err != nil {
 		return Dependency{}, err
 	}
 	if reason == "" {
 		return Dependency{}, errors.New("repograph: invalid dependency " + strconv.Quote(name) + ": unresolved reason must not be empty")
 	}
-	return Dependency{name: name, resolved: false, unresolvedReason: reason, pos: pos, opts: opts}, nil
+	return Dependency{name: name, resolved: false, unresolvedReason: reason, pos: pos, pathPos: pathPos, opts: opts}, nil
 }
 
 // Name returns the dependency block's label.
@@ -107,6 +164,96 @@ func (d Dependency) Options() DependencyOptions {
 // Pos returns the position of the dependency block.
 func (d Dependency) Pos() Position {
 	return d.pos
+}
+
+// PathPos returns the position of the config_path value (the block position
+// when the attribute had no position of its own). GRT002 and GRT003 report
+// here.
+func (d Dependency) PathPos() Position {
+	return d.pathPos
+}
+
+// TargetState returns what the loader observed at the target directory. It
+// is always TargetUnknown for an unresolved dependency.
+func (d Dependency) TargetState() TargetState {
+	return d.state
+}
+
+// PathDependency is one entry of a `dependencies { paths = [...] }` block.
+// It is either resolved (Target returns the repo-relative directory it
+// names) or unresolved (a non-literal or unresolvable entry, kept with a
+// non-empty UnresolvedReason). Path dependencies are kept apart from
+// Dependency: they have no name and a unit may list the same target in both.
+type PathDependency struct {
+	target           RepoPath
+	resolved         bool
+	literal          string
+	unresolvedReason string
+	pos              Position
+	state            TargetState
+}
+
+// NewPathDependency validates its arguments and returns a resolved
+// PathDependency. target and pos must be non-zero, literal (the path text as
+// written) must be non-empty, and state must be a defined TargetState.
+func NewPathDependency(target RepoPath, literal string, pos Position, state TargetState) (PathDependency, error) {
+	if target.IsZero() {
+		return PathDependency{}, errors.New("repograph: invalid path dependency: target must not be zero")
+	}
+	if literal == "" {
+		return PathDependency{}, errors.New("repograph: invalid path dependency " + strconv.Quote(target.String()) + ": literal must not be empty")
+	}
+	if pos.IsZero() {
+		return PathDependency{}, errors.New("repograph: invalid path dependency " + strconv.Quote(target.String()) + ": position must not be zero")
+	}
+	if !state.IsValid() {
+		return PathDependency{}, errors.New("repograph: invalid path dependency " + strconv.Quote(target.String()) + ": invalid target state: " + strconv.Itoa(int(state)))
+	}
+	return PathDependency{target: target, resolved: true, literal: literal, pos: pos, state: state}, nil
+}
+
+// NewUnresolvedPathDependency validates its arguments and returns a
+// PathDependency whose target could not be determined. reason must be
+// non-empty and pos non-zero. Its TargetState is always TargetUnknown.
+func NewUnresolvedPathDependency(reason string, pos Position) (PathDependency, error) {
+	if reason == "" {
+		return PathDependency{}, errors.New("repograph: invalid path dependency: unresolved reason must not be empty")
+	}
+	if pos.IsZero() {
+		return PathDependency{}, errors.New("repograph: invalid path dependency: position must not be zero")
+	}
+	return PathDependency{unresolvedReason: reason, pos: pos}, nil
+}
+
+// Target returns the directory this entry names, and true, only when it
+// resolved.
+func (p PathDependency) Target() (RepoPath, bool) {
+	if !p.resolved {
+		return RepoPath{}, false
+	}
+	return p.target, true
+}
+
+// UnresolvedReason returns why the entry could not be resolved. It is empty
+// for a resolved entry.
+func (p PathDependency) UnresolvedReason() string {
+	return p.unresolvedReason
+}
+
+// Pos returns the position of the entry's value.
+func (p PathDependency) Pos() Position {
+	return p.pos
+}
+
+// TargetState returns what the loader observed at the target directory.
+func (p PathDependency) TargetState() TargetState {
+	return p.state
+}
+
+// Literal returns the path text as written. It is empty for an unresolved
+// entry.
+func (p PathDependency) Literal() string {
+	return p.literal
 }
 
 // Reference is one `dependency.<Dependency>.outputs.<Output>` traversal. Pos
@@ -207,6 +354,7 @@ type Unit struct {
 	unknownReason string
 	deps          []Dependency
 	refs          []Reference
+	pathDeps      []PathDependency
 }
 
 // sortAndValidateDepsRefs sorts deps by Name and refs by Pos (then
@@ -372,6 +520,40 @@ func (u Unit) Dependency(name string) (Dependency, bool) {
 // references.
 func (u Unit) References() []Reference {
 	return slices.Clone(u.refs)
+}
+
+// WithPathDependencies returns a copy of u carrying pds, sorted by Pos then
+// target. u itself is unchanged. It rejects a config-unknown unit (which
+// carries no dependencies of any kind) and a zero-value entry.
+func (u Unit) WithPathDependencies(pds []PathDependency) (Unit, error) {
+	if u.status == StatusConfigUnknown {
+		return Unit{}, errors.New("repograph: invalid unit " + strconv.Quote(u.path.String()) + ": a config-unknown unit has no path dependencies")
+	}
+	for i, pd := range pds {
+		if pd.pos.IsZero() {
+			return Unit{}, errors.New("repograph: invalid unit " + strconv.Quote(u.path.String()) + ": zero-value path dependency at index " + strconv.Itoa(i))
+		}
+	}
+	sorted := slices.Clone(pds)
+	slices.SortFunc(sorted, comparePathDependencies)
+	u.pathDeps = sorted
+	return u, nil
+}
+
+// PathDependencies returns a sorted-by-position copy of the unit's
+// `dependencies` block entries.
+func (u Unit) PathDependencies() []PathDependency {
+	return slices.Clone(u.pathDeps)
+}
+
+func comparePathDependencies(a, b PathDependency) int {
+	if c := a.pos.Compare(b.pos); c != 0 {
+		return c
+	}
+	if c := a.target.Compare(b.target); c != 0 {
+		return c
+	}
+	return compareStrings(a.unresolvedReason, b.unresolvedReason)
 }
 
 func compareStrings(a, b string) int {

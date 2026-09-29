@@ -236,3 +236,92 @@ func (g *RepositoryGraph) References() []UnitReference {
 	})
 	return all
 }
+
+// EdgeKind is where a dependency edge was declared.
+type EdgeKind int
+
+const (
+	// EdgeBlock is a `dependency "<name>"` block's config_path.
+	EdgeBlock EdgeKind = iota
+	// EdgePaths is an entry of a `dependencies { paths = [...] }` block.
+	EdgePaths
+)
+
+// String renders the kind as "block" or "paths".
+func (k EdgeKind) String() string {
+	switch k {
+	case EdgeBlock:
+		return "block"
+	case EdgePaths:
+		return "paths"
+	default:
+		return "EdgeKind(" + strconv.Itoa(int(k)) + ")"
+	}
+}
+
+// Edge is one resolved dependency edge from a unit to the directory it
+// depends on. The target need not be a unit in the graph. Pos is the
+// config_path value position for a block edge and the entry position for a
+// paths edge. Enabled is the block's enabled fact; a paths edge is always
+// TristateTrue (the `dependencies` block has no enabled attribute).
+type Edge struct {
+	kind    EdgeKind
+	from    RepoPath
+	to      RepoPath
+	pos     Position
+	enabled Tristate
+}
+
+// Kind returns where the edge was declared.
+func (e Edge) Kind() EdgeKind { return e.kind }
+
+// From returns the declaring unit's path.
+func (e Edge) From() RepoPath { return e.from }
+
+// To returns the target directory's repo-relative path.
+func (e Edge) To() RepoPath { return e.to }
+
+// Pos returns where the edge's target is written.
+func (e Edge) Pos() Position { return e.pos }
+
+// Enabled returns the edge's enabled fact.
+func (e Edge) Enabled() Tristate { return e.enabled }
+
+// Edges returns every resolved dependency edge in the graph, block and
+// paths alike, skipping unresolved ones. The order is deterministic: from
+// ascending, then Pos, then kind, then to.
+func (g *RepositoryGraph) Edges() []Edge {
+	var edges []Edge
+	for _, u := range g.units {
+		for _, d := range u.deps {
+			to, ok := d.Target()
+			if !ok {
+				continue
+			}
+			edges = append(edges, Edge{kind: EdgeBlock, from: u.path, to: to, pos: d.pathPos, enabled: d.opts.Enabled})
+		}
+		for _, pd := range u.pathDeps {
+			to, ok := pd.Target()
+			if !ok {
+				continue
+			}
+			edges = append(edges, Edge{kind: EdgePaths, from: u.path, to: to, pos: pd.pos, enabled: TristateTrue})
+		}
+	}
+	slices.SortFunc(edges, func(a, b Edge) int {
+		if c := a.from.Compare(b.from); c != 0 {
+			return c
+		}
+		if c := a.pos.Compare(b.pos); c != 0 {
+			return c
+		}
+		if a.kind != b.kind {
+			if a.kind < b.kind {
+				return -1
+			}
+			return 1
+		}
+		return a.to.Compare(b.to)
+	})
+	return edges
+}

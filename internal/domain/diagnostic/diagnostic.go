@@ -19,6 +19,11 @@ const (
 	// CodeUnknownOutput means a dependency.X.outputs.Y reference names an
 	// output the target module does not declare.
 	CodeUnknownOutput Code = "GRT001"
+	// CodeMissingDependencyTarget means an enabled dependency's literal
+	// config_path resolves to a directory that holds no unit.
+	CodeMissingDependencyTarget Code = "GRT002"
+	// CodeDependencyCycle means the enabled dependency edges form a cycle.
+	CodeDependencyCycle Code = "GRT003"
 	// CodeSyntaxError means the HCL being analyzed is invalid.
 	CodeSyntaxError Code = "GRT100"
 )
