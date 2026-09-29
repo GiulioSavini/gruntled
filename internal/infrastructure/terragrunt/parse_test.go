@@ -435,10 +435,28 @@ func TestDependencyOptionsMockMergeWithState(t *testing.T) {
 		{"strategy deep_map_only", `mock_outputs_merge_strategy_with_state = "deep_map_only"` + "\n", repograph.TristateTrue},
 		{"strategy unrecognized literal", `mock_outputs_merge_strategy_with_state = "weird"` + "\n", repograph.TristateUnknown},
 		{"strategy non-literal", "mock_outputs_merge_strategy_with_state = local.s\n", repograph.TristateUnknown},
+		{"merge_with_state non-literal alone", "mock_outputs_merge_with_state = local.m\n", repograph.TristateUnknown},
+		// Terragrunt's getMockOutputsMergeStrategy: the strategy, when set,
+		// overrides the deprecated bool, in both directions.
 		{
-			"merge true wins over strategy no_merge",
+			"strategy no_merge overrides merge true",
 			"mock_outputs_merge_with_state = true\n" + `mock_outputs_merge_strategy_with_state = "no_merge"` + "\n",
+			repograph.TristateFalse,
+		},
+		{
+			"strategy shallow overrides merge false",
+			"mock_outputs_merge_with_state = false\n" + `mock_outputs_merge_strategy_with_state = "shallow"` + "\n",
 			repograph.TristateTrue,
+		},
+		{
+			"strategy non-literal, merge literal true",
+			"mock_outputs_merge_with_state = true\nmock_outputs_merge_strategy_with_state = local.s\n",
+			repograph.TristateUnknown,
+		},
+		{
+			"strategy unrecognized literal, merge true",
+			"mock_outputs_merge_with_state = true\n" + `mock_outputs_merge_strategy_with_state = "weird"` + "\n",
+			repograph.TristateUnknown,
 		},
 		{
 			"strategy non-literal, merge literal false -> unknown",
