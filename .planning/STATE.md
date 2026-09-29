@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: milestone
 status: Phase 4 execution
-stopped_at: Completed 04-01-PLAN.md
+stopped_at: Completed 04-02-PLAN.md
 last_updated: "2026-09-29T12:00:00.000Z"
-last_activity: "2026-09-29 — 04-01 complete: VALID-02 goldens (4 synthrepo trees 400-600 units, 10 hand-written fixtures) all exact"
+last_activity: "2026-09-29 — 04-02 complete: VALID-03/04/05 EXPERIMENT PASSED on pinned primary corpus (0 diags clean; 8+3 GRT001 = oracle; terragrunt v1.1.6 exit 0, 0 added lines)"
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 26
-  completed_plans: 23
-  percent: 88
+  completed_plans: 24
+  percent: 92
 ---
 
 # Project State
@@ -26,13 +26,13 @@ See: .planning/PROJECT.md (updated 2026-09-01)
 ## Current Position
 
 Phase: 4 of 4 (Real-World Validation) — executing
-Plan: 1 of 4 in current phase (04-01 complete)
+Plan: 2 of 4 in current phase (04-01, 04-02 complete)
 Phase 3: complete — 5/5 plans, 03-VERIFICATION.md status: passed (2026-09-29)
 Phase 2: complete — 14/14 plans, 02-VERIFICATION.md status: passed (re-verified 2026-09-29 after gap cycle 1)
-Status: Phase 4 in progress (04-02, 04-04, 04-03 remaining)
-Last activity: 2026-09-29 — 04-01 VALID-02 golden tests landed (216ea30, 5ed436b)
+Status: Phase 4 in progress (04-04, 04-03 remaining)
+Last activity: 2026-09-29 — 04-02 primary-corpus experiment passed: VALID-03/04/05 (4ef9758, 465b260)
 
-Progress: [█████████░] 88% (23 of 26 plans)
+Progress: [█████████░] 92% (24 of 26 plans)
 
 ## Performance Metrics
 
