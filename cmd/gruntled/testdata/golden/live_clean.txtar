@@ -1,0 +1,87 @@
+A realistic live repository: two environments, each with a network unit and
+a service unit sourcing local modules (unit != module), a root.hcl included
+through find_in_parent_folders, and a service depending on its network.
+Every reference names a declared output, so the run is clean.
+-- root.hcl --
+locals {
+  project = "golden"
+}
+-- modules/network/variables.tf --
+variable "cidr" {
+  type    = string
+  default = "10.0.0.0/16"
+}
+-- modules/network/outputs.tf --
+output "vpc_id" {
+  value = "vpc-${var.cidr}"
+}
+
+output "private_subnet_ids" {
+  value = ["subnet-a", "subnet-b"]
+}
+-- modules/service/main.tf --
+variable "vpc_id" {
+  type = string
+}
+
+variable "subnet_ids" {
+  type = list(string)
+}
+
+output "service_url" {
+  value = "https://svc.${var.vpc_id}.example"
+}
+-- live/dev/network/terragrunt.hcl --
+include "root" {
+  path = find_in_parent_folders("root.hcl")
+}
+
+terraform {
+  source = "../../../modules/network"
+}
+-- live/dev/service/terragrunt.hcl --
+include "root" {
+  path = find_in_parent_folders("root.hcl")
+}
+
+terraform {
+  source = "../../../modules/service"
+}
+
+dependency "network" {
+  config_path = "../network"
+}
+
+inputs = {
+  vpc_id     = dependency.network.outputs.vpc_id
+  subnet_ids = dependency.network.outputs.private_subnet_ids
+}
+-- live/prod/network/terragrunt.hcl --
+include "root" {
+  path = find_in_parent_folders("root.hcl")
+}
+
+terraform {
+  source = "../../../modules/network"
+}
+-- live/prod/service/terragrunt.hcl --
+include "root" {
+  path = find_in_parent_folders("root.hcl")
+}
+
+terraform {
+  source = "../../../modules/service"
+}
+
+dependency "network" {
+  config_path = "../network"
+}
+
+inputs = {
+  vpc_id     = dependency.network.outputs.vpc_id
+  subnet_ids = dependency.network.outputs.private_subnet_ids
+}
+-- _golden/exit --
+0
+-- _golden/want --
+# no diagnostics

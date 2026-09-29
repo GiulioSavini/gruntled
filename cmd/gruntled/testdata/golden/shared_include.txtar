@@ -1,0 +1,57 @@
+One shared include, _envcommon/app.hcl, declares a dependency whose
+config_path uses get_terragrunt_dir(), so it resolves against each including
+unit, and reads an output the db module does not declare. Three units
+include it through find_in_parent_folders with a directory segment, so the
+one bad reference is reported once per including unit at the include's
+position.
+-- _envcommon/app.hcl --
+dependency "db" {
+  config_path = "${get_terragrunt_dir()}/../db"
+}
+
+inputs = {
+  db_port = dependency.db.outputs.port
+}
+-- apps/db/terragrunt.hcl --
+inputs = {
+  engine = "postgres"
+}
+-- apps/db/main.tf --
+variable "engine" {
+  type = string
+}
+
+output "endpoint" {
+  value = "${var.engine}.db.internal"
+}
+-- apps/a/terragrunt.hcl --
+include "app" {
+  path = find_in_parent_folders("_envcommon/app.hcl")
+}
+-- apps/a/main.tf --
+variable "db_port" {
+  type = number
+}
+-- apps/b/terragrunt.hcl --
+include "app" {
+  path = find_in_parent_folders("_envcommon/app.hcl")
+}
+-- apps/b/main.tf --
+variable "db_port" {
+  type = number
+}
+-- apps/c/terragrunt.hcl --
+include "app" {
+  path = find_in_parent_folders("_envcommon/app.hcl")
+}
+-- apps/c/main.tf --
+variable "db_port" {
+  type = number
+}
+-- _golden/exit --
+1
+-- _golden/want --
+# _envcommon/app.hcl line 6: "  db_port = " is 12 bytes.
+GRT001 error _envcommon/app.hcl:6:13 apps/a
+GRT001 error _envcommon/app.hcl:6:13 apps/b
+GRT001 error _envcommon/app.hcl:6:13 apps/c

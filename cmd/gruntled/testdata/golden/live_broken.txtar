@@ -1,0 +1,90 @@
+The live_clean repository with one renamed output reference per service
+unit: dev/service reads outputs.vpc and prod/service reads
+outputs.private_subnets, neither of which the network module declares. The
+other reference in each file stays valid and must stay silent.
+-- root.hcl --
+locals {
+  project = "golden"
+}
+-- modules/network/variables.tf --
+variable "cidr" {
+  type    = string
+  default = "10.0.0.0/16"
+}
+-- modules/network/outputs.tf --
+output "vpc_id" {
+  value = "vpc-${var.cidr}"
+}
+
+output "private_subnet_ids" {
+  value = ["subnet-a", "subnet-b"]
+}
+-- modules/service/main.tf --
+variable "vpc_id" {
+  type = string
+}
+
+variable "subnet_ids" {
+  type = list(string)
+}
+
+output "service_url" {
+  value = "https://svc.${var.vpc_id}.example"
+}
+-- live/dev/network/terragrunt.hcl --
+include "root" {
+  path = find_in_parent_folders("root.hcl")
+}
+
+terraform {
+  source = "../../../modules/network"
+}
+-- live/dev/service/terragrunt.hcl --
+include "root" {
+  path = find_in_parent_folders("root.hcl")
+}
+
+terraform {
+  source = "../../../modules/service"
+}
+
+dependency "network" {
+  config_path = "../network"
+}
+
+inputs = {
+  vpc_id     = dependency.network.outputs.vpc
+  subnet_ids = dependency.network.outputs.private_subnet_ids
+}
+-- live/prod/network/terragrunt.hcl --
+include "root" {
+  path = find_in_parent_folders("root.hcl")
+}
+
+terraform {
+  source = "../../../modules/network"
+}
+-- live/prod/service/terragrunt.hcl --
+include "root" {
+  path = find_in_parent_folders("root.hcl")
+}
+
+terraform {
+  source = "../../../modules/service"
+}
+
+dependency "network" {
+  config_path = "../network"
+}
+
+inputs = {
+  vpc_id     = dependency.network.outputs.vpc_id
+  subnet_ids = dependency.network.outputs.private_subnets
+}
+-- _golden/exit --
+1
+-- _golden/want --
+# live/dev/service/terragrunt.hcl line 14: "  vpc_id     = " is 15 bytes.
+GRT001 error live/dev/service/terragrunt.hcl:14:16 live/dev/service
+# live/prod/service/terragrunt.hcl line 15: "  subnet_ids = " is 15 bytes.
+GRT001 error live/prod/service/terragrunt.hcl:15:16 live/prod/service
