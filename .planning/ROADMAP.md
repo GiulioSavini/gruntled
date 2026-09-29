@@ -27,7 +27,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Domain Foundation & Test Substrate** - Pure domain types (HCL-free, CI-enforced) plus a deterministic synthetic Terragrunt repo generator that every later phase uses for fixtures (completed 2026-09-25)
 - [x] **Phase 2: Parsing & Graph Construction** - Walk a real Terragrunt repository, resolve units to modules, and build a correctly-resolved `RepositoryGraph` without evaluating any expression value (14/14 plans, verified passed) (completed 2026-09-29)
-- [ ] **Phase 3: GRT001 Diagnostic & CLI** - `gruntled check` runs end-to-end, reporting correct, deterministic diagnostics with documented exit codes and no side effects
+- [x] **Phase 3: GRT001 Diagnostic & CLI** - `gruntled check` runs end-to-end, reporting correct, deterministic diagnostics with documented exit codes and no side effects (completed 2026-09-29)
 - [ ] **Phase 4: Real-Repo Validation Experiment** - The falsifiable claim is settled: zero false positives and every injected mutation caught on a real public corpus, faster than `terragrunt hcl validate`
 
 ## Phase Details
@@ -126,7 +126,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. Domain Foundation & Test Substrate | 3/3 | Complete    | 2026-09-25 |
 | 2. Parsing & Graph Construction | 11/14 | Complete    | 2026-09-29 |
-| 3. GRT001 Diagnostic & CLI | 5/5 | In Progress | - |
+| 3. GRT001 Diagnostic & CLI | 5/5 | Complete    | 2026-09-29 |
 | 4. Real-Repo Validation Experiment | 0/4 | Planned | - |
 
 ---
