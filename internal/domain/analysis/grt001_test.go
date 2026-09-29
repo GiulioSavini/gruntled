@@ -89,20 +89,20 @@ func mustGraph(t *testing.T, units []repograph.Unit, modules []repograph.Module)
 type depKind int
 
 const (
-	depResolved     depKind = iota // points at live/vpc, a unit in the graph
-	depUnresolved                  // NewUnresolvedDependency
-	depNotAUnit                    // points at a path that is not a unit
-	depUndeclared                  // no dependency block at all
+	depResolved   depKind = iota // points at live/vpc, a unit in the graph
+	depUnresolved                // NewUnresolvedDependency
+	depNotAUnit                  // points at a path that is not a unit
+	depUndeclared                // no dependency block at all
 )
 
 // targetKind selects what the dependency's target looks like.
 type targetKind int
 
 const (
-	targetResolved      targetKind = iota // resolved unit, module live/vpc with a known surface
-	targetConfigUnknown                   // config-unknown unit
-	targetModuleUnknown                   // module-unknown unit
-	targetSurfaceUnknown                  // resolved unit whose module surface is unknown
+	targetResolved       targetKind = iota // resolved unit, module live/vpc with a known surface
+	targetConfigUnknown                    // config-unknown unit
+	targetModuleUnknown                    // module-unknown unit
+	targetSurfaceUnknown                   // resolved unit whose module surface is unknown
 )
 
 type scenario struct {
