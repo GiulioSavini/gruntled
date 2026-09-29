@@ -27,9 +27,9 @@ machinery to prove it correct on real code.
 
 ### Diagnostics
 
-- [ ] **DIAG-01**: gruntled reports `GRT001` when a `dependency.X.outputs.Y` reference names an output the target module does not declare
+- [x] **DIAG-01**: gruntled reports `GRT001` when a `dependency.X.outputs.Y` reference names an output the target module does not declare
 - [ ] **DIAG-02**: gruntled reports `GRT100` for HCL syntax errors, with file and line
-- [ ] **DIAG-03**: gruntled applies a documented, tested rule for whether `mock_outputs` on a dependency suppresses `GRT001`
+- [x] **DIAG-03**: gruntled applies a documented, tested rule for whether `mock_outputs` on a dependency suppresses `GRT001`
 - [ ] **DIAG-04**: every diagnostic carries a repository-relative path — never an absolute path — plus line, column and a stable code
 
 ### CLI
@@ -115,9 +115,9 @@ Deferred. Tracked, not in the current roadmap.
 | GRAPH-03 | Phase 2 | Complete |
 | GRAPH-04 | Phase 2 | Complete |
 | GRAPH-05 | Phase 2 | Complete |
-| DIAG-01 | Phase 3 | Pending |
+| DIAG-01 | Phase 3 | Complete |
 | DIAG-02 | Phase 3 | Pending |
-| DIAG-03 | Phase 3 | Pending |
+| DIAG-03 | Phase 3 | Complete |
 | DIAG-04 | Phase 3 | Pending |
 | CLI-01 | Phase 3 | Pending |
 | CLI-02 | Phase 3 | Pending |

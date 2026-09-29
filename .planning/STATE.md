@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: milestone
-status: executing
-stopped_at: Completed 02-05-PLAN.md (Phase 2 complete)
-last_updated: "2026-09-29T08:52:05.510Z"
-last_activity: 2026-09-28 — 02-06..02-11 merged (lazy-eval guard, loader guards, zero values, arch blind spots, size/depth limits, two-input fuzz); Phase 3 and 4 plans revised per plan-check
+status: Phase 3 execution
+stopped_at: Completed 03-01-PLAN.md
+last_updated: "2026-09-29T08:57:06.203Z"
+last_activity: "2026-09-29 — 03-01 complete: analysis.UnknownOutputs (DIAG-03), checking.Check, strategy-over-bool MockMergeWithState"
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 26
-  completed_plans: 19
-  percent: 61
+  completed_plans: 20
+  percent: 77
 ---
 
 # Project State
@@ -21,17 +21,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-01)
 
 **Core value:** Tell the user, before they run anything slow, that `dependency.X.outputs.Y` does not exist in the module it points to.
-**Current focus:** Phase 2 (Parsing & Graph Construction) — complete; Phase 3 (Analysis) not yet planned
+**Current focus:** Phase 3 (GRT001 Diagnostic & CLI) — executing
 
 ## Current Position
 
 Phase: 3 of 4 (GRT001 Diagnostic & CLI) — executing
-Plan: 2 of 5 in current phase complete (03-02, 03-04); remaining 03-01, 03-03, 03-05
+Plan: 3 of 5 in current phase complete (03-01, 03-02, 03-04); remaining 03-03, 03-05
 Phase 2: complete — 14/14 plans, 02-VERIFICATION.md status: passed (re-verified 2026-09-29 after gap cycle 1)
 Status: Phase 3 execution
-Last activity: 2026-09-29 — gap cycle 1 (02-12..02-14) merged, Phase 2 re-verified passed
+Last activity: 2026-09-29 — 03-01 complete: analysis.UnknownOutputs (DIAG-03), checking.Check, strategy-over-bool MockMergeWithState
 
-Progress: [███████░░░] 70% (16 of 23 plans)
+Progress: [████████░░] 77% (20 of 26 plans)
 
 ## Performance Metrics
 
@@ -59,6 +59,7 @@ Progress: [███████░░░] 70% (16 of 23 plans)
 
 *Updated after each plan completion*
 | Phase 02 P05 | 40 | 3 tasks | 7 files |
+| Phase 03 P01 | 20 | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -95,6 +96,9 @@ Recent decisions affecting current work:
 - [Phase 02 P5]: deep-merge dependency resolution only activates when a label's occurrences span more than one file AND at least one is itself a deep include; a single-occurrence label always keeps its literal facts, never guessed-merged
 - [Phase 02 P5]: TestUnknownReasons parses reasons.go with go/parser and fails if any Reason* constant lacks a fixture row, so the unknown-reason catalogue and its test coverage can never silently drift apart
 - [Phase 02 P5]: the real primary corpus has 3 units (not 0) that are deliberately config-unknown: two same-label `dependency "iam"` blocks in one file, a real shape this project's "never guess which duplicate wins" policy (research Pattern 6) refuses to resolve -- verified once locally against a fresh clone, documented in 02-05-SUMMARY.md, not a defect
+- [Phase 03 P1]: GRT001 always SeverityError; mock_outputs only appends the masking suffix when mock keys, allowed commands and merge/zero-output facts are certain literals
+- [Phase 03 P1]: checking.Check returns *indexing.Error unchanged (exit 3 in the CLI); analyzer failures are *checking.Error{Stage: analyze}
+- [Phase 03 P1]: mock_outputs_merge_strategy_with_state, when present, decides MockMergeWithState alone (Terragrunt getMockOutputsMergeStrategy), reversing the Phase 2 either-true rule
 
 ### Pending Todos
 
@@ -106,6 +110,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-09-25T14:16:00.000Z
-Stopped at: Completed 02-05-PLAN.md (Phase 2 complete)
+Last session: 2026-09-29T08:56:49.318Z
+Stopped at: Completed 03-01-PLAN.md
 Resume file: None
