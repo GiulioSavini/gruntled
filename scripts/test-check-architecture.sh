@@ -29,22 +29,26 @@ mkcopy() {
   echo "$d"
 }
 
+# addstub creates the stub module in its own temp directory OUTSIDE the
+# copy: a stub inside the copy would be a nested go.mod, which the
+# single-module rule rejects.
 addstub() {
-  local copy="$1" org="$2"
-  mkdir -p "$copy/zzstub/${org}"
-  cat >"$copy/zzstub/${org}/go.mod" <<EOF
+  local copy="$1" org="$2" stubdir
+  stubdir=$(mktemp -d)
+  COPIES+=("$stubdir")
+  cat >"$stubdir/go.mod" <<EOF
 module github.com/${org}/zzprobe
 
 go 1.27
 EOF
-  cat >"$copy/zzstub/${org}/p.go" <<EOF
+  cat >"$stubdir/p.go" <<EOF
 package zzprobe
 
 const X = 1
 EOF
   (cd "$copy" && go mod edit \
     -require="github.com/${org}/zzprobe@v0.0.0" \
-    -replace="github.com/${org}/zzprobe=./zzstub/${org}")
+    -replace="github.com/${org}/zzprobe=${stubdir}")
 }
 
 run_case() {
@@ -636,5 +640,38 @@ package zz
 import _ "github.com/hashicorp/hcl/v2"
 EOF
 run_case "hcl-in-testdata-allowed" "$copy" zero
+
+# --- nested-go-mod: a nested module under internal/domain (02-REVIEW G22) ---
+copy=$(mkcopy)
+mkdir -p "$copy/internal/domain/zz"
+printf 'module %s/internal/domain/zz\n\ngo 1.27\n' "$MODULE" >"$copy/internal/domain/zz/go.mod"
+printf 'package zz\n\nimport _ "os"\n' >"$copy/internal/domain/zz/zz.go"
+(cd "$copy" && go mod edit \
+  -require="${MODULE}/internal/domain/zz@v0.0.0" \
+  -replace="${MODULE}/internal/domain/zz=./internal/domain/zz")
+printf 'package repograph\n\nimport _ "%s/internal/domain/zz"\n' "$MODULE" >"$copy/internal/domain/repograph/zz_probe.go"
+run_case "nested-go-mod" "$copy" single-module
+
+# --- nested-go-mod-dot-dir: the find prunes dot dirs, the module path catches it
+copy=$(mkcopy)
+mkdir -p "$copy/.zz"
+printf 'module %s/internal/domain/zz\n\ngo 1.27\n' "$MODULE" >"$copy/.zz/go.mod"
+printf 'package zz\n\nimport _ "os"\n' >"$copy/.zz/zz.go"
+(cd "$copy" && go mod edit \
+  -require="${MODULE}/internal/domain/zz@v0.0.0" \
+  -replace="${MODULE}/internal/domain/zz=./.zz")
+printf 'package repograph\n\nimport _ "%s/internal/domain/zz"\n' "$MODULE" >"$copy/internal/domain/repograph/zz_probe.go"
+run_case "nested-go-mod-dot-dir" "$copy" single-module
+
+# --- go-work: a go.work at the root -----------------------------------------
+copy=$(mkcopy)
+printf 'go 1.27\n\nuse .\n' >"$copy/go.work"
+run_case "go-work" "$copy" single-module
+
+# --- unrelated-go-mod-in-dot-dir-allowed: like .claude/worktrees copies -----
+copy=$(mkcopy)
+mkdir -p "$copy/.cache/x"
+printf 'module example.com/x\n\ngo 1.27\n' >"$copy/.cache/x/go.mod"
+run_case "unrelated-go-mod-in-dot-dir-allowed" "$copy" zero
 
 echo "all architecture self-tests passed"

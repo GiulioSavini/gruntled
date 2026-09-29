@@ -12,7 +12,8 @@
 # one of the known layers (internal-layout); only cmd/... and
 # internal/infrastructure/... may import internal/infrastructure/...
 # (infrastructure-importers); and only _test.go files may import
-# internal/testsupport (testsupport-only-in-tests).
+# internal/testsupport (testsupport-only-in-tests). The repository must also
+# stay a single Go module: no nested go.mod and no go.work (single-module).
 #
 # Phase 3 adds the presenter and binary rules: internal/interfaces must be
 # non-empty (interfaces-non-vacuous-guard), may import only a pure stdlib
@@ -29,6 +30,10 @@
 # exits, so a single run can report more than one violation.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+
+# A go.work in the repository or any parent directory would change which
+# modules go list resolves, so every rule below must see the plain module.
+export GOWORK=off
 
 fail=0
 
@@ -109,6 +114,46 @@ if [ -n "$internal_layout_violations" ]; then
   echo "=== RULE FAILED: internal-layout ===" >&2
   echo "internal/ must hold only: domain, application, infrastructure, interfaces, testsupport (interfaces is reserved for Phase 3 presenters). Move the code under one of those, or make the directory non-Go content:" >&2
   printf '%s\n' "$internal_layout_violations" >&2
+  fail=1
+fi
+
+# --- single-module -------------------------------------------------------
+# The repository is one Go module. A nested module is invisible to
+# go list ./internal/... and to every rule that uses it, so the domain could
+# import os through it (02-REVIEW G22). This needs no compiler, and a nested
+# module must be reported even when it breaks compilation.
+single_module_violations=""
+nested_go_mods=$(find . \( -type d \( -name '.?*' -o -name '_*' \) -prune \) -o -type f -name go.mod -print | grep -v -x './go.mod' || true)
+if [ -n "$nested_go_mods" ]; then
+  single_module_violations="${single_module_violations}nested go.mod files:
+${nested_go_mods}
+"
+fi
+for work in go.work go.work.sum; do
+  if [ -e "$work" ]; then
+    single_module_violations="${single_module_violations}${work} at the repository root
+"
+  fi
+done
+main_module=$(awk '$1 == "module" { print $2; exit }' go.mod)
+main_module_re=$(printf '%s' "$main_module" | sed 's/[.]/\\./g')
+if other_modules=$(go list -m -e -f '{{if not .Main}}{{.Path}}{{end}}' all 2>/tmp/check-architecture-modules.$$); then
+  inner_modules=$(printf '%s\n' "$other_modules" | grep -E "^${main_module_re}(/|$)" || true)
+  if [ -n "$inner_modules" ]; then
+    single_module_violations="${single_module_violations}modules under the main module path:
+${inner_modules}
+"
+  fi
+else
+  single_module_violations="${single_module_violations}go list -m all failed:
+$(cat /tmp/check-architecture-modules.$$)
+"
+fi
+rm -f /tmp/check-architecture-modules.$$
+if [ -n "$single_module_violations" ]; then
+  echo "=== RULE FAILED: single-module ===" >&2
+  echo "The repository is one Go module. A nested module is invisible to go list ./internal/... and to every rule that uses it, so the domain could import os through it (02-REVIEW G22):" >&2
+  printf '%s' "$single_module_violations" >&2
   fail=1
 fi
 
