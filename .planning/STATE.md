@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: milestone
 status: Phase 3 execution
-stopped_at: Completed 03-03-PLAN.md
-last_updated: "2026-09-29T12:00:00.000Z"
-last_activity: "2026-09-29 — 03-03 complete: gruntled check wired on stdlib flag (exit 0/1/2/3), 11 testscript scripts incl. DIAG-03 rows"
+stopped_at: Completed 03-05-PLAN.md
+last_updated: "2026-09-29T18:00:00.000Z"
+last_activity: "2026-09-29 — 03-05 complete: CLI e2e oracle/determinism/no-writes/mutation-diff/help-docs tests; corpus gate clean (0) and role_name mutation 8 GRT001"
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 26
-  completed_plans: 21
-  percent: 81
+  completed_plans: 22
+  percent: 85
 ---
 
 # Project State
@@ -26,12 +26,12 @@ See: .planning/PROJECT.md (updated 2026-09-01)
 ## Current Position
 
 Phase: 3 of 4 (GRT001 Diagnostic & CLI) — executing
-Plan: 4 of 5 in current phase complete (03-01, 03-02, 03-03, 03-04); remaining 03-05
+Plan: 5 of 5 in current phase complete (03-01 to 03-05); awaiting phase verification
 Phase 2: complete — 14/14 plans, 02-VERIFICATION.md status: passed (re-verified 2026-09-29 after gap cycle 1)
 Status: Phase 3 execution
-Last activity: 2026-09-29 — 03-03 complete: gruntled check wired on stdlib flag (exit 0/1/2/3), 11 testscript scripts incl. DIAG-03 rows
+Last activity: 2026-09-29 — 03-05 complete: CLI e2e guarantees tested; corpus gate clean (exit 0) and role_name mutation gives 8 GRT001
 
-Progress: [████████░░] 81% (21 of 26 plans)
+Progress: [████████░░] 85% (22 of 26 plans)
 
 ## Performance Metrics
 
@@ -61,6 +61,7 @@ Progress: [████████░░] 81% (21 of 26 plans)
 | Phase 02 P05 | 40 | 3 tasks | 7 files |
 | Phase 03 P01 | 20 | 3 tasks | 7 files |
 | Phase 03 P03 | 40 | 3 tasks | 16 files |
+| Phase 03 P05 | 14 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -102,6 +103,7 @@ Recent decisions affecting current work:
 - [Phase 03 P1]: mock_outputs_merge_strategy_with_state, when present, decides MockMergeWithState alone (Terragrunt getMockOutputsMergeStrategy), reversing the Phase 2 either-true rule
 - [Phase 03 P3]: cmd/gruntled run(args, stdout, stderr) int is the only entry point; tests call it in-process and through testscript, where a gruntled-exit helper asserts the exact numeric exit code
 - [Phase 03 P3]: text mode with no diagnostics performs no stdout write; JSON always prints one document and no stderr summary
+- [Phase 03 P5]: CLI e2e tests run in-process over synthrepo trees and compare decoded JSON, importing no application internals
 
 ### Pending Todos
 
@@ -113,6 +115,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-09-29T12:00:00.000Z
-Stopped at: Completed 03-03-PLAN.md
+Last session: 2026-09-29T18:00:00.000Z
+Stopped at: Completed 03-05-PLAN.md
 Resume file: None

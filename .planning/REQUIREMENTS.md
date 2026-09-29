@@ -36,9 +36,9 @@ machinery to prove it correct on real code.
 
 - [x] **CLI-01**: `gruntled check [path]` analyses a repository and prints diagnostics in a human-readable form
 - [x] **CLI-02**: `gruntled check` exits 0 when clean and non-zero when it reports an error, with documented exit codes
-- [ ] **CLI-03**: `gruntled check` produces byte-identical output, in identical order, for identical input
-- [ ] **CLI-04**: gruntled makes no network calls and starts no external processes at any point
-- [ ] **CLI-05**: gruntled writes nothing inside the repository it analyses
+- [x] **CLI-03**: `gruntled check` produces byte-identical output, in identical order, for identical input
+- [x] **CLI-04**: gruntled makes no network calls and starts no external processes at any point
+- [x] **CLI-05**: gruntled writes nothing inside the repository it analyses
 
 ### Validation
 
@@ -121,9 +121,9 @@ Deferred. Tracked, not in the current roadmap.
 | DIAG-04 | Phase 3 | Complete |
 | CLI-01 | Phase 3 | Complete |
 | CLI-02 | Phase 3 | Complete |
-| CLI-03 | Phase 3 | Pending |
-| CLI-04 | Phase 3 | Pending |
-| CLI-05 | Phase 3 | Pending |
+| CLI-03 | Phase 3 | Complete |
+| CLI-04 | Phase 3 | Complete |
+| CLI-05 | Phase 3 | Complete |
 | VALID-01 | Phase 1 | Complete |
 | VALID-02 | Phase 4 | Pending |
 | VALID-03 | Phase 4 | Pending |
