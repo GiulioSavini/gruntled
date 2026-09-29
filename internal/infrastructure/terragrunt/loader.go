@@ -249,7 +249,9 @@ func (l *Loader) resolveUnit(cache *fileCache, e unitEntry, targets *includeTarg
 // independently of their early returns, so a decl after a failing one
 // still marks its target (02-REVIEW G16):
 //   - a nil path marks unitDir's ancestors;
-//   - a path that does not evaluate marks the ancestors, and also every
+//   - a path that does not evaluate but provably names no in-repo unit
+//     (includeReachesNoUnit) marks nothing;
+//   - any other path that does not evaluate marks the ancestors, and also every
 //     include-free unit unless its file name is fixed and is not
 //     terragrunt.hcl (dynamicIncludeFileNames);
 //   - a path that evaluates but names no in-repo regular file marks
@@ -264,6 +266,9 @@ func (l *Loader) markIncludeDecls(targets *includeTargets, unitDir string, decls
 			continue
 		}
 		raw, ok := evalPath(d.path, evalScope{fsys: l.fsys, unitDir: unitDir, kind: scopeInclude})
+		if !ok && includeReachesNoUnit(d.path) {
+			continue
+		}
 		if !ok {
 			targets.markAncestors(unitDir)
 			names, fixed := dynamicIncludeFileNames(d.path)

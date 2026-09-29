@@ -3,14 +3,14 @@ package main
 // Env-gated secondary-corpus check on denis256/terragrunt-tests (04-04).
 //
 // The expectation table below is hand-derived from the corpus text and the
-// locked DIAG-03 rules, never from gruntled output. Gap-closure plan 02-13
-// (include-target rule) later made every include-free unit of a repository
-// with a dynamic or terragrunt.hcl-named include an include target, reported
-// unknown. On denis256 that covers the referring unit or the target unit of
-// all 8 references, so DIAG-03 keeps them silent. The test therefore asserts
-// that the GRT001 set is empty, and that each of the 8 known references is
-// explained by an unknown unit or module, with the reason logged. A reference
-// on a fully resolved path that gruntled does not report fails the test.
+// locked DIAG-03 rules, never from gruntled output. The test asserts that the
+// GRT001 set equals exactly the 8 known references: a missing one is a
+// recall failure, an extra one a false positive.
+//
+// Gap-closure plan 02-13 (include-target rule) once hid all 8, because a few
+// includes that cannot name any in-repo unit (a find_in_parent_folders that
+// finds nothing, a local that Terragrunt rejects at include time) made every
+// include-free unit an include target. Those includes now mark nothing.
 
 import (
 	"bytes"
@@ -358,73 +358,34 @@ func TestDenis256Corpus(t *testing.T) {
 	})
 
 	t.Run("grt001_exact_set", func(t *testing.T) {
-		// Since 02-13 the expected GRT001 set on denis256 is empty: every
-		// hand-derived reference sits on an unknown referring or target unit.
-		var got []string
+		want := map[string]string{}
+		for _, e := range denisExpected {
+			want[e.pos()] = e.Unit + " | " + denisMessage(e)
+		}
 		for _, d := range rep.Diagnostics {
 			if d.Code != "GRT001" {
 				continue
 			}
 			pos := d.File + ":" + strconv.Itoa(d.Line) + ":" + strconv.Itoa(d.Column)
-			got = append(got, pos+" "+d.Unit+" | "+d.Message)
 			if d.Severity != "error" {
 				t.Errorf("GRT001 at %s has severity %q, want error", pos, d.Severity)
 			}
-			for _, s := range denisSilent {
-				if s.pos() == pos {
-					t.Errorf("GRT001 at silent position %s (%s): %s", pos, s.Why, d.Message)
-				}
+			got := d.Unit + " | " + d.Message
+			w, ok := want[pos]
+			switch {
+			case !ok:
+				t.Errorf("EXTRA GRT001 %s %s", pos, got)
+			case got != w:
+				t.Errorf("GRT001 %s\n got  %s\n want %s", pos, got, w)
 			}
+			delete(want, pos)
 		}
-		slices.Sort(got)
-		for _, g := range got {
-			t.Logf("got GRT001 %s", g)
-		}
-		if len(got) != 0 {
-			t.Errorf("GRT001 set on denis256 is not empty (%d extra):\n%s", len(got), strings.Join(got, "\n"))
-		}
-	})
-
-	t.Run("expected_refs_explained_by_unknown", func(t *testing.T) {
-		unit := map[string]string{}
-		for _, u := range rep.UnknownUnits {
-			unit[u.Path] = u.Status + "/" + u.Reason
-		}
-		module := map[string]string{}
-		for _, m := range rep.UnknownModules {
-			module[m.Path] = "module-unknown/" + m.Reason
-		}
-		reported := map[string]bool{}
-		for _, d := range rep.Diagnostics {
-			if d.Code == "GRT001" {
-				reported[d.File+":"+strconv.Itoa(d.Line)+":"+strconv.Itoa(d.Column)] = true
-			}
-		}
-		for _, e := range denisExpected {
-			if reported[e.pos()] {
-				continue
-			}
-			us, uOK := unit[e.Unit]
-			ts, tOK := unit[e.Target]
-			ms, mOK := module[e.Target]
-			if !uOK && !tOK && !mOK {
-				t.Errorf("MISS %s %s | %s: unit and target both resolved, but no GRT001", e.pos(), e.Unit, denisMessage(e))
-				continue
-			}
-			t.Logf("not reported %s %s | %s\n    unit %s: %s; target %s: %s; target module: %s",
-				e.pos(), e.Unit, denisMessage(e),
-				e.Unit, denisOr(us, "resolved"), e.Target, denisOr(ts, "resolved"), denisOr(ms, "known"))
+		for pos, w := range want {
+			t.Errorf("MISS GRT001 %s %s", pos, w)
 		}
 	})
 
 	if d1 := denisDigest(t, root); d1 != d0 {
 		t.Fatalf("corpus digest changed: %s -> %s", d0, d1)
 	}
-}
-
-func denisOr(s, def string) string {
-	if s == "" {
-		return def
-	}
-	return s
 }

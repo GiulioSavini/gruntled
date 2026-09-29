@@ -365,15 +365,63 @@ func TestIncludeTargetDynamicConditional(t *testing.T) {
 	assertAncestorsOnly(t, `include { path = get_env("CI", "") == "true" ? "ci.hcl" : "local.hcl" }`)
 }
 
-func TestIncludeTargetDynamicLocal(t *testing.T) {
+// assertSharedTarget loads app next to the include-free, non-ancestor unit
+// "shared" and checks whether shared is an include target.
+func assertSharedTarget(t *testing.T, appHCL string, want bool) {
+	t.Helper()
 	res := loadUnits(t, filesFS(map[string]string{
-		"shared/terragrunt.hcl": "",
-		"live/prod/app/terragrunt.hcl": `locals { root = "../../../shared/terragrunt.hcl" }
+		"shared/terragrunt.hcl":   "",
+		"live/app/terragrunt.hcl": appHCL,
+	}))
+	if got := unitByPath(t, res, "shared").ConfigUnknownReason == ReasonIncludeTarget; got != want {
+		t.Fatalf("shared is include target = %v, want %v", got, want)
+	}
+}
+
+// TestIncludeTargetRejectedByTerragrunt pins that an include path naming a
+// variable Terragrunt 1.1.6 does not provide at include time marks
+// nothing: Terragrunt fails to parse the unit, so it includes no file.
+func TestIncludeTargetRejectedByTerragrunt(t *testing.T) {
+	for name, hcl := range map[string]string{
+		"local": `locals { root = "../../shared/terragrunt.hcl" }
 include { path = local.root }
 `,
-	}))
-	if s := unitByPath(t, res, "shared"); s.ConfigUnknownReason != ReasonIncludeTarget {
-		t.Fatalf("shared ConfigUnknownReason = %q, want %q", s.ConfigUnknownReason, ReasonIncludeTarget)
+		"local_template": `locals { f = "terragrunt" }
+include { path = "${local.f}.hcl" }
+`,
+		"local_find":  `include { path = find_in_parent_folders("${local.file}") }`,
+		"include_ref": `include { path = find_in_parent_folders(include.other.locals.f) }`,
+	} {
+		t.Run(name, func(t *testing.T) { assertSharedTarget(t, hcl, false) })
+	}
+}
+
+// TestIncludeTargetDynamicValues pins that values, which Terragrunt does
+// provide at include time, and a try that can catch an unknown variable,
+// both keep the conservative marking.
+func TestIncludeTargetDynamicValues(t *testing.T) {
+	for name, hcl := range map[string]string{
+		"values": `include { path = values.parent }`,
+		"try":    `include { path = try(local.root, "../../shared/terragrunt.hcl") }`,
+	} {
+		t.Run(name, func(t *testing.T) { assertSharedTarget(t, hcl, true) })
+	}
+}
+
+// TestIncludeTargetFindInParentFoldersMiss pins that a
+// find_in_parent_folders call that finds nothing in the repository marks
+// nothing, unless its argument could climb out of the ancestor chain.
+func TestIncludeTargetFindInParentFoldersMiss(t *testing.T) {
+	for name, tc := range map[string]struct {
+		hcl  string
+		want bool
+	}{
+		"no_arg":    {`include { path = find_in_parent_folders() }`, false},
+		"base_name": {`include { path = find_in_parent_folders("root.hcl") }`, false},
+		"slash":     {`include { path = find_in_parent_folders("x/terragrunt.hcl") }`, true},
+		"fallback":  {`include { path = find_in_parent_folders(get_env("N"), "x") }`, true},
+	} {
+		t.Run(name, func(t *testing.T) { assertSharedTarget(t, tc.hcl, tc.want) })
 	}
 }
 

@@ -11,9 +11,8 @@ how to rerun it.
 ## Outcome
 
 All five claims passed on the pinned primary corpus. The denis256 secondary check also
-passed, but it passed with a known recall limitation: gruntled reports none of the 8
-hand-derived references on that corpus (0/8). See
-[Secondary corpus](#secondary-corpus-denis256terragrunt-tests).
+passes: gruntled reports exactly the 8 hand-derived references on that corpus (8/8) and
+nothing else. See [Secondary corpus](#secondary-corpus-denis256terragrunt-tests).
 
 | Requirement | Claim | Result | Evidence |
 |---|---|---|---|
@@ -22,7 +21,7 @@ hand-derived references on that corpus (0/8). See
 | VALID-04 | Every reference broken by an injected rename or deletion is reported, and nothing else | PASS | [VALID-04](#valid-04-injected-mutations) |
 | VALID-05 | Plain `terragrunt hcl validate` does not report those mutations | PASS | [VALID-05](#valid-05-terragrunt-hcl-validate-on-the-same-mutated-trees) |
 | VALID-06 | `gruntled check` is faster than `terragrunt hcl validate` on the same repository | PASS | [VALID-06](#valid-06-benchmark) |
-| Secondary corpus denis256 (supplementary to VALID-02) | No panic, deterministic output, and an exact GRT001 set | PARTIAL: precision PASS (0 false positives); recall FAIL (0/8 known references reported, all hidden by the 02-13 include-target rule) | [Secondary corpus](#secondary-corpus-denis256terragrunt-tests) |
+| Secondary corpus denis256 (supplementary to VALID-02) | No panic, deterministic output, and an exact GRT001 set | PASS: exactly the 8 known references reported (8/8), 0 false positives | [Secondary corpus](#secondary-corpus-denis256terragrunt-tests) |
 
 ## Environment
 
@@ -155,33 +154,39 @@ corpus digest.
 
 ```
 DENIS256 units=1146
-DENIS256 resolved=249
-DENIS256 module_unknown=157
-DENIS256 config_unknown=740
-DENIS256 unknown_modules=4
-DENIS256 errors=4
+DENIS256 resolved=852
+DENIS256 module_unknown=219
+DENIS256 config_unknown=75
+DENIS256 unknown_modules=30
+DENIS256 errors=16
 DENIS256 warnings=0
-DENIS256 grt100=4
-DENIS256 grt001=0
-DENIS256 unknown_reason include-target=719
-DENIS256 unknown_reason remote-source=132
-DENIS256 unknown_reason generate-may-declare-outputs=14
+DENIS256 grt100=8
+DENIS256 grt001=8
+DENIS256 unknown_reason remote-source=182
+DENIS256 unknown_reason include-target=54
+DENIS256 unknown_reason generate-may-declare-outputs=21
+DENIS256 unknown_reason source-dynamic-path=13
 DENIS256 unknown_reason include-dynamic-path=11
-DENIS256 unknown_reason source-dynamic-path=9
 DENIS256 unknown_reason syntax-error=5
 DENIS256 unknown_reason invalid-include=2
+DENIS256 unknown_reason source-outside-repo=2
 DENIS256 unknown_reason config-too-deep=1
 DENIS256 unknown_reason include-not-found=1
 DENIS256 unknown_reason json-config-unsupported=1
-DENIS256 unknown_reason source-outside-repo=1
 DENIS256 unknown_reason unit-dir-overlays-module=1
+DENIS256 grt100 autoinclude-bugs/case1-object-key-leak/units/app/main.tf:1:26
+DENIS256 grt100 broken-dependencies/dependency/main.tf:8:17
+DENIS256 grt100 broken-dependencies/dependency2/main.tf:4:23
 DENIS256 grt100 encryption/terragrunt.hcl:14:20
 DENIS256 grt100 include-error/terragrunt.hcl:28:19
 DENIS256 grt100 issue-3368/terragrunt.hcl:24:68
 DENIS256 grt100 scaffold/test1/.boilerplate/terragrunt.hcl:7:24
+DENIS256 grt100 stack-autoincludes/object-computed-key-leak/units/app/main.tf:3:16
 ```
 
-That is 897 unknown units out of 1146, 719 of them `include-target`.
+That is 294 unknown units out of 1146, 54 of them `include-target`. The 8 GRT100 are
+all genuine syntax errors in the corpus fixtures (for example `some broken code` in
+`broken-dependencies/dependency/main.tf`).
 
 **How the expectation was made.** It was derived by hand from the corpus text and the
 locked DIAG-03 table. The starting point was the 9 would-be hits of the Phase 2 stress
@@ -191,37 +196,37 @@ before gruntled ran.
 **Independence.** The classification of each row (GRT001 or silent, suffix or not) is
 independent of gruntled: it comes from the HCL and the locked DIAG-03 rules. The
 candidate list is not independent. It came from the Phase 2 stress run, which used
-gruntled's own parser, so a breakage that run did not flag could be missing from it. No
-extra GRT001 was found in this run (`grt001=0`), so there is nothing to classify as a
-false positive.
+gruntled's own parser, so a breakage that run did not flag could be missing from it. The
+run reports the 8 expected GRT001 and no other (`grt001=8`), so there is nothing to
+classify as a false positive.
 
 **Deviation from the original request.** The request asked for 9 GRT001 hits. The
 disabled-dependency reference is silent under the locked DIAG-03 row 2
 (`enabled` not literally `true`), which applies before mocks are consulted. So 8 were
 expected, not 9.
 
-**Result: 0 of the 8 are reported. This is a known limitation, not a pass on recall.**
-Gap-closure plan 02-13 added a conservative include-target rule. When any include in the
-repository has a dynamic file name, or names a `terragrunt.hcl`, every include-free unit
-may be the target of that include, so gruntled marks it `config-unknown: include-target`
-and does not check it. Under DIAG-03 a reference whose referring unit or target unit is
-unknown is silent. On denis256 this rule covers every one of the 8 references. It keeps
-precision intact (0 GRT001, no false positive, the `enabled = false` reference silent),
-but recall on the known references is 0/8. The assertion was amended after 02-13 to an
-empty GRT001 set, with each of the 8 references required to sit on an unknown referring
-unit, target unit or target module. The 8 rows stay in `denisExpected` as the regression
-target for a v2 refinement that narrows the include-target rule.
+**Result: all 8 are reported, and nothing else.** Gap-closure plan 02-13 added a
+conservative include-target rule. When an include cannot be evaluated and its file name
+may be `terragrunt.hcl`, every include-free unit may be its target, so gruntled marks it
+`config-unknown: include-target` and, under DIAG-03, stays silent on it. On denis256 seven
+such includes first hid all 8 references (719 of 1146 units `include-target`, 0/8). None
+of the seven can name an in-repo unit: five are `find_in_parent_folders` calls with no
+argument or a plain file name that find nothing inside the repository, and two
+reference `local.*`, which Terragrunt 1.1.6 rejects in an include path ("Unknown
+variable") because it decodes includes before locals. Only `values` is in scope there,
+which the pinned binary confirms. Such includes now mark nothing, and the exact-set
+assertion from the original request is back.
 
 | `file:line:col` | dependency / output | Expected under DIAG-03 | Suffix expected | Actual in this run | Justification |
 |---|---|---|---|---|---|
-| `issue-2163/app/terragrunt.hcl:14:24` | `app_service_plan01` / `asp_id` | GRT001 (mock-only key) | no | not reported: target `issue-2163/module` is `config-unknown/include-target` | The module declares no outputs. `asp_id` is only mocked, and the allowed commands are `["validate", "plan"]`, so apply fails loudly instead of masking. |
-| `issue-2405/app/terragrunt.hcl:16:21` | `vpc` / `vpc_id` | GRT001 (mock-only key) | yes | not reported: unit and target `config-unknown/include-target` | `vpc/main.tf` is empty. `vpc_id` exists only in `mock_outputs`, and the allowed-commands list is misplaced inside the mock map, so apply would use the mock. |
-| `issue-2405/app/terragrunt.hcl:17:21` | `vpc` / `private_subnets` | GRT001 (mock-only key) | yes | not reported: unit and target `config-unknown/include-target` | Same fixture and facts as the row above, for `private_subnets`. |
-| `issue-2631/main/terragrunt.hcl:9:9` | `dep` / `a` | GRT001 (genuine fixture bug) | no | not reported: unit and target `config-unknown/include-target` | The module declares only `y`, and there is no `mock_outputs` at all. |
-| `issue-2718/app/terragrunt.hcl:23:25` | `vpc_main` / `aws_subnet_public_output` | GRT001 (mock-only key) | yes | not reported: target `issue-2718/vpc` is `config-unknown/include-target` | `vpc/main.tf` is empty. The key exists only in `mock_outputs`. The merge and allowed-commands settings are misplaced inside the mock map, so every command gets the mocks, apply included. |
-| `mock-output/module1/terragrunt.hcl:22:16` | `module2` / `subnets` | GRT001 (mock-only key) | yes | not reported: unit and target `config-unknown/include-target` | `module2` declares only `hello` and `attribute`. `subnets` is only mocked, the `"shallow"` strategy merges mocks into state, and apply is allowed, so apply silently injects the mock. |
-| `mocks/module1/terragrunt.hcl:10:12` | `module2` / `vpc_id2` | GRT001 (genuine fixture bug) | no | not reported: unit and target `config-unknown/include-target` | A typo for `vpc_id`. `module2/main.tf` is empty, and `mock_outputs` is `yamldecode(file(...))`, which is not literal (so no suffix) and defines only `vpc_id` anyway. |
-| `optional-dependency/reference-disabled-dependency/app/terragrunt.hcl:17:12` | `vpc` / `vpc_id` | GRT001 (mock-only key) | yes | not reported: unit and target `config-unknown/include-target` | `enabled = true` literally. The module has one resource and zero outputs. `vpc_id` is only mocked, and there is no allowed-commands list, so apply returns the mock. |
+| `issue-2163/app/terragrunt.hcl:14:24` | `app_service_plan01` / `asp_id` | GRT001 (mock-only key) | no | reported | The module declares no outputs. `asp_id` is only mocked, and the allowed commands are `["validate", "plan"]`, so apply fails loudly instead of masking. |
+| `issue-2405/app/terragrunt.hcl:16:21` | `vpc` / `vpc_id` | GRT001 (mock-only key) | yes | reported | `vpc/main.tf` is empty. `vpc_id` exists only in `mock_outputs`, and the allowed-commands list is misplaced inside the mock map, so apply would use the mock. |
+| `issue-2405/app/terragrunt.hcl:17:21` | `vpc` / `private_subnets` | GRT001 (mock-only key) | yes | reported | Same fixture and facts as the row above, for `private_subnets`. |
+| `issue-2631/main/terragrunt.hcl:9:9` | `dep` / `a` | GRT001 (genuine fixture bug) | no | reported | The module declares only `y`, and there is no `mock_outputs` at all. |
+| `issue-2718/app/terragrunt.hcl:23:25` | `vpc_main` / `aws_subnet_public_output` | GRT001 (mock-only key) | yes | reported | `vpc/main.tf` is empty. The key exists only in `mock_outputs`. The merge and allowed-commands settings are misplaced inside the mock map, so every command gets the mocks, apply included. |
+| `mock-output/module1/terragrunt.hcl:22:16` | `module2` / `subnets` | GRT001 (mock-only key) | yes | reported | `module2` declares only `hello` and `attribute`. `subnets` is only mocked, the `"shallow"` strategy merges mocks into state, and apply is allowed, so apply silently injects the mock. |
+| `mocks/module1/terragrunt.hcl:10:12` | `module2` / `vpc_id2` | GRT001 (genuine fixture bug) | no | reported | A typo for `vpc_id`. `module2/main.tf` is empty, and `mock_outputs` is `yamldecode(file(...))`, which is not literal (so no suffix) and defines only `vpc_id` anyway. |
+| `optional-dependency/reference-disabled-dependency/app/terragrunt.hcl:17:12` | `vpc` / `vpc_id` | GRT001 (mock-only key) | yes | reported | `enabled = true` literally. The module has one resource and zero outputs. `vpc_id` is only mocked, and there is no allowed-commands list, so apply returns the mock. |
 | `optional-dependency/reference-disabled-dependency/app/terragrunt.hcl:18:12` | `db` / `db` | silent (DIAG-03 row 2) | no | silent | `enabled = false`: row 2 of DIAG-03 is silent before mocks are consulted. The Phase 2 stress run listed it only because it ran without DIAG-03. |
 
 In words: 2 genuine fixture bugs (`issue-2631/main` `a`, `mocks/module1` `vpc_id2`),
@@ -490,10 +495,8 @@ every push.
   terragrunt-compatible syntax was not found; see [Corpus](#corpus).
 - Two mutation kinds: one rename and one deletion, each in a different module.
 - The denis256 check is a single secondary exact-set run, not a zero-false-positive
-  claim. On that corpus gruntled reports 0 of 8 known references, because the 02-13
-  include-target rule marks 719 of 1146 units unknown. Narrowing that rule is a v2
-  candidate.
+  claim. The include-target rule still marks 54 of its 1146 units unknown.
 - GRT001 only. Units that gruntled marks unknown are not checked (the Phase 2 policy).
-  In this run that was 3 of 65 units on the primary corpus and 897 of 1146 on denis256.
+  In this run that was 3 of 65 units on the primary corpus and 294 of 1146 on denis256.
 - The timing claim is relative, on one machine only, under the load described above. The
   absolute numbers are not a performance specification.

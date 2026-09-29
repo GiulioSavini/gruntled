@@ -135,9 +135,9 @@ complete and verified.
 
 **Known limitation:** to stay free of false positives, gruntled skips every
 unit that could be the target of an `include` it cannot resolve exactly. On
-repositories with dynamic include paths this can leave most units unchecked:
-on the secondary corpus `denis256/terragrunt-tests`, 719 of 1146 units are
-skipped this way and none of the 8 known broken references is reported.
+repositories with dynamic include paths some units stay unchecked: on the
+secondary corpus `denis256/terragrunt-tests`, 54 of 1146 units are skipped this
+way. All 8 known broken references there are still reported.
 
 **Not built yet:**
 - Everything under "Later" in the roadmap: the `gruntled watch` daemon,

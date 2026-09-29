@@ -231,6 +231,63 @@ func dynamicIncludeFileNames(expr hcl.Expression) ([]string, bool) {
 	return nil, false
 }
 
+// includeReachesNoUnit reports whether an include path that failed to
+// evaluate provably names no in-repo unit, in one of two ways:
+//
+//   - Terragrunt itself rejects it: it references a variable other than
+//     values outside any try or can call. Terragrunt 1.1.6 decodes include
+//     blocks before locals, so local, include, feature and dependency are
+//     all "Unknown variable" there and the unit fails to parse.
+//   - It is find_in_parent_folders with no argument or one literal file
+//     name without "/". Such a call can only fail by probing every in-repo
+//     ancestor without a match, and every ancestor above the root yields a
+//     path outside the repository.
+func includeReachesNoUnit(expr hcl.Expression) bool {
+	if w, ok := expr.(*hclsyntax.TemplateWrapExpr); ok {
+		expr = w.Wrapped
+	}
+	return rejectedByTerragrunt(expr) || findInParentFoldersMiss(expr)
+}
+
+// rejectedByTerragrunt reports whether expr references a variable other
+// than values with no try or can call that could catch the error.
+func rejectedByTerragrunt(expr hcl.Expression) bool {
+	syn, ok := expr.(hclsyntax.Expression)
+	if !ok {
+		return false
+	}
+	catches := false
+	hclsyntax.VisitAll(syn, func(n hclsyntax.Node) hcl.Diagnostics {
+		if c, ok := n.(*hclsyntax.FunctionCallExpr); ok && (c.Name == "try" || c.Name == "can") {
+			catches = true
+		}
+		return nil
+	})
+	if catches {
+		return false
+	}
+	for _, v := range expr.Variables() {
+		if v.RootName() != "values" {
+			return true
+		}
+	}
+	return false
+}
+
+// findInParentFoldersMiss reports whether expr is a find_in_parent_folders
+// call with no argument, or with one literal file name without "/".
+func findInParentFoldersMiss(expr hcl.Expression) bool {
+	c, ok := expr.(*hclsyntax.FunctionCallExpr)
+	if !ok || c.Name != "find_in_parent_folders" || c.ExpandFinal || len(c.Args) > 1 {
+		return false
+	}
+	if len(c.Args) == 0 {
+		return true
+	}
+	name, ok := literalString(c.Args[0])
+	return ok && !strings.Contains(name, "/")
+}
+
 // nonEmptyBase returns the base name of p, or ok=false when p names no file.
 func nonEmptyBase(p string) ([]string, bool) {
 	if p == "" || strings.HasSuffix(p, "/") {
