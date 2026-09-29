@@ -143,10 +143,10 @@ func TestNewDependencyRejectsZeroPosition(t *testing.T) {
 	opts := repograph.DefaultDependencyOptions()
 	var zeroPos repograph.Position
 
-	if _, err := repograph.NewDependency("vpc", target, zeroPos, opts); err == nil {
+	if _, err := repograph.NewDependency("vpc", target, zeroPos, pathPosFor(zeroPos), repograph.TargetHasConfig, opts); err == nil {
 		t.Errorf("NewDependency with zero Position: expected error, got nil")
 	}
-	if _, err := repograph.NewUnresolvedDependency("vpc", "r", zeroPos, opts); err == nil {
+	if _, err := repograph.NewUnresolvedDependency("vpc", "r", zeroPos, pathPosFor(zeroPos), opts); err == nil {
 		t.Errorf("NewUnresolvedDependency with zero Position: expected error, got nil")
 	}
 	if _, err := repograph.NewReference("vpc", "id", zeroPos); err == nil {
@@ -167,20 +167,20 @@ func TestNewDependencyRejectsInvalidOptions(t *testing.T) {
 		{"MockMergeWithState", repograph.DependencyOptions{MockMergeWithState: repograph.Tristate(99)}},
 	}
 	for _, c := range cases {
-		if _, err := repograph.NewDependency("vpc", target, pos, c.opts); err == nil {
+		if _, err := repograph.NewDependency("vpc", target, pos, pathPosFor(pos), repograph.TargetHasConfig, c.opts); err == nil {
 			t.Errorf("NewDependency with invalid %s: expected error, got nil", c.name)
 		}
-		if _, err := repograph.NewUnresolvedDependency("vpc", "r", pos, c.opts); err == nil {
+		if _, err := repograph.NewUnresolvedDependency("vpc", "r", pos, pathPosFor(pos), c.opts); err == nil {
 			t.Errorf("NewUnresolvedDependency with invalid %s: expected error, got nil", c.name)
 		}
 	}
 
 	// The zero-value DependencyOptions{} (every field Unknown) is the
 	// loader's deep-merge fallback and must remain accepted.
-	if _, err := repograph.NewDependency("vpc", target, pos, repograph.DependencyOptions{}); err != nil {
+	if _, err := repograph.NewDependency("vpc", target, pos, pathPosFor(pos), repograph.TargetHasConfig, repograph.DependencyOptions{}); err != nil {
 		t.Errorf("NewDependency with zero-value DependencyOptions: unexpected error: %v", err)
 	}
-	if _, err := repograph.NewUnresolvedDependency("vpc", "r", pos, repograph.DependencyOptions{}); err != nil {
+	if _, err := repograph.NewUnresolvedDependency("vpc", "r", pos, pathPosFor(pos), repograph.DependencyOptions{}); err != nil {
 		t.Errorf("NewUnresolvedDependency with zero-value DependencyOptions: unexpected error: %v", err)
 	}
 }
@@ -349,7 +349,7 @@ func TestNewDependencyAndReference(t *testing.T) {
 	pos := mustPosition(t, repograph.MustRepoPath("units/app/terragrunt.hcl"), 4, 1)
 	opts := repograph.DefaultDependencyOptions()
 
-	dep, err := repograph.NewDependency("vpc", target, pos, opts)
+	dep, err := repograph.NewDependency("vpc", target, pos, pathPosFor(pos), repograph.TargetHasConfig, opts)
 	if err != nil {
 		t.Fatalf("NewDependency: unexpected error: %v", err)
 	}
@@ -364,10 +364,10 @@ func TestNewDependencyAndReference(t *testing.T) {
 		t.Errorf("Dependency.Options() = %+v, want %+v", dep.Options(), opts)
 	}
 
-	if _, err := repograph.NewDependency("", target, pos, opts); err == nil {
+	if _, err := repograph.NewDependency("", target, pos, pathPosFor(pos), repograph.TargetHasConfig, opts); err == nil {
 		t.Errorf("NewDependency with empty name: expected error, got nil")
 	}
-	if _, err := repograph.NewDependency("vpc", repograph.RepoPath{}, pos, opts); err == nil {
+	if _, err := repograph.NewDependency("vpc", repograph.RepoPath{}, pos, pathPosFor(pos), repograph.TargetHasConfig, opts); err == nil {
 		t.Errorf("NewDependency with zero target: expected error, got nil")
 	}
 
@@ -391,7 +391,7 @@ func TestNewUnresolvedDependency(t *testing.T) {
 	pos := mustPosition(t, repograph.MustRepoPath("units/app/terragrunt.hcl"), 4, 1)
 	opts := repograph.DefaultDependencyOptions()
 
-	d, err := repograph.NewUnresolvedDependency("vpc", "config-path-dynamic", pos, opts)
+	d, err := repograph.NewUnresolvedDependency("vpc", "config-path-dynamic", pos, pathPosFor(pos), opts)
 	if err != nil {
 		t.Fatalf("NewUnresolvedDependency: unexpected error: %v", err)
 	}
@@ -405,10 +405,10 @@ func TestNewUnresolvedDependency(t *testing.T) {
 		t.Errorf("Options() = %+v, want %+v", d.Options(), opts)
 	}
 
-	if _, err := repograph.NewUnresolvedDependency("vpc", "", pos, opts); err == nil {
+	if _, err := repograph.NewUnresolvedDependency("vpc", "", pos, pathPosFor(pos), opts); err == nil {
 		t.Errorf("NewUnresolvedDependency with empty reason: expected error, got nil")
 	}
-	if _, err := repograph.NewUnresolvedDependency("", "reason", pos, opts); err == nil {
+	if _, err := repograph.NewUnresolvedDependency("", "reason", pos, pathPosFor(pos), opts); err == nil {
 		t.Errorf("NewUnresolvedDependency with empty name: expected error, got nil")
 	}
 }
@@ -581,7 +581,7 @@ func TestNewModuleUnknownUnit(t *testing.T) {
 
 func mustDependency(t *testing.T, name string, target repograph.RepoPath, pos repograph.Position) repograph.Dependency {
 	t.Helper()
-	d, err := repograph.NewDependency(name, target, pos, repograph.DefaultDependencyOptions())
+	d, err := repograph.NewDependency(name, target, pos, pathPosFor(pos), repograph.TargetHasConfig, repograph.DefaultDependencyOptions())
 	if err != nil {
 		t.Fatalf("NewDependency(%q): unexpected error: %v", name, err)
 	}
@@ -610,4 +610,191 @@ func errorHasPrefix(err error, prefix string) bool {
 	}
 	s := err.Error()
 	return len(s) >= len(prefix) && s[:len(prefix)] == prefix
+}
+
+// pathPosFor returns a non-zero config_path value position for a dependency
+// block at p: the next line of the same file, or a fixed position when p is
+// zero, so a test that zeroes the block position isolates that one field.
+func pathPosFor(p repograph.Position) repograph.Position {
+	file, line := repograph.MustRepoPath("units/app/terragrunt.hcl"), 5
+	if !p.IsZero() {
+		file, line = p.File(), p.Line()+1
+	}
+	pp, err := repograph.NewPosition(file, line, 17)
+	if err != nil {
+		panic(err)
+	}
+	return pp
+}
+
+func TestTargetState(t *testing.T) {
+	cases := []struct {
+		s     repograph.TargetState
+		str   string
+		valid bool
+	}{
+		{repograph.TargetUnknown, "unknown", true},
+		{repograph.TargetDirMissing, "dir-missing", true},
+		{repograph.TargetNoConfig, "no-config", true},
+		{repograph.TargetHasConfig, "has-config", true},
+		{repograph.TargetState(99), "TargetState(99)", false},
+		{repograph.TargetState(-1), "TargetState(-1)", false},
+	}
+	for _, c := range cases {
+		if got := c.s.String(); got != c.str {
+			t.Errorf("TargetState(%d).String() = %q, want %q", int(c.s), got, c.str)
+		}
+		if got := c.s.IsValid(); got != c.valid {
+			t.Errorf("TargetState(%d).IsValid() = %v, want %v", int(c.s), got, c.valid)
+		}
+	}
+	var zero repograph.TargetState
+	if zero != repograph.TargetUnknown {
+		t.Errorf("zero TargetState = %v, want TargetUnknown", zero)
+	}
+}
+
+func TestDependencyPathPosAndTargetState(t *testing.T) {
+	target := repograph.MustRepoPath("units/vpc")
+	pos := mustPosition(t, repograph.MustRepoPath("units/app/terragrunt.hcl"), 4, 1)
+	pathPos := mustPosition(t, repograph.MustRepoPath("units/app/terragrunt.hcl"), 5, 17)
+	opts := repograph.DefaultDependencyOptions()
+	var zeroPos repograph.Position
+
+	d, err := repograph.NewDependency("vpc", target, pos, pathPos, repograph.TargetDirMissing, opts)
+	if err != nil {
+		t.Fatalf("NewDependency: unexpected error: %v", err)
+	}
+	if d.PathPos() != pathPos || d.Pos() != pos || d.TargetState() != repograph.TargetDirMissing {
+		t.Errorf("NewDependency: got pos=%v pathPos=%v state=%v", d.Pos(), d.PathPos(), d.TargetState())
+	}
+	for _, s := range []repograph.TargetState{repograph.TargetUnknown, repograph.TargetNoConfig, repograph.TargetHasConfig} {
+		if _, err := repograph.NewDependency("vpc", target, pos, pathPos, s, opts); err != nil {
+			t.Errorf("NewDependency with state %v: unexpected error: %v", s, err)
+		}
+	}
+	if _, err := repograph.NewDependency("vpc", target, pos, zeroPos, repograph.TargetHasConfig, opts); err == nil {
+		t.Errorf("NewDependency with zero pathPos: expected error, got nil")
+	}
+	if _, err := repograph.NewDependency("vpc", target, pos, pathPos, repograph.TargetState(99), opts); err == nil {
+		t.Errorf("NewDependency with TargetState(99): expected error, got nil")
+	}
+
+	u, err := repograph.NewUnresolvedDependency("vpc", "config-path-dynamic", pos, pathPos, opts)
+	if err != nil {
+		t.Fatalf("NewUnresolvedDependency: unexpected error: %v", err)
+	}
+	if u.PathPos() != pathPos || u.TargetState() != repograph.TargetUnknown {
+		t.Errorf("NewUnresolvedDependency: got pathPos=%v state=%v, want %v unknown", u.PathPos(), u.TargetState(), pathPos)
+	}
+	if _, err := repograph.NewUnresolvedDependency("vpc", "r", pos, zeroPos, opts); err == nil {
+		t.Errorf("NewUnresolvedDependency with zero pathPos: expected error, got nil")
+	}
+}
+
+func TestNewPathDependency(t *testing.T) {
+	target := repograph.MustRepoPath("units/vpc")
+	pos := mustPosition(t, repograph.MustRepoPath("units/app/terragrunt.hcl"), 2, 12)
+	var zeroPos repograph.Position
+
+	pd, err := repograph.NewPathDependency(target, "../vpc", pos, repograph.TargetNoConfig)
+	if err != nil {
+		t.Fatalf("NewPathDependency: unexpected error: %v", err)
+	}
+	got, ok := pd.Target()
+	if !ok || got != target || pd.Pos() != pos || pd.TargetState() != repograph.TargetNoConfig || pd.Literal() != "../vpc" || pd.UnresolvedReason() != "" {
+		t.Errorf("NewPathDependency: got target=(%v,%v) pos=%v state=%v literal=%q reason=%q", got, ok, pd.Pos(), pd.TargetState(), pd.Literal(), pd.UnresolvedReason())
+	}
+
+	if _, err := repograph.NewPathDependency(repograph.RepoPath{}, "../vpc", pos, repograph.TargetHasConfig); err == nil {
+		t.Errorf("NewPathDependency with zero target: expected error, got nil")
+	}
+	if _, err := repograph.NewPathDependency(target, "../vpc", zeroPos, repograph.TargetHasConfig); err == nil {
+		t.Errorf("NewPathDependency with zero pos: expected error, got nil")
+	}
+	if _, err := repograph.NewPathDependency(target, "../vpc", pos, repograph.TargetState(99)); err == nil {
+		t.Errorf("NewPathDependency with invalid state: expected error, got nil")
+	}
+	if _, err := repograph.NewPathDependency(target, "", pos, repograph.TargetHasConfig); err == nil {
+		t.Errorf("NewPathDependency with empty literal: expected error, got nil")
+	}
+
+	un, err := repograph.NewUnresolvedPathDependency("config-path-dynamic", pos)
+	if err != nil {
+		t.Fatalf("NewUnresolvedPathDependency: unexpected error: %v", err)
+	}
+	if _, ok := un.Target(); ok || un.UnresolvedReason() != "config-path-dynamic" || un.TargetState() != repograph.TargetUnknown || un.Pos() != pos || un.Literal() != "" {
+		t.Errorf("NewUnresolvedPathDependency: got ok=%v reason=%q state=%v pos=%v literal=%q", ok, un.UnresolvedReason(), un.TargetState(), un.Pos(), un.Literal())
+	}
+	if _, err := repograph.NewUnresolvedPathDependency("", pos); err == nil {
+		t.Errorf("NewUnresolvedPathDependency with empty reason: expected error, got nil")
+	}
+	if _, err := repograph.NewUnresolvedPathDependency("r", zeroPos); err == nil {
+		t.Errorf("NewUnresolvedPathDependency with zero pos: expected error, got nil")
+	}
+}
+
+func mustPathDependency(t *testing.T, target string, pos repograph.Position) repograph.PathDependency {
+	t.Helper()
+	pd, err := repograph.NewPathDependency(repograph.MustRepoPath(target), "../"+target, pos, repograph.TargetHasConfig)
+	if err != nil {
+		t.Fatalf("NewPathDependency(%q): unexpected error: %v", target, err)
+	}
+	return pd
+}
+
+func TestUnitWithPathDependencies(t *testing.T) {
+	file := repograph.MustRepoPath("units/app/terragrunt.hcl")
+	unitPath := repograph.MustRepoPath("units/app")
+	a := mustPathDependency(t, "units/a", mustPosition(t, file, 3, 5))
+	b := mustPathDependency(t, "units/b", mustPosition(t, file, 2, 5))
+	c := mustPathDependency(t, "units/c", mustPosition(t, file, 2, 5)) // same pos as b: tie broken by target
+
+	resolved, err := repograph.NewResolvedUnit(unitPath, repograph.MustRepoPath("modules/app"), nil, nil)
+	if err != nil {
+		t.Fatalf("NewResolvedUnit: %v", err)
+	}
+	if got := resolved.PathDependencies(); len(got) != 0 {
+		t.Errorf("fresh unit PathDependencies() = %v, want empty", got)
+	}
+
+	in := []repograph.PathDependency{a, c, b}
+	withPDs, err := resolved.WithPathDependencies(in)
+	if err != nil {
+		t.Fatalf("WithPathDependencies: unexpected error: %v", err)
+	}
+	want := []repograph.PathDependency{b, c, a}
+	if got := withPDs.PathDependencies(); !reflect.DeepEqual(got, want) {
+		t.Errorf("PathDependencies() = %v, want %v", got, want)
+	}
+	if !reflect.DeepEqual(in, []repograph.PathDependency{a, c, b}) {
+		t.Errorf("WithPathDependencies mutated its input: %v", in)
+	}
+	if len(resolved.PathDependencies()) != 0 {
+		t.Errorf("WithPathDependencies mutated the receiver")
+	}
+	got := withPDs.PathDependencies()
+	got[0] = a
+	if again := withPDs.PathDependencies(); !reflect.DeepEqual(again, want) {
+		t.Errorf("PathDependencies() is not a copy: %v", again)
+	}
+
+	mu, err := repograph.NewModuleUnknownUnit(unitPath, "remote-source", nil, nil)
+	if err != nil {
+		t.Fatalf("NewModuleUnknownUnit: %v", err)
+	}
+	if _, err := mu.WithPathDependencies([]repograph.PathDependency{a}); err != nil {
+		t.Errorf("WithPathDependencies on module-unknown unit: unexpected error: %v", err)
+	}
+
+	cu, err := repograph.NewConfigUnknownUnit(unitPath, "broken")
+	if err != nil {
+		t.Fatalf("NewConfigUnknownUnit: %v", err)
+	}
+	if _, err := cu.WithPathDependencies([]repograph.PathDependency{a}); err == nil {
+		t.Errorf("WithPathDependencies on config-unknown unit: expected error, got nil")
+	}
+	if _, err := resolved.WithPathDependencies([]repograph.PathDependency{a, {}}); err == nil {
+		t.Errorf("WithPathDependencies with zero-value entry: expected error, got nil")
+	}
 }

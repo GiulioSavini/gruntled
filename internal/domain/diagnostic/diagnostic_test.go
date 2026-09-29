@@ -209,3 +209,17 @@ func TestCompareOrdersByUnitZeroFirst(t *testing.T) {
 		}
 	}
 }
+
+func TestCodeConstants(t *testing.T) {
+	cases := map[diagnostic.Code]string{
+		diagnostic.CodeUnknownOutput:           "GRT001",
+		diagnostic.CodeMissingDependencyTarget: "GRT002",
+		diagnostic.CodeDependencyCycle:         "GRT003",
+		diagnostic.CodeSyntaxError:             "GRT100",
+	}
+	for c, want := range cases {
+		if string(c) != want || !c.Valid() {
+			t.Errorf("code %q: want %q and valid", c, want)
+		}
+	}
+}
