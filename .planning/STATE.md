@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: milestone
 status: Phase 3 execution
-stopped_at: Completed 03-01-PLAN.md
-last_updated: "2026-09-29T08:57:06.203Z"
-last_activity: "2026-09-29 — 03-01 complete: analysis.UnknownOutputs (DIAG-03), checking.Check, strategy-over-bool MockMergeWithState"
+stopped_at: Completed 03-03-PLAN.md
+last_updated: "2026-09-29T12:00:00.000Z"
+last_activity: "2026-09-29 — 03-03 complete: gruntled check wired on stdlib flag (exit 0/1/2/3), 11 testscript scripts incl. DIAG-03 rows"
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 26
-  completed_plans: 20
-  percent: 77
+  completed_plans: 21
+  percent: 81
 ---
 
 # Project State
@@ -26,12 +26,12 @@ See: .planning/PROJECT.md (updated 2026-09-01)
 ## Current Position
 
 Phase: 3 of 4 (GRT001 Diagnostic & CLI) — executing
-Plan: 3 of 5 in current phase complete (03-01, 03-02, 03-04); remaining 03-03, 03-05
+Plan: 4 of 5 in current phase complete (03-01, 03-02, 03-03, 03-04); remaining 03-05
 Phase 2: complete — 14/14 plans, 02-VERIFICATION.md status: passed (re-verified 2026-09-29 after gap cycle 1)
 Status: Phase 3 execution
-Last activity: 2026-09-29 — 03-01 complete: analysis.UnknownOutputs (DIAG-03), checking.Check, strategy-over-bool MockMergeWithState
+Last activity: 2026-09-29 — 03-03 complete: gruntled check wired on stdlib flag (exit 0/1/2/3), 11 testscript scripts incl. DIAG-03 rows
 
-Progress: [████████░░] 77% (20 of 26 plans)
+Progress: [████████░░] 81% (21 of 26 plans)
 
 ## Performance Metrics
 
@@ -60,6 +60,7 @@ Progress: [████████░░] 77% (20 of 26 plans)
 *Updated after each plan completion*
 | Phase 02 P05 | 40 | 3 tasks | 7 files |
 | Phase 03 P01 | 20 | 3 tasks | 7 files |
+| Phase 03 P03 | 40 | 3 tasks | 16 files |
 
 ## Accumulated Context
 
@@ -99,6 +100,8 @@ Recent decisions affecting current work:
 - [Phase 03 P1]: GRT001 always SeverityError; mock_outputs only appends the masking suffix when mock keys, allowed commands and merge/zero-output facts are certain literals
 - [Phase 03 P1]: checking.Check returns *indexing.Error unchanged (exit 3 in the CLI); analyzer failures are *checking.Error{Stage: analyze}
 - [Phase 03 P1]: mock_outputs_merge_strategy_with_state, when present, decides MockMergeWithState alone (Terragrunt getMockOutputsMergeStrategy), reversing the Phase 2 either-true rule
+- [Phase 03 P3]: cmd/gruntled run(args, stdout, stderr) int is the only entry point; tests call it in-process and through testscript, where a gruntled-exit helper asserts the exact numeric exit code
+- [Phase 03 P3]: text mode with no diagnostics performs no stdout write; JSON always prints one document and no stderr summary
 
 ### Pending Todos
 
@@ -110,6 +113,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-09-29T08:56:49.318Z
-Stopped at: Completed 03-01-PLAN.md
+Last session: 2026-09-29T12:00:00.000Z
+Stopped at: Completed 03-03-PLAN.md
 Resume file: None

@@ -28,14 +28,14 @@ machinery to prove it correct on real code.
 ### Diagnostics
 
 - [x] **DIAG-01**: gruntled reports `GRT001` when a `dependency.X.outputs.Y` reference names an output the target module does not declare
-- [ ] **DIAG-02**: gruntled reports `GRT100` for HCL syntax errors, with file and line
+- [x] **DIAG-02**: gruntled reports `GRT100` for HCL syntax errors, with file and line
 - [x] **DIAG-03**: gruntled applies a documented, tested rule for whether `mock_outputs` on a dependency suppresses `GRT001`
-- [ ] **DIAG-04**: every diagnostic carries a repository-relative path — never an absolute path — plus line, column and a stable code
+- [x] **DIAG-04**: every diagnostic carries a repository-relative path — never an absolute path — plus line, column and a stable code
 
 ### CLI
 
-- [ ] **CLI-01**: `gruntled check [path]` analyses a repository and prints diagnostics in a human-readable form
-- [ ] **CLI-02**: `gruntled check` exits 0 when clean and non-zero when it reports an error, with documented exit codes
+- [x] **CLI-01**: `gruntled check [path]` analyses a repository and prints diagnostics in a human-readable form
+- [x] **CLI-02**: `gruntled check` exits 0 when clean and non-zero when it reports an error, with documented exit codes
 - [ ] **CLI-03**: `gruntled check` produces byte-identical output, in identical order, for identical input
 - [ ] **CLI-04**: gruntled makes no network calls and starts no external processes at any point
 - [ ] **CLI-05**: gruntled writes nothing inside the repository it analyses
@@ -116,11 +116,11 @@ Deferred. Tracked, not in the current roadmap.
 | GRAPH-04 | Phase 2 | Complete |
 | GRAPH-05 | Phase 2 | Complete |
 | DIAG-01 | Phase 3 | Complete |
-| DIAG-02 | Phase 3 | Pending |
+| DIAG-02 | Phase 3 | Complete |
 | DIAG-03 | Phase 3 | Complete |
-| DIAG-04 | Phase 3 | Pending |
-| CLI-01 | Phase 3 | Pending |
-| CLI-02 | Phase 3 | Pending |
+| DIAG-04 | Phase 3 | Complete |
+| CLI-01 | Phase 3 | Complete |
+| CLI-02 | Phase 3 | Complete |
 | CLI-03 | Phase 3 | Pending |
 | CLI-04 | Phase 3 | Pending |
 | CLI-05 | Phase 3 | Pending |

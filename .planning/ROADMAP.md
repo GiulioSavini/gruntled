@@ -95,7 +95,7 @@ Gap cycle 1 (from 02-REVIEW.md Round 2, G15..G22, and 02-VERIFICATION.md; wave 1
 Plans:
 - [x] 03-01-PLAN.md — Pure GRT001 analyzer with the DIAG-03 decision table, checking.Check use case, merge-strategy precedence fix
 - [x] 03-02-PLAN.md — Text/JSON/summary presenters in internal/interfaces, and the interfaces-external-deps and binary-no-net-no-exec arch rules with self-tests
-- [ ] 03-03-PLAN.md — `gruntled check` composition root on stdlib flag (exit codes 0/1/2/3, flags after path), and testscript end-to-end runs for GRT001/GRT100/DIAG-03
+- [x] 03-03-PLAN.md — `gruntled check` composition root on stdlib flag (exit codes 0/1/2/3, flags after path), and testscript end-to-end runs for GRT001/GRT100/DIAG-03
 - [x] 03-04-PLAN.md — docs/cli.md (usage, exit codes, JSON schema, DIAG-03 rule and rejected alternatives), and PROJECT.md Key Decisions and stack line
 - [ ] 03-05-PLAN.md — Synthrepo oracle, determinism across checkouts, no-writes, mutation diff, and help/docs sync tests; README Status/usage; corpus gate
 
@@ -126,7 +126,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. Domain Foundation & Test Substrate | 3/3 | Complete    | 2026-09-25 |
 | 2. Parsing & Graph Construction | 11/14 | Complete    | 2026-09-29 |
-| 3. GRT001 Diagnostic & CLI | 3/5 | In Progress | - |
+| 3. GRT001 Diagnostic & CLI | 4/5 | In Progress | - |
 | 4. Real-Repo Validation Experiment | 0/4 | Planned | - |
 
 ---
