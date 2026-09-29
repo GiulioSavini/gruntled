@@ -10,10 +10,10 @@ everything is wired together, and tells you when a `dependency.X.outputs.Y`
 reference points at an output that does not exist — before you run anything
 slow.
 
-**This project is mid-development.** `gruntled check` works end to end and
-reports `GRT001` and `GRT100`, but it has not been validated against a real
-corpus yet (that is Phase 4). See [Status](#status) below before you rely on
-it.
+**v0.1 is an early release.** `gruntled check` works end to end, reports
+`GRT001` and `GRT100`, and has been validated on a real public corpus (see
+[`docs/validation.md`](docs/validation.md)). See [Status](#status) below for
+its known limitations before you rely on it.
 
 ## The problem
 
@@ -104,8 +104,8 @@ than staying quiet.
 ## Status
 
 v0.1 is being built as a falsifiable experiment, in four phases (see
-[`.planning/ROADMAP.md`](.planning/ROADMAP.md)). Phases 1-3 are complete,
-Phase 4 hasn't started.
+[`.planning/ROADMAP.md`](.planning/ROADMAP.md)). All four phases are
+complete and verified.
 
 **Works today, tested:**
 - `gruntled check [--format text|json] [path]`, end to end: it opens the
@@ -128,10 +128,18 @@ Phase 4 hasn't started.
   output is byte-identical across checkout paths and working directories,
   and a read-only repository is left untouched.
 
+- The validation experiment ([`docs/validation.md`](docs/validation.md)):
+  zero false positives on a real public Terragrunt corpus, every injected
+  mutation caught, and faster than `terragrunt hcl validate` on the same
+  machine.
+
+**Known limitation:** to stay free of false positives, gruntled skips every
+unit that could be the target of an `include` it cannot resolve exactly. On
+repositories with dynamic include paths this can leave most units unchecked:
+on the secondary corpus `denis256/terragrunt-tests`, 719 of 1146 units are
+skipped this way and none of the 8 known broken references is reported.
+
 **Not built yet:**
-- The real-repository validation experiment: zero false positives and every
-  injected mutation caught on a public Terragrunt corpus, faster than
-  `terragrunt hcl validate` (Phase 4).
 - Everything under "Later" in the roadmap: the `gruntled watch` daemon,
   `gruntled blast` (Broken vs Impacted), diagnostics `GRT002`-`GRT006`,
   `gruntled graph --json`, SARIF output.

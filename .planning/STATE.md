@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: milestone
-status: Phase 4 execution
+status: verifying
 stopped_at: Completed 04-03-PLAN.md
-last_updated: "2026-09-29T11:20:00.000Z"
-last_activity: "2026-09-29 — 04-03 complete: VALID-06 PASS 3/3 benchmark runs (median ratio 1.99-2.81), docs/validation.md committed; milestone experiment PASSED, phase verification pending"
+last_updated: "2026-09-29T11:23:25.118Z"
+last_activity: "2026-09-29 — 04-03 benchmark (11aa6a7) and docs/validation.md (9415f21): VALID-02..06 all PASS; denis256 0 false positives, 0/8 recall (02-13 include-target limitation, v2 candidate)"
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 26
   completed_plans: 26
   percent: 100
@@ -25,12 +25,13 @@ See: .planning/PROJECT.md (updated 2026-09-01)
 
 ## Current Position
 
-Phase: 4 of 4 (Real-World Validation) — executing
+Phase: 4 of 4 (Real-World Validation) — complete
 Plan: 4 of 4 in current phase (04-01, 04-02, 04-03, 04-04 complete)
+Phase 4: complete — 4/4 plans, 04-VERIFICATION.md status: passed (2026-09-29)
 Phase 3: complete — 5/5 plans, 03-VERIFICATION.md status: passed (2026-09-29)
 Phase 2: complete — 14/14 plans, 02-VERIFICATION.md status: passed (re-verified 2026-09-29 after gap cycle 1)
-Status: All Phase 4 plans executed; phase verification pending (phase not yet marked complete)
-Last activity: 2026-09-29 — 04-03 benchmark (11aa6a7) and docs/validation.md (9415f21): VALID-02..06 all PASS; denis256 0 false positives, 0/8 recall (02-13 include-target limitation, v2 candidate)
+Status: Milestone v1 complete (all 4 phases verified)
+Last activity: 2026-09-29 — Phase 4 verified (5/5) and marked complete; milestone v1 done. Open v2 item: include-target rule costs recall (denis256 0/8)
 
 Progress: [██████████] 100% (26 of 26 plans)
 
