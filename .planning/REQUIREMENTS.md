@@ -47,7 +47,7 @@ machinery to prove it correct on real code.
 - [x] **VALID-03**: gruntled reports zero diagnostics on the unmutated primary corpus (`guidance-for-iso20022-messaging-workflows-on-aws`)
 - [x] **VALID-04**: gruntled reports every reference broken by a deliberate output rename or deletion injected into the corpus
 - [x] **VALID-05**: `terragrunt hcl validate` is confirmed not to report those injected mutations, evidencing the gap
-- [ ] **VALID-06**: a reproducible benchmark shows `gruntled check` faster than `terragrunt hcl validate` on the same repository
+- [x] **VALID-06**: a reproducible benchmark shows `gruntled check` faster than `terragrunt hcl validate` on the same repository
 
 ### Architecture
 
@@ -129,7 +129,7 @@ Deferred. Tracked, not in the current roadmap.
 | VALID-03 | Phase 4 | Complete |
 | VALID-04 | Phase 4 | Complete |
 | VALID-05 | Phase 4 | Complete |
-| VALID-06 | Phase 4 | Pending |
+| VALID-06 | Phase 4 | Complete |
 | ARCH-01 | Phase 1 | Complete |
 | ARCH-02 | Phase 1 | Complete |
 

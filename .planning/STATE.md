@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: milestone
 status: Phase 4 execution
-stopped_at: Completed 04-04-PLAN.md
-last_updated: "2026-09-29T10:42:55.000Z"
-last_activity: "2026-09-29 — 04-04 complete: denis256 secondary corpus PASSED (amended: 0 GRT001, no panic, deterministic; 8 known refs silenced by 02-13 include-target, 0/8 recall)"
+stopped_at: Completed 04-03-PLAN.md
+last_updated: "2026-09-29T11:20:00.000Z"
+last_activity: "2026-09-29 — 04-03 complete: VALID-06 PASS 3/3 benchmark runs (median ratio 1.99-2.81), docs/validation.md committed; milestone experiment PASSED, phase verification pending"
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 26
-  completed_plans: 25
-  percent: 96
+  completed_plans: 26
+  percent: 100
 ---
 
 # Project State
@@ -26,13 +26,13 @@ See: .planning/PROJECT.md (updated 2026-09-01)
 ## Current Position
 
 Phase: 4 of 4 (Real-World Validation) — executing
-Plan: 3 of 4 in current phase (04-01, 04-02, 04-04 complete)
+Plan: 4 of 4 in current phase (04-01, 04-02, 04-03, 04-04 complete)
 Phase 3: complete — 5/5 plans, 03-VERIFICATION.md status: passed (2026-09-29)
 Phase 2: complete — 14/14 plans, 02-VERIFICATION.md status: passed (re-verified 2026-09-29 after gap cycle 1)
-Status: Phase 4 in progress (04-03 remaining)
-Last activity: 2026-09-29 — 04-04 denis256 secondary-corpus check passed under orchestrator amendment (66da448); recall cost of 02-13 recorded for 04-03
+Status: All Phase 4 plans executed; phase verification pending (phase not yet marked complete)
+Last activity: 2026-09-29 — 04-03 benchmark (11aa6a7) and docs/validation.md (9415f21): VALID-02..06 all PASS; denis256 0 false positives, 0/8 recall (02-13 include-target limitation, v2 candidate)
 
-Progress: [█████████░] 96% (25 of 26 plans)
+Progress: [██████████] 100% (26 of 26 plans)
 
 ## Performance Metrics
 
@@ -63,6 +63,7 @@ Progress: [█████████░] 96% (25 of 26 plans)
 | Phase 03 P01 | 20 | 3 tasks | 7 files |
 | Phase 03 P03 | 40 | 3 tasks | 16 files |
 | Phase 03 P05 | 14 | 2 tasks | 2 files |
+| Phase 04 P03 | 35 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -105,6 +106,9 @@ Recent decisions affecting current work:
 - [Phase 03 P3]: cmd/gruntled run(args, stdout, stderr) int is the only entry point; tests call it in-process and through testscript, where a gruntled-exit helper asserts the exact numeric exit code
 - [Phase 03 P3]: text mode with no diagnostics performs no stdout write; JSON always prints one document and no stderr summary
 - [Phase 03 P5]: CLI e2e tests run in-process over synthrepo trees and compare decoded JSON, importing no application internals
+- [Phase 04 P3]: VALID-06 PASS in 3 of 3 process-vs-process runs (terragrunt/gruntled median 2.81, 2.13, 1.99) on a loaded WSL2 machine (4 CPUs); all runs reported, none discarded
+- [Phase 04 P3]: docs/validation.md is the single record of VALID-02..06; TestValidationDocPins keeps its pins and denis256 positions in step with the tests
+- [Phase 04 P3]: denis256 recall 0/8 caused by the 02-13 include-target rule is documented as a known limitation and v2 refinement candidate
 
 ### Pending Todos
 
@@ -116,6 +120,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-09-29T18:00:00.000Z
-Stopped at: Completed 03-05-PLAN.md
+Last session: 2026-09-29T11:20:00.000Z
+Stopped at: Completed 04-03-PLAN.md
 Resume file: None
