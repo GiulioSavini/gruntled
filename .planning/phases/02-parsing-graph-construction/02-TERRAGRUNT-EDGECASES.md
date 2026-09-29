@@ -49,6 +49,8 @@ REQUIREMENTS.md` (PARSE-01..06, GRAPH-01..05), `.planning/research/PITFALLS.md`
 | SRC-13 | Local path resolving to a nonexistent directory | Yes | Report | No |
 | SRC-14 | Malformed or in-file duplicate `generate` block (`invalid-generate`, G9) | No | Unknown | No |
 | SRC-15 | Unit directory unlistable during the overlay check (`module-file-unreadable`, G6) | No | Unknown | No |
+| SRC-16 | Literal `generate` contents containing "output" or a `\u` escape anywhere (`generate-may-declare-outputs`, G19) | No | Unknown | No |
+| SRC-17 | Module with both `x.tf` and `x.tofu` (or `.tf.json`/`.tofu.json`) (union surface, G20) | Yes | Resolve | No |
 | INC-01 | Basic `include` via `find_in_parent_folders()` | Yes | Resolve | Yes |
 | INC-02 | `include` with explicit literal `path` | Yes | Resolve | Yes |
 | INC-03 | Multiple `include` blocks, distinct labels | Yes | Resolve | Yes |
@@ -62,6 +64,9 @@ REQUIREMENTS.md` (PARSE-01..06, GRAPH-01..05), `.planning/research/PITFALLS.md`
 | INC-11 | `read_terragrunt_config()` in `locals` (not gating source/config_path) | Yes (structurally) | Resolve (out of scope for the traversal it produces) | No |
 | INC-12 | Parent config with its own `dependency` blocks | Yes | Resolve | No |
 | INC-13 | Include of a `.json` file, explicit or via `find_in_parent_folders()` (`include-json-unsupported`, G5) | No | Unknown | No |
+| INC-14 | Include target reached through a symlinked dir, file or chain (G15) | Yes | Unknown (include-target on the real parent) | No |
+| INC-15 | Dynamic include path (`get_repo_root()`, `get_env`, `local.*`, conditional) (`include-dynamic-path`, G16) | No | Unknown | No |
+| INC-16 | Includer whose includes are unknowable or fail (G16) | No | Unknown (ancestors include-target) | No |
 | DEP-01 | Basic `dependency` with literal `config_path` | Yes | Resolve | Yes |
 | DEP-02 | `config_path` via pure path function(s) | Yes | Resolve | Yes |
 | DEP-03 | `config_path` via ambiguous function composition | No | Unknown | No |
@@ -103,6 +108,8 @@ REQUIREMENTS.md` (PARSE-01..06, GRAPH-01..05), `.planning/research/PITFALLS.md`
 | STACK-10 | Custom `download_dir` (literal vs env-driven) | Partial | Resolve (literal) / documented gap (env) | No |
 | STACK-11 | Unit or include file over 4 MiB or nested over 1000 levels (`config-too-large` / `config-too-deep`, G7b) | No | Unknown | No |
 | STACK-12 | Module file over 4 MiB or nested over 1000 levels (`module-file-too-large` / `module-file-too-deep`, G7a) | No | Unknown | No |
+| STACK-13 | Ternary chains past 1000 levels or over 10,000 operator/dot/index links (`config-too-deep` / `module-file-too-deep`, G17) | No | Unknown | No |
+| STACK-14 | Non-regular files: FIFO, socket, device (G18) | No | Unknown / skipped | No |
 
 ---
 
@@ -381,6 +388,41 @@ generate "p" { ... }       # same label twice in one file
   `readDirFailFS`); tfsurface's `TestReadSurfaceLimitPrecedence` for the reader variant.
 - Generator: No.
 
+### SRC-16 — Literal `generate` contents that may declare an output
+
+```hcl
+generate "o" {
+  path     = "o.tf"
+  contents = <<EOT
+/* generated */ output "id" { value = 1 }
+EOT
+}
+```
+
+- Static resolution: No. The old line-start pattern missed an output block after a
+  comment or on the same line as another block.
+- Behaviour: **Unknown**. The module is module-unknown `generate-may-declare-outputs`
+  (`ReasonGenerateMayDeclareOutputs`, gap G19, 02-13) when the literal contents contain
+  "output" or a `\u` escape anywhere. A block type in HCL native syntax cannot be
+  escaped; in JSON the key can be written with `\u` escapes. This over-approximates on
+  purpose: a word or comment containing "output" also counts. Measured delta against the
+  old pattern: 0 more module-unknown units on denis256 (14 of 1146) and gc-articles
+  (8 of 16).
+- Tests: `TestGenerateMayDeclareOutputsLiteral`, `TestGenerateOutputG19Repro`.
+- Generator: No.
+
+### SRC-17 — Module with both `.tf` and `.tofu` files
+
+- Static resolution: Yes. gruntled does not know whether terraform or tofu runs the
+  module, so it reads both views.
+- Behaviour: **Resolve**. The surface is the union of the `.tf` and `.tofu` views
+  (including `.tf.json`/`.tofu.json`). A broken file in either view makes the module
+  unknown (gap G20, 02-12).
+- Tests: `TestReadSurfaceTfTofuUnion`, `TestReadSurfaceTfTofuG20Repro`,
+  `TestReadSurfaceTfTofuJSONUnion`, `TestReadSurfaceTfTofuVariablesUnion`,
+  `TestReadSurfaceTfTofuShadowedSyntaxError`.
+- Generator: No.
+
 ## 2. `include` / `read_terragrunt_config`
 
 ### INC-01 — Basic `include` via `find_in_parent_folders()`
@@ -636,6 +678,58 @@ include "root" {
   GRT100.
 - Tests: `TestUnknownReasons` rows `include-json-unsupported/explicit` and
   `/find-in-parent` (both assert no diagnostics).
+- Generator: No.
+
+### INC-14 — Include target reached through a symlink
+
+```hcl
+# live/x/app/terragrunt.hcl, where live/link -> parent
+include { path = "../../link/terragrunt.hcl" }
+```
+
+- Static resolution: Yes. Include targets are compared by canonical in-repo path
+  (`canonicalPath`), so a symlinked directory, a symlinked file or a chain of links still
+  marks the real parent.
+- Behaviour: **Unknown** for the parent: `live/parent` is config-unknown
+  `include-target` (gap G15, 02-13). An alias escaping the repository makes the includer
+  `include-outside-repo`; an unresolvable one (loop, backslash target, Lstat/ReadLink
+  error) makes it `unreadable-config`.
+- Tests: `TestCanonicalPath`, `TestIncludeTargetSymlinkedDir`,
+  `TestIncludeTargetSymlinkedFile`, `TestIncludeTargetSymlinkChain`.
+- Generator: No.
+
+### INC-15 — Dynamic include path
+
+```hcl
+include { path = "${get_repo_root()}/live/terragrunt.hcl" }
+include { path = get_env("CI", "") == "true" ? "ci.hcl" : "local.hcl" }
+include { path = local.root }
+```
+
+- Static resolution: No. `get_repo_root()`, `get_path_to_repo_root()`, `get_env`,
+  `local.*` and conditionals are not evaluated in include scope.
+- Behaviour: **Unknown**. The includer is config-unknown `include-dynamic-path`. Its
+  ancestors are marked `include-target`. When the file name is not fixed, or is
+  `terragrunt.hcl`, every include-free unit is marked too (`dynamicIncludeFileNames`,
+  gap G16, 02-13).
+- Tests: `TestIncludeTargetG16RepoRoot`, `TestIncludeTargetG16PathToRepoRoot`,
+  `TestIncludeTargetDynamicSibling`, `TestIncludeTargetDynamicFixedName`,
+  `TestIncludeTargetDynamicConditional`, `TestIncludeTargetDynamicLocal`,
+  `TestDynamicIncludeFileNames`.
+- Generator: No.
+
+### INC-16 — Includer whose includes are unknowable or fail
+
+- Static resolution: No. A unit with a syntax error, a JSON config, an autoinclude file,
+  an oversize or overdeep file, an invalid include decl, or an include that fails to
+  resolve cannot say which parent it includes.
+- Behaviour: **Unknown**. Every strict ancestor directory of that unit is marked
+  `include-target`, because `find_in_parent_folders` reaches every ancestor. Every decl
+  is still evaluated for marking, so a decl after a failing one still marks its target
+  (gap G16, 02-13).
+- Tests: `TestIncludeTargetG16SyntaxError`, `TestIncludeTargetG16InvalidDecls`,
+  `TestIncludeTargetMarkedPastFirstFailure`, `TestIncludeTargetUnknowableIncludes`,
+  `TestIncludeTargetNotFoundMarksAncestors`, `TestIncludeTargetPrecedence`.
 - Generator: No.
 
 ## 3. `dependency` / `dependencies` blocks
@@ -1443,6 +1537,29 @@ false positive". Tests: `TestUnknownReasons` row `include-target`,
 `TestIncludeTargetKeepsEarlierConfigUnknownReason` and the env-gated
 `TestIncludeTargetSecretCorpus`.
 
+**Revised by gaps G15/G16 (02-13):** targets are matched by canonical in-repo path, and
+parents are also marked for failing and dynamic includers. A unit is `include-target`
+under any of three rules: (1) an exact canonical match of some include's file
+(`TestIncludeTargetSymlinkedDir`, `TestIncludeTargetSymlinkedFile`,
+`TestIncludeTargetSymlinkChain`); (2) a strict ancestor of a unit whose includes are
+unknowable or failed (`TestIncludeTargetUnknowableIncludes`,
+`TestIncludeTargetNotFoundMarksAncestors`, `TestIncludeTargetG16SyntaxError`); (3) every
+include-free unit, once some include's file name is dynamic or `terragrunt.hcl`
+(`TestIncludeTargetDynamicSibling`, `TestIncludeTargetDynamicLocal`). The residuals:
+
+- (a) a unit whose includes are unknowable (syntax error, JSON config, oversize or
+  overdeep, unreadable) and whose include would have named a NON-ancestor unit by
+  explicit path: only ancestors are marked. This was not escalated to the include-free
+  rule on purpose: a mid-edit syntax error in any unit would otherwise wipe out coverage
+  of the whole repository while the user types.
+- (b) a dynamic include whose file name is fixed to something other than
+  `terragrunt.hcl`, but which is a symlink to a non-ancestor unit's `terragrunt.hcl`.
+- (c) the coverage cost of the include-free rule: one dynamic include naming
+  `terragrunt.hcl`, or with an unfixed name, makes every include-free unit
+  `include-target`. Measured on denis256: include-target units go from 53 to 719 of 1146,
+  which also hides that corpus's two genuine GRT001 findings (`issue-2631`,
+  `mocks/module1`). The primary corpus has no include blocks and is unchanged.
+
 ### STACK-10 — Custom `download_dir`
 
 ```hcl
@@ -1513,6 +1630,34 @@ inputs = { x = ((((((( ... 200000 levels ... ))))))) }
 
 ---
 
+### STACK-13 — Pathologically deep or long expressions
+
+- Static resolution: No. A ternary chain nesting past 1000 levels (in either the
+  condition or the result shape) or an expression chaining more than 10,000
+  operator/dot/index links would build a huge AST or crash the parser.
+- Behaviour: **Unknown**. The file is refused before parsing: `config-too-deep` for a
+  unit or include file, `module-file-too-deep` for a module file (gap G17, 02-12,
+  `hclconv.MaxExpressionChain` = 10,000). The lexing memory peak for the refused
+  2,000,000-link repro is not recorded in 02-12-SUMMARY.md.
+- Tests: `TestDeepTernaryNoCrash`, `TestDeepTernaryIncludeNoCrash`,
+  `TestLongOperatorChainRefused`, `TestCheckNativeDepthTernary`,
+  `TestCheckNativeDepthChain`, `TestReadSurfaceDeepTernary`, `TestReadSurfaceLongChain`,
+  and the `GRUNTLED_HEAVY_TESTS=1`-gated `TestHeavyG17Reproductions`.
+- Generator: No.
+
+### STACK-14 — Non-regular files (FIFO, socket, device)
+
+- Static resolution: No. Opening a FIFO for reading blocks until a writer appears.
+- Behaviour: **Unknown**, and nothing blocks (gap G18, 02-12). A non-regular
+  `terragrunt.hcl` is never a unit. As an include target it is `include-not-found`. As a
+  module file it gives `module-file-unreadable`. Every reader refuses the file at Stat
+  time, before Open, and re-checks the open handle. Residual: a file swapped for a FIFO
+  between the Stat and the Open can still block that one read.
+- Tests: `TestReadFileLimitedFIFO`, `TestBuildWithFIFOFiles`, `TestRealFSFIFOModuleFile`,
+  `TestDiscoverUnitsSkipsFIFO`, `TestDiscoverUnitsSkipsNonRegularMapFS`,
+  `TestReadSurfaceNonRegularModuleFile`.
+- Generator: No.
+
 ## Cross-cutting notes for implementation
 
 - **Extraction is a separate walk from graph construction.** Building the
@@ -1562,3 +1707,14 @@ The 02-REVIEW gaps and the plan that closed each:
 - G12 (zero values invalid everywhere in repograph): 02-08.
 - G13, G14 (architecture check: unpoliced `internal/*` dirs, build-constrained
   files): 02-09.
+
+### Gap closure (02-12..02-14)
+
+- G15 (include target through a symlink): 02-13. INC-14, STACK-09 revision.
+- G16 (parents of failing and dynamic includers): 02-13. INC-15, INC-16, STACK-09
+  revision.
+- G17 (deep ternary nesting, long operator chains): 02-12. STACK-13.
+- G18 (non-regular files): 02-12. STACK-14.
+- G19 (generate output detector): 02-13. SRC-16.
+- G20 (tf/tofu union surface): 02-12. SRC-17.
+- G21, G22 (architecture check: Go import scanner, single-module rule): 02-14.

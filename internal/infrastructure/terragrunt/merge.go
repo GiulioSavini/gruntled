@@ -2,7 +2,6 @@ package terragrunt
 
 import (
 	"io/fs"
-	"regexp"
 	"sort"
 	"strings"
 
@@ -248,9 +247,15 @@ func sortRefs(refs []repograph.Reference) {
 // reference), or a template containing a non-literal part (an
 // interpolation) all count as "may declare outputs" -- gruntled never
 // evaluates the content to find out. A template whose parts are ALL string
-// literals (a heredoc with only literal text qualifies) is scanned for the
-// literal `output` block/attribute shape; only a positive match there
-// counts.
+// literals (a heredoc with only literal text qualifies) counts when its
+// text contains "output" or a \u escape anywhere. A block type in HCL
+// native syntax is an identifier and cannot be escaped, so any output block
+// in native generated text contains the substring "output"; in JSON the key
+// can be written with \u escapes, hence the second check. The rule
+// over-approximates on purpose: any word or comment containing "output"
+// makes the module unknown, which can only cost coverage, never produce a
+// false GRT001 (02-REVIEW G19: a comment before the block defeated the old
+// line-start pattern).
 func generateMayDeclareOutputs(contents hcl.Expression) bool {
 	if contents == nil {
 		return true
@@ -270,13 +275,9 @@ func generateMayDeclareOutputs(contents hcl.Expression) bool {
 		}
 		sb.WriteString(lit.Val.AsString())
 	}
-	return generateOutputPatternRE.MatchString(sb.String())
+	text := sb.String()
+	return strings.Contains(text, "output") || strings.Contains(text, `\u`)
 }
-
-// generateOutputPatternRE matches a literal `output` block header
-// ("output ..." at the start of a line, HCL syntax) or a JSON-style
-// "output": key, inside a generate block's literal contents.
-var generateOutputPatternRE = regexp.MustCompile(`(?m)^\s*output\b|"output"\s*:`)
 
 // mergeGenerateUnknownReason walks files in precedence order and returns
 // ReasonGenerateMayDeclareOutputs the first time an effective generate

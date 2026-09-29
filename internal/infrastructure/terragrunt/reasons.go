@@ -137,7 +137,8 @@ const (
 	// ReasonGenerateMayDeclareOutputs means an effective generate block's
 	// contents are not provably free of an `output` declaration: contents
 	// missing, not a plain string template, or a literal template whose
-	// text matches the output-declaration pattern.
+	// text contains "output" or a \u escape anywhere (02-REVIEW G19; the
+	// check over-approximates on purpose and only ever costs coverage).
 	ReasonGenerateMayDeclareOutputs = "generate-may-declare-outputs"
 	// ReasonUnitDirOverlaysModule means the unit's source points somewhere
 	// other than its own directory, and the unit directory itself holds a
