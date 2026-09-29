@@ -170,10 +170,12 @@ type DependencyOptions struct {
 	// MockOutputs is the key set of `mock_outputs`. AbsentNames() when the
 	// attribute itself is absent from the block.
 	MockOutputs NameList
-	// MockMergeWithState is true when `mock_outputs_merge_with_state` is a
-	// literal true, or when `mock_outputs_merge_strategy_with_state` is a
-	// literal value other than "no_merge". Terragrunt's default when both
-	// are absent is false.
+	// MockMergeWithState is whether mocks are merged with state.
+	// `mock_outputs_merge_strategy_with_state`, when present, decides: a
+	// literal "no_merge" is false, "shallow" and "deep_map_only" are true,
+	// and anything else is Unknown. Only otherwise the deprecated
+	// `mock_outputs_merge_with_state` bool decides. Terragrunt's default
+	// when both are absent is false.
 	MockMergeWithState Tristate
 	// MockAllowedCommands is the list of
 	// `mock_outputs_allowed_terraform_commands`. AbsentNames() when the

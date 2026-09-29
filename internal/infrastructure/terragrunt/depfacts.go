@@ -72,37 +72,25 @@ func mockOutputKeys(body *hclsyntax.Body) repograph.NameList {
 	return names
 }
 
-// mockMergeWithState combines mock_outputs_merge_with_state and
-// mock_outputs_merge_strategy_with_state exactly as Terragrunt reads them
-// together: the fact is True when EITHER attribute literally says so, a
-// literal True from either one is never overridden by the other being
-// non-literal, and the fact is Unknown only when neither is literally True
-// and at least one of them is present but not literal (or not one of the
-// three strategy values this domain recognizes).
+// mockMergeWithState reads mock_outputs_merge_strategy_with_state and the
+// deprecated mock_outputs_merge_with_state the way Terragrunt's
+// getMockOutputsMergeStrategy does: the strategy, when present, overrides
+// the bool entirely. A present strategy decides alone (a recognized literal
+// through mergeStrategyState, anything else Unknown); otherwise the bool
+// decides when present (Unknown when not literal), and the fact is False
+// when neither attribute is present.
 func mockMergeWithState(body *hclsyntax.Body) repograph.Tristate {
-	merge := repograph.TristateFalse
-	if attr, ok := body.Attributes["mock_outputs_merge_with_state"]; ok {
-		merge = literalBool(attr.Expr)
-	}
-
-	strategy := repograph.TristateFalse
 	if attr, ok := body.Attributes["mock_outputs_merge_strategy_with_state"]; ok {
 		s, litOK := literalString(attr.Expr)
 		if !litOK {
-			strategy = repograph.TristateUnknown
-		} else {
-			strategy = mergeStrategyState(s)
+			return repograph.TristateUnknown
 		}
+		return mergeStrategyState(s)
 	}
-
-	switch {
-	case merge == repograph.TristateTrue || strategy == repograph.TristateTrue:
-		return repograph.TristateTrue
-	case merge == repograph.TristateUnknown || strategy == repograph.TristateUnknown:
-		return repograph.TristateUnknown
-	default:
-		return repograph.TristateFalse
+	if attr, ok := body.Attributes["mock_outputs_merge_with_state"]; ok {
+		return literalBool(attr.Expr)
 	}
+	return repograph.TristateFalse
 }
 
 // mergeStrategyState maps mock_outputs_merge_strategy_with_state's three
