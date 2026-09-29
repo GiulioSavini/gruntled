@@ -425,6 +425,5 @@ bash scripts/test-check-architecture.sh
 
 ## License
 
-`.planning/PROJECT.md` records Apache-2.0 as the intended license, matching
-OpenTofu and Terragrunt, but no `LICENSE` file has been added to this
-repository yet.
+Licensed under the Apache License, Version 2.0 (the same license as OpenTofu
+and Terragrunt). See [`LICENSE`](LICENSE).
