@@ -1,0 +1,50 @@
+# 0: analysis completed, no error diagnostics
+exec gruntled-exit 0 check clean
+! stdout .
+stderr '^gruntled: checked 2 units \(0 unknown\): 0 errors, 0 warnings$'
+
+# 1: at least one error diagnostic
+exec gruntled-exit 1 check broken
+stdout '^app/terragrunt.hcl:4:17: GRT001 '
+
+# 2: usage errors
+exec gruntled-exit 2 check a b
+stderr 'more than one path given'
+! stdout .
+exec gruntled-exit 2 check --bogus
+stderr 'flag provided but not defined'
+! stdout .
+exec gruntled-exit 2 check . --format yaml
+stderr 'invalid --format "yaml" \(want text or json\)'
+! stdout .
+
+# 3: analysis could not run
+exec gruntled-exit 3 check missing/
+stderr 'cannot open repository'
+! stdout .
+exec gruntled-exit 3 check file.txt
+stderr 'cannot open repository'
+! stdout .
+
+-- file.txt --
+not a directory
+-- clean/vpc/terragrunt.hcl --
+-- clean/vpc/main.tf --
+output "vpc_id" { value = "x" }
+-- clean/app/terragrunt.hcl --
+dependency "vpc" {
+  config_path = "../vpc"
+}
+inputs = { id = dependency.vpc.outputs.vpc_id }
+-- clean/app/main.tf --
+variable "id" {}
+-- broken/vpc/terragrunt.hcl --
+-- broken/vpc/main.tf --
+output "vpc_id" { value = "x" }
+-- broken/app/terragrunt.hcl --
+dependency "vpc" {
+  config_path = "../vpc"
+}
+inputs = { id = dependency.vpc.outputs.vpc_idd }
+-- broken/app/main.tf --
+variable "id" {}

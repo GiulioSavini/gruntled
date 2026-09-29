@@ -1,0 +1,40 @@
+# flags after the path, --format=, and single-dash flags give identical output
+cd repo
+exec gruntled-exit 1 check . --format json
+cp stdout $WORK/a.json
+exec gruntled-exit 1 check --format=json .
+cp stdout $WORK/b.json
+exec gruntled-exit 1 check -format json .
+cp stdout $WORK/c.json
+cmp $WORK/a.json $WORK/b.json
+cmp $WORK/a.json $WORK/c.json
+stdout '"code": "GRT001"'
+
+# "--" ends flag parsing
+exec gruntled-exit 1 check -- ./
+stdout '^app/terragrunt.hcl:4:17: GRT001 '
+
+# "--" before a path after a flag analyses that path
+cd $WORK
+exec gruntled-exit 0 check --format json -- sub
+stdout '"units": 1'
+
+# a second positional after a trailing flag is still a usage error
+cd repo
+exec gruntled-exit 2 check . --format json extra
+stderr 'more than one path given'
+! stdout .
+
+-- repo/vpc/terragrunt.hcl --
+-- repo/vpc/main.tf --
+output "vpc_id" { value = "x" }
+-- repo/app/terragrunt.hcl --
+dependency "vpc" {
+  config_path = "../vpc"
+}
+inputs = { id = dependency.vpc.outputs.vpc_idd }
+-- repo/app/main.tf --
+variable "id" {}
+-- sub/solo/terragrunt.hcl --
+-- sub/solo/main.tf --
+output "x" { value = "x" }

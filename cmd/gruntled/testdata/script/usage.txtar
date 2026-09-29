@@ -1,0 +1,22 @@
+# no arguments: top-level usage, exit 2
+exec gruntled-exit 2
+stderr 'usage: gruntled <command>'
+! stdout .
+
+# top-level help: exit 0
+exec gruntled-exit 0 -h
+stderr 'usage: gruntled <command>'
+exec gruntled-exit 0 --help
+exec gruntled-exit 0 help
+
+# check help: exit 0 with the exit-code table
+exec gruntled-exit 0 check -h
+stderr '^usage: gruntled check \[--format text\|json\] \[path\]$'
+stderr '3  analysis could not run'
+! stdout .
+
+# unknown command: exit 2
+exec gruntled-exit 2 frobnicate
+stderr 'unknown command "frobnicate"'
+stderr 'usage: gruntled <command>'
+! stdout .
