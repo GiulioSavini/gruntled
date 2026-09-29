@@ -4,6 +4,9 @@ import (
 	"io/fs"
 	"path"
 	"strings"
+
+	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/hclsyntax"
 )
 
 // canonErr is canonicalPath's outcome.
@@ -106,16 +109,41 @@ func splitPath(p string) []string {
 
 // includeTargets accumulates, across one LoadUnits call, which unit
 // directories are parent configs of some other unit (LoadUnits step 13,
-// ReasonIncludeTarget).
+// ReasonIncludeTarget). A unit is a target under any of three rules:
+//
+//  1. exact: some unit's include resolved, by canonical path, to its
+//     terragrunt.hcl;
+//  2. ancestor: it is a strict ancestor directory of a unit whose includes
+//     are unknowable or failed, since find_in_parent_folders reaches every
+//     ancestor;
+//  3. include-free: some include's path is dynamic and its file name is
+//     unknown or "terragrunt.hcl", so any unit with no include of its own
+//     could be the parent.
+//
+// Every rule only ever fails toward unknown; see the catalogue for the
+// residuals.
 type includeTargets struct {
 	// exact holds every include file path (lexical and canonical) that
 	// some unit's include resolved to an existing regular in-repo file.
 	exact map[string]bool
+	// ancestors holds every strict ancestor directory of a unit whose
+	// includes are unknowable or failed.
+	ancestors map[string]bool
+	// anyIncludeFree is set once some include's target file name is
+	// dynamic or "terragrunt.hcl".
+	anyIncludeFree bool
+	// includeFree holds every unit whose own terragrunt.hcl parsed with
+	// zero include blocks.
+	includeFree map[string]bool
 }
 
 // newIncludeTargets returns an empty accumulator.
 func newIncludeTargets() *includeTargets {
-	return &includeTargets{exact: map[string]bool{}}
+	return &includeTargets{
+		exact:       map[string]bool{},
+		ancestors:   map[string]bool{},
+		includeFree: map[string]bool{},
+	}
 }
 
 // markExact records paths as include targets.
@@ -125,8 +153,88 @@ func (t *includeTargets) markExact(paths ...string) {
 	}
 }
 
+// markAncestors records every strict ancestor directory of unitDir, up to
+// and including ".", as a target.
+func (t *includeTargets) markAncestors(unitDir string) {
+	for d := unitDir; d != "."; {
+		d = path.Dir(d)
+		t.ancestors[d] = true
+	}
+}
+
+// markAllIncludeFree makes every include-free unit a target.
+func (t *includeTargets) markAllIncludeFree() {
+	t.anyIncludeFree = true
+}
+
+// noteIncludeFree records that unitDir's own terragrunt.hcl has no include
+// block.
+func (t *includeTargets) noteIncludeFree(unitDir string) {
+	t.includeFree[unitDir] = true
+}
+
 // isTarget reports whether unitDir's own terragrunt.hcl is an include
-// target.
+// target under any of the three rules.
 func (t *includeTargets) isTarget(unitDir string) bool {
-	return t.exact[path.Join(unitDir, "terragrunt.hcl")]
+	return t.exact[path.Join(unitDir, "terragrunt.hcl")] ||
+		t.ancestors[unitDir] ||
+		(t.anyIncludeFree && t.includeFree[unitDir])
+}
+
+// dynamicIncludeFileNames returns the file names an include path
+// expression can end in without evaluating it, and ok=false when the name
+// itself is not fixed.
+//
+// Only the file name matters. Units are exactly the files named
+// terragrunt.hcl, and a dynamic prefix can point anywhere in the repo, so a
+// fixed directory suffix proves nothing (a symlink can alias it). A fixed
+// file name other than terragrunt.hcl, on the other hand, can reach a unit
+// only through a symlinked file, which is the documented residual.
+//
+// A literal string, or a template made only of literal strings, gives the
+// base name of its text. A template whose LAST part is a literal containing
+// "/" gives the text after the last "/", which must be non-empty. A
+// conditional gives the union of both branches, and is ok only if both are.
+// Anything else is not ok.
+func dynamicIncludeFileNames(expr hcl.Expression) ([]string, bool) {
+	switch e := expr.(type) {
+	case *hclsyntax.LiteralValueExpr:
+		text, ok := literalString(e)
+		if !ok {
+			return nil, false
+		}
+		return nonEmptyBase(text)
+	case *hclsyntax.TemplateExpr:
+		if len(e.Parts) == 0 {
+			return nil, false
+		}
+		if text, ok := literalString(e); ok {
+			return nonEmptyBase(text)
+		}
+		last, ok := literalString(e.Parts[len(e.Parts)-1])
+		if !ok {
+			return nil, false
+		}
+		i := strings.LastIndex(last, "/")
+		if i < 0 || i == len(last)-1 {
+			return nil, false
+		}
+		return []string{last[i+1:]}, true
+	case *hclsyntax.ConditionalExpr:
+		a, okA := dynamicIncludeFileNames(e.TrueResult)
+		b, okB := dynamicIncludeFileNames(e.FalseResult)
+		if !okA || !okB {
+			return nil, false
+		}
+		return append(a, b...), true
+	}
+	return nil, false
+}
+
+// nonEmptyBase returns the base name of p, or ok=false when p names no file.
+func nonEmptyBase(p string) ([]string, bool) {
+	if p == "" || strings.HasSuffix(p, "/") {
+		return nil, false
+	}
+	return []string{path.Base(p)}, true
 }

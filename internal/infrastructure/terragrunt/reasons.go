@@ -74,6 +74,12 @@ const (
 	// Targets are matched by canonical in-repo path (02-REVIEW G15): an
 	// include that reaches the parent through a symlinked directory, a
 	// symlinked file or a chain of links still marks the real parent.
+	// A unit is a target under any of three rules (02-REVIEW G15/G16):
+	// an exact canonical match of some include's file; a strict ancestor
+	// of a unit whose includes are unknowable or failed; or, once some
+	// include's file name is dynamic or terragrunt.hcl, every include-free
+	// unit. Each rule only fails toward unknown; the catalogue
+	// (02-TERRAGRUNT-EDGECASES.md) lists the residuals.
 	// Catalogue STACK-09 ("included and independently runnable") becomes a
 	// documented false negative. An earlier config-unknown reason on the
 	// same unit is kept (the first check that applies always wins).

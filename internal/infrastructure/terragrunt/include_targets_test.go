@@ -2,8 +2,12 @@ package terragrunt
 
 import (
 	"io/fs"
+	"slices"
 	"testing"
 	"testing/fstest"
+
+	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/hclsyntax"
 )
 
 // TestCanonicalPath pins canonicalPath over fstest.MapFS symlink entries:
@@ -129,5 +133,32 @@ func TestCanonicalPath(t *testing.T) {
 				t.Fatalf("canonicalPath(%q) = %q, want %q", tc.in, got, tc.wantPath)
 			}
 		})
+	}
+}
+
+func TestDynamicIncludeFileNames(t *testing.T) {
+	cases := []struct {
+		src   string
+		names []string
+		ok    bool
+	}{
+		{`"${get_repo_root()}/live/terragrunt.hcl"`, []string{"terragrunt.hcl"}, true},
+		{`"${x}/_envcommon/vpc.hcl"`, []string{"vpc.hcl"}, true},
+		{`"${x}terragrunt.hcl"`, nil, false},
+		{`c ? "ci.hcl" : "a/local.hcl"`, []string{"ci.hcl", "local.hcl"}, true},
+		{`c ? "ci.hcl" : "${x}"`, nil, false},
+		{`local.root`, nil, false},
+		{`find_in_parent_folders(local.n)`, nil, false},
+		{`"${x}/"`, nil, false},
+	}
+	for _, c := range cases {
+		expr, diags := hclsyntax.ParseExpression([]byte(c.src), "t.hcl", hcl.InitialPos)
+		if diags.HasErrors() {
+			t.Fatalf("ParseExpression(%s): %v", c.src, diags)
+		}
+		names, ok := dynamicIncludeFileNames(expr)
+		if ok != c.ok || !slices.Equal(names, c.names) {
+			t.Errorf("dynamicIncludeFileNames(%s) = (%v, %v), want (%v, %v)", c.src, names, ok, c.names, c.ok)
+		}
 	}
 }

@@ -2,9 +2,12 @@ package terragrunt
 
 import (
 	"os"
+	"strings"
 	"testing"
 
+	"github.com/GiulioSavini/gruntled/internal/application/indexing"
 	"github.com/GiulioSavini/gruntled/internal/domain/repograph"
+	"github.com/GiulioSavini/gruntled/internal/infrastructure/hclconv"
 )
 
 // TestIncludeTargetCorpusReproduction is the EXACT 03-RESEARCH.md Pattern 4
@@ -230,5 +233,198 @@ func TestIncludeTargetSecretCorpus(t *testing.T) {
 	}
 	if missing != 0 {
 		t.Fatalf("references missing their declared output = %d, want 0", missing)
+	}
+}
+
+// g16Tree is the TestIncludeTargetCorpusReproduction tree with app's own
+// terragrunt.hcl replaced by appHCL: the G16 repros change ONLY that file.
+func g16Tree(appHCL string) map[string]string {
+	return map[string]string{
+		"live/terragrunt.hcl": `dependency "vpc" {
+  config_path = "../vpc"
+}
+inputs = { vpc_id = dependency.vpc.outputs.id }
+`,
+		"live/prod/app/terragrunt.hcl": appHCL,
+		"live/prod/app/main.tf":        "",
+		"live/prod/vpc/terragrunt.hcl": "",
+		"live/prod/vpc/main.tf":        `output "id" { value = 1 }`,
+		"vpc/terragrunt.hcl":           "",
+		"vpc/main.tf":                  `output "other" { value = 1 }`,
+	}
+}
+
+// assertG16 checks the shared G16 outcome: live is config-unknown
+// include-target with no references, app has wantAppReason, and no
+// reference misses its output (the false GRT001 at live/terragrunt.hcl:4:21
+// is gone).
+func assertG16(t *testing.T, appHCL, wantAppReason string) indexing.Result {
+	t.Helper()
+	res := build(t, filesFS(g16Tree(appHCL)))
+	live, ok := res.Graph.Unit(repograph.MustRepoPath("live"))
+	if !ok {
+		t.Fatalf("unit %q not found", "live")
+	}
+	if live.Status() != repograph.StatusConfigUnknown || live.UnknownReason() != ReasonIncludeTarget {
+		t.Fatalf("live = (%v, %q), want (%v, %q)", live.Status(), live.UnknownReason(), repograph.StatusConfigUnknown, ReasonIncludeTarget)
+	}
+	if len(live.References()) != 0 {
+		t.Fatalf("live References() = %v, want none", live.References())
+	}
+	app, ok := res.Graph.Unit(repograph.MustRepoPath("live/prod/app"))
+	if !ok {
+		t.Fatalf("unit %q not found", "live/prod/app")
+	}
+	if app.UnknownReason() != wantAppReason {
+		t.Fatalf("live/prod/app UnknownReason() = %q, want %q", app.UnknownReason(), wantAppReason)
+	}
+	if n := missingOutputs(res); n != 0 {
+		t.Fatalf("references missing their declared output = %d, want 0", n)
+	}
+	return res
+}
+
+func TestIncludeTargetG16RepoRoot(t *testing.T) {
+	assertG16(t, `include { path = "${get_repo_root()}/live/terragrunt.hcl" }`, ReasonIncludeDynamicPath)
+}
+
+func TestIncludeTargetG16PathToRepoRoot(t *testing.T) {
+	assertG16(t, `include { path = "${get_path_to_repo_root()}/live/terragrunt.hcl" }`, ReasonIncludeDynamicPath)
+}
+
+func TestIncludeTargetG16SyntaxError(t *testing.T) {
+	res := assertG16(t, "include { path = find_in_parent_folders() }\ninputs = {\n", ReasonSyntaxError)
+	if res.Diagnostics.Len() != 1 {
+		t.Fatalf("Diagnostics.Len() = %d, want exactly 1 GRT100 for app's file", res.Diagnostics.Len())
+	}
+}
+
+func TestIncludeTargetG16InvalidDecls(t *testing.T) {
+	assertG16(t, "include { path = find_in_parent_folders() }\ninclude { path = find_in_parent_folders() }\n", ReasonInvalidInclude)
+}
+
+func TestIncludeTargetMarkedPastFirstFailure(t *testing.T) {
+	res := loadUnits(t, filesFS(map[string]string{
+		"x.hcl.json":            "{}",
+		"shared/terragrunt.hcl": "",
+		"u/terragrunt.hcl": `include "a" { path = "../x.hcl.json" }
+include "b" { path = "../shared/terragrunt.hcl" }
+`,
+	}))
+	if u := unitByPath(t, res, "u"); u.ConfigUnknownReason != ReasonIncludeJSONUnsupported {
+		t.Fatalf("u ConfigUnknownReason = %q, want %q", u.ConfigUnknownReason, ReasonIncludeJSONUnsupported)
+	}
+	if s := unitByPath(t, res, "shared"); s.ConfigUnknownReason != ReasonIncludeTarget {
+		t.Fatalf("shared ConfigUnknownReason = %q, want %q", s.ConfigUnknownReason, ReasonIncludeTarget)
+	}
+}
+
+func TestIncludeTargetDynamicSibling(t *testing.T) {
+	res := loadUnits(t, filesFS(map[string]string{
+		"root.hcl":                     "",
+		"shared/terragrunt.hcl":        "",
+		"other/terragrunt.hcl":         "",
+		"live/prod/app/terragrunt.hcl": `include { path = "${get_repo_root()}/shared/terragrunt.hcl" }`,
+		"live/prod/vpc/terragrunt.hcl": `include { path = find_in_parent_folders("root.hcl") }`,
+	}))
+	for _, dir := range []string{"shared", "other"} {
+		if u := unitByPath(t, res, dir); u.ConfigUnknownReason != ReasonIncludeTarget {
+			t.Fatalf("%s ConfigUnknownReason = %q, want %q", dir, u.ConfigUnknownReason, ReasonIncludeTarget)
+		}
+	}
+	if v := unitByPath(t, res, "live/prod/vpc"); v.ConfigUnknownReason != "" {
+		t.Fatalf("live/prod/vpc ConfigUnknownReason = %q, want resolved (it has its own include)", v.ConfigUnknownReason)
+	}
+}
+
+// assertAncestorsOnly checks that app's ancestor units are include-target
+// while the non-ancestor, include-free sibling "shared" stays resolved.
+func assertAncestorsOnly(t *testing.T, appHCL string) {
+	t.Helper()
+	res := loadUnits(t, filesFS(map[string]string{
+		"terragrunt.hcl":               "",
+		"live/terragrunt.hcl":          "",
+		"shared/terragrunt.hcl":        "",
+		"live/prod/app/terragrunt.hcl": appHCL,
+	}))
+	for _, dir := range []string{".", "live"} {
+		if u := unitByPath(t, res, dir); u.ConfigUnknownReason != ReasonIncludeTarget {
+			t.Fatalf("%s ConfigUnknownReason = %q, want %q", dir, u.ConfigUnknownReason, ReasonIncludeTarget)
+		}
+	}
+	if s := unitByPath(t, res, "shared"); s.ConfigUnknownReason != "" {
+		t.Fatalf("shared ConfigUnknownReason = %q, want resolved", s.ConfigUnknownReason)
+	}
+}
+
+func TestIncludeTargetDynamicFixedName(t *testing.T) {
+	assertAncestorsOnly(t, `include { path = "${get_repo_root()}/_envcommon/vpc.hcl" }`)
+}
+
+func TestIncludeTargetDynamicConditional(t *testing.T) {
+	assertAncestorsOnly(t, `include { path = get_env("CI", "") == "true" ? "ci.hcl" : "local.hcl" }`)
+}
+
+func TestIncludeTargetDynamicLocal(t *testing.T) {
+	res := loadUnits(t, filesFS(map[string]string{
+		"shared/terragrunt.hcl": "",
+		"live/prod/app/terragrunt.hcl": `locals { root = "../../../shared/terragrunt.hcl" }
+include { path = local.root }
+`,
+	}))
+	if s := unitByPath(t, res, "shared"); s.ConfigUnknownReason != ReasonIncludeTarget {
+		t.Fatalf("shared ConfigUnknownReason = %q, want %q", s.ConfigUnknownReason, ReasonIncludeTarget)
+	}
+}
+
+func TestIncludeTargetUnknowableIncludes(t *testing.T) {
+	cases := map[string]map[string]string{
+		"json": {"live/app/terragrunt.hcl.json": "{}"},
+		"autoinclude": {
+			"live/app/terragrunt.hcl":             "",
+			"live/app/terragrunt.autoinclude.hcl": "",
+		},
+		"oversize": {"live/app/terragrunt.hcl": "#" + strings.Repeat("x", hclconv.MaxFileBytes)},
+	}
+	for name, extra := range cases {
+		t.Run(name, func(t *testing.T) {
+			files := map[string]string{
+				"live/terragrunt.hcl":   "",
+				"shared/terragrunt.hcl": "",
+			}
+			for k, v := range extra {
+				files[k] = v
+			}
+			res := loadUnits(t, filesFS(files))
+			if u := unitByPath(t, res, "live"); u.ConfigUnknownReason != ReasonIncludeTarget {
+				t.Fatalf("live ConfigUnknownReason = %q, want %q", u.ConfigUnknownReason, ReasonIncludeTarget)
+			}
+			if s := unitByPath(t, res, "shared"); s.ConfigUnknownReason != "" {
+				t.Fatalf("shared ConfigUnknownReason = %q, want resolved", s.ConfigUnknownReason)
+			}
+		})
+	}
+}
+
+func TestIncludeTargetNotFoundMarksAncestors(t *testing.T) {
+	res := loadUnits(t, filesFS(map[string]string{
+		"live/terragrunt.hcl":     "",
+		"live/app/terragrunt.hcl": `include { path = "../missing.hcl" }`,
+	}))
+	if a := unitByPath(t, res, "live/app"); a.ConfigUnknownReason != ReasonIncludeNotFound {
+		t.Fatalf("live/app ConfigUnknownReason = %q, want %q", a.ConfigUnknownReason, ReasonIncludeNotFound)
+	}
+	if u := unitByPath(t, res, "live"); u.ConfigUnknownReason != ReasonIncludeTarget {
+		t.Fatalf("live ConfigUnknownReason = %q, want %q", u.ConfigUnknownReason, ReasonIncludeTarget)
+	}
+}
+
+func TestIncludeTargetPrecedence(t *testing.T) {
+	res := loadUnits(t, filesFS(map[string]string{
+		"live/terragrunt.hcl":     "locals {",
+		"live/app/terragrunt.hcl": `include { path = "${get_repo_root()}/x.hcl" }`,
+	}))
+	if u := unitByPath(t, res, "live"); u.ConfigUnknownReason != ReasonSyntaxError {
+		t.Fatalf("live ConfigUnknownReason = %q, want %q (its own earlier reason wins)", u.ConfigUnknownReason, ReasonSyntaxError)
 	}
 }
