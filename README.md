@@ -10,10 +10,10 @@ everything is wired together, and tells you when a `dependency.X.outputs.Y`
 reference points at an output that does not exist — before you run anything
 slow.
 
-**This project is mid-development.** The domain model, the parsing pipeline
-and the architecture guardrails exist and are tested; the `gruntled check`
-command line does not exist yet. See [Status](#status) below before you go
-looking for a binary to run.
+**This project is mid-development.** `gruntled check` works end to end and
+reports `GRT001` and `GRT100`, but it has not been validated against a real
+corpus yet (that is Phase 4). See [Status](#status) below before you rely on
+it.
 
 ## The problem
 
@@ -104,41 +104,31 @@ than staying quiet.
 ## Status
 
 v0.1 is being built as a falsifiable experiment, in four phases (see
-[`.planning/ROADMAP.md`](.planning/ROADMAP.md)). Phase 1 is complete, Phase 2
-is in progress, Phases 3 and 4 haven't started.
+[`.planning/ROADMAP.md`](.planning/ROADMAP.md)). Phases 1 and 2 are complete,
+Phase 3 is nearly done, Phase 4 hasn't started.
 
 **Works today, tested:**
-- The pure domain model (`internal/domain/repograph`, `internal/domain/diagnostic`):
-  `Unit`, `Module`, `Surface`, `Dependency`, `Reference`, the
-  `RepositoryGraph` aggregate, and `Diagnostic` with its `GRT001`/`GRT100`
-  codes.
+- `gruntled check [--format text|json] [path]`, end to end: it opens the
+  repository read-only, builds the graph, and reports `GRT001` (a
+  `dependency.X.outputs.Y` naming an output the target module does not
+  declare) and `GRT100` (HCL that does not parse), with the exit codes below.
+- The `mock_outputs` rule for `GRT001`: mocks never suppress or downgrade
+  the diagnostic; when a mock would silently stand in for the missing output
+  at `apply`, the message says so.
+- The pure domain model (`internal/domain/repograph`, `internal/domain/diagnostic`)
+  and the `GRT001` analyzer (`internal/domain/analysis`).
+- The Terragrunt loader (include merging, two-hop resolution from a
+  dependency to its unit to its module) and the module surface reader.
 - The architecture-enforcement script and its CI job (see
   [Architecture](#architecture)).
 - The deterministic synthetic Terragrunt repository generator
   (`internal/testsupport/synthrepo`), including deliberate mutation
   injection with an exact expected-diagnostics oracle.
-- The `indexing.Build` application use case, tested against hand-written
-  fakes (no filesystem, no HCL).
-- Leaf infrastructure adapters, individually tested against real files:
-  unit-directory discovery (`terragrunt.discoverUnits`), whole-body
-  `dependency.X.outputs.Y` reference extraction with byte-accurate
-  positions, a parse-once structural cache, the six pure Terragrunt path
-  functions under closed evaluation, `terraform.source` classification
-  (`sourceresolve.Classify`), and the module surface reader
-  (`tfsurface.Reader`).
 
-**In progress:** the Terragrunt loader that wires the pieces above into a
-complete `ports.UnitLoader` — include merging, resolving a unit to its
-module both via `terraform.source` and via the unit's own directory when
-absent, and end-to-end two-hop resolution against a real repository on disk.
+**Still to do in Phase 3:** end-to-end tests of the determinism, no-writes
+and oracle guarantees through the binary.
 
 **Not built yet:**
-- Any analyzer that actually emits `GRT001`/`GRT100` against a real
-  repository, and the `mock_outputs` interaction rule for `GRT001`
-  (Phase 3).
-- The `gruntled check` CLI. `cmd/gruntled` currently only prints
-  `gruntled: no commands implemented yet` and exits 1 — it's a Phase 1 stub
-  that exists so `go build ./...` exercises the full module tree.
 - The real-repository validation experiment: zero false positives and every
   injected mutation caught on a public Terragrunt corpus, faster than
   `terragrunt hcl validate` (Phase 4).
@@ -146,25 +136,29 @@ absent, and end-to-end two-hop resolution against a real repository on disk.
   `gruntled blast` (Broken vs Impacted), diagnostics `GRT002`-`GRT006`,
   `gruntled graph --json`, SARIF output.
 
-### Planned interface (Phase 3)
-
-Once `gruntled check` exists, per
-[`.planning/REQUIREMENTS.md`](.planning/REQUIREMENTS.md) (CLI-01 through
-CLI-05), it's a one-shot command that analyzes a repository and prints
-diagnostics deterministically:
+### Usage
 
 ```console
-$ gruntled check .
-units/app/terragrunt.hcl:8:15: GRT001: dependency.vpc.outputs.subnet_id: module units/vpc has no output "subnet_id"
+$ gruntled check live/
+app/terragrunt.hcl:4:17: GRT001 dependency "vpc" output "vpc_idd" is not declared by module "vpc" (target unit "vpc") (unit app)
+gruntled: checked 5 units (1 unknown): 1 errors, 0 warnings
 $ echo $?
-<non-zero, exact codes not yet documented — CLI-02>
+1
 ```
 
-This does not run today. It's derived from the requirements document to show
-the shape of the eventual output (CLI-01 through CLI-05: human-readable
-diagnostics, a documented non-zero exit code on error, byte-identical output
-for identical input, no network calls or external processes, nothing written
-inside the analyzed repository), not a claim about current behavior.
+Diagnostics go to stdout, one per line, with paths relative to the checked
+repository; the summary line goes to stderr. `--format json` prints a single
+versioned JSON document instead. Flags work before or after the path.
+
+| Exit code | Meaning |
+|---|---|
+| 0 | Analysis completed, no error diagnostics |
+| 1 | At least one error diagnostic (`GRT001`, `GRT100`) |
+| 2 | Usage error: unknown command or flag, invalid `--format`, more than one path |
+| 3 | Analysis could not run: path missing, not a directory or unreadable, or an internal failure |
+
+The full reference, including the JSON schema and the `mock_outputs` rule,
+is in [`docs/cli.md`](docs/cli.md).
 
 ## Architecture
 
@@ -180,29 +174,39 @@ flowchart TB
     subgraph DOM["internal/domain — pure, stdlib allowlist only"]
         RG["repograph: Unit, Module, Surface, Dependency, Reference, RepositoryGraph"]
         DG["diagnostic: Code, Diagnostic, Set"]
+        AN["analysis: GRT001 analyzer"]
     end
     subgraph APP["internal/application — domain + context only"]
         PT["ports: UnitLoader, SurfaceReader"]
         IX["indexing.Build (use case)"]
+        CK["checking.Check (use case)"]
     end
     subgraph INFRA["internal/infrastructure — the only place HCL is imported"]
         TG["terragrunt: walk, parse-once cache, reference extraction, path functions"]
         TFS["tfsurface: module surface reader"]
         SR["sourceresolve: source classification"]
     end
-    CMD["cmd/gruntled — composition root (Phase 1 stub today)"]
+    subgraph IFACE["internal/interfaces — presenters, no I/O of their own"]
+        PR["presenter: text, JSON, summary"]
+    end
+    CMD["cmd/gruntled — composition root"]
 
     IX --> PT
     IX --> RG
     IX --> DG
-    TG -. implements, loader in progress .-> PT
+    CK --> IX
+    CK --> AN
+    AN --> RG
+    PR --> DG
+    TG -->|implements| PT
     TFS -->|implements| PT
     TG --> RG
     TFS --> RG
-    SR -. wired by the loader, in progress .-> TG
-    CMD -. wires in Phase 3 .-> IX
-    CMD -. wires in Phase 3 .-> TG
-    CMD -. wires in Phase 3 .-> TFS
+    TG --> SR
+    CMD -->|wires| CK
+    CMD -->|wires| PR
+    CMD -->|wires| TG
+    CMD -->|wires| TFS
 ```
 
 This isn't aspirational: it's enforced on every push and PR by
@@ -323,10 +327,9 @@ in code today:
 | `GRT001` | `CodeUnknownOutput` | A `dependency.X.outputs.Y` reference names an output the target module does not declare. |
 | `GRT100` | `CodeSyntaxError` | The HCL being analyzed is invalid. |
 
-Neither is emitted end-to-end against a real repository yet (see
-[Status](#status)) — the `Diagnostic` type and its ordering (`Compare`,
-`Key`, `Set`) exist and are tested; the analyzer that produces `GRT001`
-findings from a `RepositoryGraph` is Phase 3.
+Both are emitted by `gruntled check` (see [Usage](#usage)). `GRT001` comes
+from the analyzer in `internal/domain/analysis`; `GRT100` from the parsers,
+one per file that fails to parse.
 
 `GRT002` through `GRT006` are named and scoped in the design document and the
 roadmap's "Later" section (`config_path` pointing nowhere, dependency
