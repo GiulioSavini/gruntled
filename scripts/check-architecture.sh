@@ -187,55 +187,39 @@ check_external_deps() {
   fi
 }
 
-# scan_import_lines prints "file:line" for every import spec, in any *.go
-# file, whose path matches target_re right after the opening quote (" or
-# `). It exists because go list only sees the files the host platform
-# compiles: a _GOOS/_GOARCH suffix or a //go:build tag hides a file from it
-# entirely, so a rule that must hold on every platform needs this
-# source-level scan next to go list.
+# scan_imports runs the source-level import scanner for one rule and
+# leaves its matches, one "./file.go:LINE: import "x"" per line, in
+# scan_out. It exists because go list only sees the files the host
+# platform compiles: a _GOOS/_GOARCH suffix or a //go:build tag hides a
+# file from it entirely, so a rule that must hold on every platform needs
+# this scan next to go list.
 #
-# Directories the go tool itself ignores are pruned: names starting with
-# "." or "_", testdata and vendor (so .git and a .claude/worktrees copy of
-# the repo are never scanned). Extra args are passed straight to find as
-# file predicates, letting each caller exclude what its rule allows.
+# The scanner is a Go program (scripts/archscan, go/parser with
+# ImportsOnly), not a line-based scan: a /* */ comment or a ";" inside an
+# import block defeated the old awk version (02-REVIEW G21). It reads every
+# *.go file whatever its build constraints, prunes the directories the go
+# tool ignores (names starting with "." or "_", testdata, vendor), and
+# matches re against the unquoted import path. It lives under scripts/,
+# outside internal/, and is never linked into cmd/gruntled.
 #
-# Only import declarations are read, never arbitrary lines: a single-line
-# `import [name|_|.] "x"`, or the specs of an `import ( ... )` block. The
-# scan of a file stops at its first func/type/var/const declaration (Go
-# allows imports only before those), so a string literal or a raw-string
-# Go snippet in a test cannot match. Comments never match either, because
-# a spec line must begin (after an optional name) with the quote.
-scan_import_lines() {
-  local target_re="$1"
-  shift
-  # shellcheck disable=SC2016 # the awk program is single-quoted on purpose
-  SCAN_TARGET_RE="$target_re" find . \
-    \( -type d \( -name '.?*' -o -name '_*' -o -name testdata -o -name vendor \) \) -prune -o \
-    -type f -name '*.go' "$@" -exec awk '
-      FNR == 1 { inblock = 0; incomment = 0; done = 0
-                 spec = "^[ \t]*([A-Za-z_][A-Za-z0-9_]*[ \t]+|[_.][ \t]*)?[\"`]" ENVIRON["SCAN_TARGET_RE"] }
-      done { next }
-      { line = $0; sub(/\r$/, "", line) }
-      incomment { if (index(line, "*/") > 0) incomment = 0; next }
-      inblock {
-        if (line ~ /^[ \t]*\)/) { inblock = 0; next }
-        if (line ~ spec) print FILENAME ":" FNR
-        next
-      }
-      line ~ /^[ \t]*import[ \t]*\(/ {
-        rest = line; sub(/^[ \t]*import[ \t]*\(/, "", rest)
-        if (rest ~ spec) print FILENAME ":" FNR
-        if (index(rest, ")") == 0) inblock = 1
-        next
-      }
-      line ~ /^[ \t]*import[ \t"`]/ {
-        rest = line; sub(/^[ \t]*import/, "", rest)
-        if (rest ~ spec) print FILENAME ":" FNR
-        next
-      }
-      line ~ /^[ \t]*(func|type|var|const)([ \t(]|$)/ { done = 1; next }
-      line ~ /^[ \t]*\/\*/ { if (index(substr(line, index(line, "/*") + 2), "*/") == 0) incomment = 1 }
-    ' {} +
+# A scanner failure (it did not build, a file's imports did not parse, an
+# I/O error) fails the rule that asked for it; it never passes silently.
+# The result comes back in scan_out, not on stdout, because fail=1 set
+# inside a $(...) subshell would be lost.
+scan_out=""
+scan_imports() {
+  local rule="$1" re="$2"
+  shift 2
+  local errfile
+  errfile=$(mktemp)
+  scan_out=""
+  if ! scan_out=$(go run ./scripts/archscan -match "$re" "$@" 2>"$errfile"); then
+    echo "=== RULE FAILED: ${rule} ===" >&2
+    echo "import scanner failed:" >&2
+    cat "$errfile" >&2
+    fail=1
+  fi
+  rm -f "$errfile"
 }
 
 # --- Step 2: domain-stdlib-allowlist ---------------------------------------
@@ -333,9 +317,10 @@ fi
 # go list -e (not plain go list) so a probe that breaks some unrelated
 # package under set -e does not abort the script before this rule runs.
 # go list only sees the files the host platform compiles, so the source
-# scan below adds every file hidden behind a _GOOS/_GOARCH suffix or a
-# //go:build tag. It reads import declarations only, so a doc comment
-# that names the libraries stays allowed.
+# scan below (scan_imports, a go/parser-based scanner) adds every file
+# hidden behind a _GOOS/_GOARCH suffix or a //go:build tag. It reads
+# import declarations only, so a doc comment or a string that names the
+# libraries stays allowed.
 hcl_go_list=$(
   go list -e -f '{{.ImportPath}}{{"\t"}}{{join .Imports " "}} {{join .TestImports " "}} {{join .XTestImports " "}}' ./... |
     while IFS=$'\t' read -r pkg rest; do
@@ -351,7 +336,8 @@ hcl_go_list=$(
       done
     done
 )
-hcl_source=$(scan_import_lines 'github\.com/(hashicorp|zclconf)/' -not -path './internal/infrastructure/*')
+scan_imports hcl-only-in-infrastructure '^github\.com/(hashicorp|zclconf)/' -exclude internal/infrastructure/
+hcl_source=$scan_out
 hcl_violations=$(printf '%s\n%s\n' "$hcl_go_list" "$hcl_source" | grep -v '^$' | sort -u || true)
 if [ -n "$hcl_violations" ]; then
   echo "=== RULE FAILED: hcl-only-in-infrastructure ===" >&2
@@ -366,9 +352,8 @@ fi
 # internal/infrastructure/...; every other layer must go through the
 # application ports, not infrastructure directly. Two engines: go list
 # sees every import the host platform compiles (prod and test); the
-# source scan adds files no build on this platform makes visible
-# (_windows.go, //go:build).
-infra_import_re="${module_re}/internal/infrastructure"
+# source scan (scan_imports) adds files no build on this platform makes
+# visible (_windows.go, //go:build).
 infra_go_list=$(
   go list -e -f '{{.ImportPath}}{{"\t"}}{{join .Imports " "}} {{join .TestImports " "}} {{join .XTestImports " "}}' ./... |
     while IFS=$'\t' read -r pkg rest; do
@@ -384,7 +369,8 @@ infra_go_list=$(
       done
     done
 )
-infra_source=$(scan_import_lines "${infra_import_re}(/|[\"\`])" -not -path './cmd/*' -not -path './internal/infrastructure/*')
+scan_imports infrastructure-importers "^${module_re}/internal/infrastructure(/|\$)" -exclude cmd/ -exclude internal/infrastructure/
+infra_source=$scan_out
 infra_violations=$(printf '%s\n%s\n' "$infra_go_list" "$infra_source" | grep -v '^$' | sort -u || true)
 if [ -n "$infra_violations" ]; then
   echo "=== RULE FAILED: infrastructure-importers ===" >&2
@@ -399,9 +385,8 @@ fi
 # package may link it, whether or not cmd reaches it (binary-links-
 # testsupport above only catches the case where it does). Two engines: go
 # list's .Imports only (never TestImports/XTestImports, which are
-# expected to use testsupport); the source scan over non-_test.go files
-# adds files no build on this platform makes visible.
-testsupport_import_re="${module_re}/internal/testsupport"
+# expected to use testsupport); the source scan (scan_imports) over
+# non-_test.go files adds files no build on this platform makes visible.
 ts_go_list=$(
   go list -e -f '{{.ImportPath}}{{"\t"}}{{join .Imports " "}}' ./... |
     while IFS=$'\t' read -r pkg rest; do
@@ -417,7 +402,8 @@ ts_go_list=$(
       done
     done
 )
-ts_source=$(scan_import_lines "${testsupport_import_re}(/|[\"\`])" -not -path './internal/testsupport/*' -not -name '*_test.go')
+scan_imports testsupport-only-in-tests "^${module_re}/internal/testsupport(/|\$)" -exclude internal/testsupport/ -skip-tests
+ts_source=$scan_out
 ts_violations=$(printf '%s\n%s\n' "$ts_go_list" "$ts_source" | grep -v '^$' | sort -u || true)
 if [ -n "$ts_violations" ]; then
   echo "=== RULE FAILED: testsupport-only-in-tests ===" >&2

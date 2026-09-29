@@ -576,4 +576,65 @@ func TestZZProbe(t *testing.T) {}
 EOF
 run_case "binary-exec-in-test-allowed" "$copy" zero
 
+# --- hcl-comment-in-import-block: a /* */ comment before the spec (G21) ----
+# The old line-based scan required a spec line to begin with the quote, so
+# a comment in front of it hid the import. The Go parser does not care.
+copy=$(mkcopy)
+cat >"$copy/cmd/gruntled/zz_probe_windows.go" <<'EOF'
+package main
+
+import ( /* x */ _ "github.com/hashicorp/hcl/v2" )
+EOF
+run_case "hcl-comment-in-import-block" "$copy" hcl-only-in-infrastructure
+
+# --- hcl-semicolon-import-block: two specs on one line, split by ; (G21) --
+copy=$(mkcopy)
+cat >"$copy/cmd/gruntled/zz_probe_windows.go" <<'EOF'
+package main
+
+import ( _ "fmt"; _ "github.com/hashicorp/hcl/v2" )
+EOF
+run_case "hcl-semicolon-import-block" "$copy" hcl-only-in-infrastructure
+
+# --- infra-comment-in-import-block: same comment bypass, Step 7 ----------
+copy=$(mkcopy)
+mkdir -p "$copy/internal/testsupport/zz"
+cat >"$copy/internal/testsupport/zz/zz_windows.go" <<EOF
+package zz
+
+import ( /* x */ _ "${MODULE}/internal/infrastructure/hclconv" )
+EOF
+run_case "infra-comment-in-import-block" "$copy" infrastructure-importers
+
+# --- testsupport-semicolon-in-tagged-prod: same ; bypass, Step 8 ---------
+copy=$(mkcopy)
+mkdir -p "$copy/internal/infrastructure/zzprobe"
+cat >"$copy/internal/infrastructure/zzprobe/zz_windows.go" <<EOF
+package zzprobe
+
+import ( _ "fmt"; _ "${MODULE}/internal/testsupport/synthrepo" )
+EOF
+run_case "testsupport-semicolon-in-tagged-prod" "$copy" testsupport-only-in-tests
+
+# --- hcl-raw-string-in-func-allowed: an import in a raw string is fine ----
+copy=$(mkcopy)
+cat >"$copy/internal/domain/repograph/zz_probe.go" <<'EOF'
+package repograph
+
+func zzProbe() string {
+	return `import _ "github.com/hashicorp/hcl/v2"`
+}
+EOF
+run_case "hcl-raw-string-in-func-allowed" "$copy" zero
+
+# --- hcl-in-testdata-allowed: testdata/ is ignored like the go tool does --
+copy=$(mkcopy)
+mkdir -p "$copy/internal/domain/repograph/testdata"
+cat >"$copy/internal/domain/repograph/testdata/zz.go" <<'EOF'
+package zz
+
+import _ "github.com/hashicorp/hcl/v2"
+EOF
+run_case "hcl-in-testdata-allowed" "$copy" zero
+
 echo "all architecture self-tests passed"
