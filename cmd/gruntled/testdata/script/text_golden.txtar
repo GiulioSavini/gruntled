@@ -1,0 +1,45 @@
+# Text golden: a clean unit (vpc), one GRT001 in app, a module-unknown unit
+# (dns, remote source), and a shared include (root.hcl) with a broken ref that
+# is reported once per including unit at the same position.
+# Positions counted by hand: app line 4 "inputs = { id = " is 16 bytes -> col 17;
+# root.hcl line 4 "inputs = { net = " is 17 bytes -> col 18.
+exec gruntled-exit 1 check .
+cmp stdout want.txt
+stderr '^gruntled: checked 5 units \(1 unknown\): 3 errors, 0 warnings$'
+! stdout '/tmp|\$WORK|^/'
+
+-- vpc/terragrunt.hcl --
+-- vpc/main.tf --
+output "vpc_id" { value = "x" }
+-- app/terragrunt.hcl --
+dependency "vpc" {
+  config_path = "../vpc"
+}
+inputs = { id = dependency.vpc.outputs.vpc_idd }
+-- app/main.tf --
+variable "id" {}
+-- dns/terragrunt.hcl --
+terraform {
+  source = "git::https://example.com/x.git"
+}
+-- root.hcl --
+dependency "vpc" {
+  config_path = "${get_terragrunt_dir()}/../vpc"
+}
+inputs = { net = dependency.vpc.outputs.subnet_id }
+-- web/terragrunt.hcl --
+include "root" {
+  path = find_in_parent_folders("root.hcl")
+}
+-- web/main.tf --
+variable "net" {}
+-- api/terragrunt.hcl --
+include "root" {
+  path = find_in_parent_folders("root.hcl")
+}
+-- api/main.tf --
+variable "net" {}
+-- want.txt --
+app/terragrunt.hcl:4:17: GRT001 dependency "vpc" output "vpc_idd" is not declared by module "vpc" (target unit "vpc") (unit app)
+root.hcl:4:18: GRT001 dependency "vpc" output "subnet_id" is not declared by module "vpc" (target unit "vpc") (unit api)
+root.hcl:4:18: GRT001 dependency "vpc" output "subnet_id" is not declared by module "vpc" (target unit "vpc") (unit web)

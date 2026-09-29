@@ -1,0 +1,20 @@
+# Terragrunt issue 2163 shape: mocks cover the missing output but apply may not
+# use them (allowed = validate, plan). GRT001 fires without the suffix; apply
+# would fail on the missing output.
+exec gruntled-exit 1 check .
+cmp stdout want.txt
+
+-- vpc/terragrunt.hcl --
+-- vpc/main.tf --
+output "vpc_id" { value = "x" }
+-- app/terragrunt.hcl --
+dependency "vpc" {
+  config_path                             = "../vpc"
+  mock_outputs                            = { vpc_idd = "mock" }
+  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+}
+inputs = { id = dependency.vpc.outputs.vpc_idd }
+-- app/main.tf --
+variable "id" {}
+-- want.txt --
+app/terragrunt.hcl:6:17: GRT001 dependency "vpc" output "vpc_idd" is not declared by module "vpc" (target unit "vpc") (unit app)

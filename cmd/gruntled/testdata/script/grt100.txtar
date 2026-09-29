@@ -1,0 +1,48 @@
+# GRT100: a file that does not parse is reported at a repo-relative position
+# (relative to the checked path) and exits 1.
+
+# a mid-edit unit terragrunt.hcl (unclosed dependency block)
+exec gruntled-exit 1 check unit
+stdout '^app/terragrunt\.hcl:\d+:\d+: GRT100 '
+! stdout 'GRT001'
+! stdout '^unit/'
+
+# a broken include file
+exec gruntled-exit 1 check include
+stdout '^root\.hcl:\d+:\d+: GRT100 '
+! stdout 'GRT001'
+
+# a broken module .tf; the unit that references it stays silent (unknown surface)
+exec gruntled-exit 1 check module
+stdout '^vpc/main\.tf:\d+:\d+: GRT100 '
+! stdout 'GRT001'
+
+-- unit/vpc/terragrunt.hcl --
+-- unit/vpc/main.tf --
+output "vpc_id" { value = "x" }
+-- unit/app/terragrunt.hcl --
+dependency "vpc" {
+  config_path = "../vpc"
+inputs = { id = dependency.vpc.outputs.vpc_idd }
+-- unit/app/main.tf --
+variable "id" {}
+-- include/root.hcl --
+inputs = {
+  region = "eu-south-1"
+-- include/web/terragrunt.hcl --
+include "root" {
+  path = find_in_parent_folders("root.hcl")
+}
+-- include/web/main.tf --
+variable "region" {}
+-- module/vpc/terragrunt.hcl --
+-- module/vpc/main.tf --
+output "vpc_id" {
+  value = "x"
+-- module/app/terragrunt.hcl --
+dependency "vpc" {
+  config_path = "../vpc"
+}
+inputs = { id = dependency.vpc.outputs.vpc_idd }
+-- module/app/main.tf --
+variable "id" {}

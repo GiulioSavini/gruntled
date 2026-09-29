@@ -1,0 +1,7 @@
+# A directory without Terragrunt units: exit 0, nothing on stdout.
+exec gruntled-exit 0 check .
+! stdout .
+stderr '^gruntled: no Terragrunt units found$'
+
+-- README.md --
+nothing to see here

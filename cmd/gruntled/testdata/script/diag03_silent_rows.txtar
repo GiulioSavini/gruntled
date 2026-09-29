@@ -1,0 +1,139 @@
+# Every silent DIAG-03 row: the referenced output is MISSING from the target
+# module in each case, yet gruntled must exit 0 with nothing on stdout.
+
+# row 1: undeclared dependency label
+exec gruntled-exit 0 check row1
+! stdout .
+# row 2a: enabled = false
+exec gruntled-exit 0 check row2a
+! stdout .
+# row 2b: enabled is not a literal
+exec gruntled-exit 0 check row2b
+! stdout .
+# row 3a: skip_outputs = true
+exec gruntled-exit 0 check row3a
+! stdout .
+# row 3b: skip_outputs is not a literal
+exec gruntled-exit 0 check row3b
+! stdout .
+# row 4: config_path points at a directory that is not a unit
+exec gruntled-exit 0 check row4
+! stdout .
+# row 5a: target unit has a remote source (module-unknown)
+exec gruntled-exit 0 check row5a
+! stdout .
+# row 5b: target unit directory has no .tf files (unknown surface)
+exec gruntled-exit 0 check row5b
+! stdout .
+# row 5c: target unit is config-unknown through a dynamic include path; the
+# referencing unit itself stays known, so the silence comes from the target
+exec gruntled-exit 0 check row5c --format json
+stdout '"path": "vpc",\n\s+"status": "config-unknown",\n\s+"reason": "include-dynamic-path"'
+! stdout '"path": "app"'
+! stdout '"code"'
+
+-- row1/vpc/terragrunt.hcl --
+-- row1/vpc/main.tf --
+output "vpc_id" { value = "x" }
+-- row1/app/terragrunt.hcl --
+inputs = { id = dependency.nope.outputs.x }
+-- row1/app/main.tf --
+variable "id" {}
+-- row2a/vpc/terragrunt.hcl --
+-- row2a/vpc/main.tf --
+output "vpc_id" { value = "x" }
+-- row2a/app/terragrunt.hcl --
+dependency "vpc" {
+  config_path = "../vpc"
+  enabled     = false
+}
+inputs = { id = dependency.vpc.outputs.vpc_idd }
+-- row2a/app/main.tf --
+variable "id" {}
+-- row2b/vpc/terragrunt.hcl --
+-- row2b/vpc/main.tf --
+output "vpc_id" { value = "x" }
+-- row2b/app/terragrunt.hcl --
+locals {
+  flag = true
+}
+dependency "vpc" {
+  config_path = "../vpc"
+  enabled     = local.flag
+}
+inputs = { id = dependency.vpc.outputs.vpc_idd }
+-- row2b/app/main.tf --
+variable "id" {}
+-- row3a/vpc/terragrunt.hcl --
+-- row3a/vpc/main.tf --
+output "vpc_id" { value = "x" }
+-- row3a/app/terragrunt.hcl --
+dependency "vpc" {
+  config_path  = "../vpc"
+  skip_outputs = true
+}
+inputs = { id = dependency.vpc.outputs.vpc_idd }
+-- row3a/app/main.tf --
+variable "id" {}
+-- row3b/vpc/terragrunt.hcl --
+-- row3b/vpc/main.tf --
+output "vpc_id" { value = "x" }
+-- row3b/app/terragrunt.hcl --
+locals {
+  skip = false
+}
+dependency "vpc" {
+  config_path  = "../vpc"
+  skip_outputs = local.skip
+}
+inputs = { id = dependency.vpc.outputs.vpc_idd }
+-- row3b/app/main.tf --
+variable "id" {}
+-- row4/not-a-unit/main.tf --
+output "vpc_id" { value = "x" }
+-- row4/app/terragrunt.hcl --
+dependency "vpc" {
+  config_path = "../not-a-unit"
+}
+inputs = { id = dependency.vpc.outputs.vpc_idd }
+-- row4/app/main.tf --
+variable "id" {}
+-- row5a/vpc/terragrunt.hcl --
+terraform {
+  source = "git::https://example.com/vpc.git"
+}
+-- row5a/app/terragrunt.hcl --
+dependency "vpc" {
+  config_path = "../vpc"
+}
+inputs = { id = dependency.vpc.outputs.vpc_idd }
+-- row5a/app/main.tf --
+variable "id" {}
+-- row5b/vpc/terragrunt.hcl --
+-- row5b/vpc/README.md --
+no terraform files here
+-- row5b/app/terragrunt.hcl --
+dependency "vpc" {
+  config_path = "../vpc"
+}
+inputs = { id = dependency.vpc.outputs.vpc_idd }
+-- row5b/app/main.tf --
+variable "id" {}
+-- row5c/common.hcl --
+inputs = {}
+-- row5c/vpc/terragrunt.hcl --
+locals {
+  dir = get_parent_terragrunt_dir()
+}
+include "common" {
+  path = "${local.dir}/common.hcl"
+}
+-- row5c/vpc/main.tf --
+output "vpc_id" { value = "x" }
+-- row5c/app/terragrunt.hcl --
+dependency "vpc" {
+  config_path = "../vpc"
+}
+inputs = { id = dependency.vpc.outputs.vpc_idd }
+-- row5c/app/main.tf --
+variable "id" {}

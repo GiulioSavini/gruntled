@@ -1,0 +1,45 @@
+# ROADMAP SC2 corpus pattern: a mock covers the missing output, merge-with-state
+# is on and apply may use mocks. GRT001 still fires (never suppressed, never
+# downgraded) and carries the mock-masking suffix. Line 7: "inputs = { id = "
+# is 16 bytes, so the reference starts at byte column 17.
+exec gruntled-exit 1 check shape
+cmp stdout want_shape.txt
+stderr '^gruntled: checked 2 units \(0 unknown\): 1 errors, 0 warnings$'
+
+# mock_outputs_merge_strategy_with_state = "no_merge" overrides
+# mock_outputs_merge_with_state = true: masking is no longer certain (the
+# module declares an output), so GRT001 fires without the suffix.
+exec gruntled-exit 1 check nomerge
+cmp stdout want_nomerge.txt
+
+-- shape/vpc/terragrunt.hcl --
+-- shape/vpc/main.tf --
+output "vpc_id" { value = "x" }
+-- shape/app/terragrunt.hcl --
+dependency "vpc" {
+  config_path                             = "../vpc"
+  mock_outputs                            = { vpc_idd = "mock" }
+  mock_outputs_merge_with_state           = true
+  mock_outputs_allowed_terraform_commands = ["init", "plan", "apply", "destroy", "validate"]
+}
+inputs = { id = dependency.vpc.outputs.vpc_idd }
+-- shape/app/main.tf --
+variable "id" {}
+-- want_shape.txt --
+app/terragrunt.hcl:7:17: GRT001 dependency "vpc" output "vpc_idd" is not declared by module "vpc" (target unit "vpc"); mock_outputs supplies it, so apply would silently use the mock value (unit app)
+-- nomerge/vpc/terragrunt.hcl --
+-- nomerge/vpc/main.tf --
+output "vpc_id" { value = "x" }
+-- nomerge/app/terragrunt.hcl --
+dependency "vpc" {
+  config_path                             = "../vpc"
+  mock_outputs                            = { vpc_idd = "mock" }
+  mock_outputs_merge_with_state           = true
+  mock_outputs_merge_strategy_with_state  = "no_merge"
+  mock_outputs_allowed_terraform_commands = ["init", "plan", "apply", "destroy", "validate"]
+}
+inputs = { id = dependency.vpc.outputs.vpc_idd }
+-- nomerge/app/main.tf --
+variable "id" {}
+-- want_nomerge.txt --
+app/terragrunt.hcl:8:17: GRT001 dependency "vpc" output "vpc_idd" is not declared by module "vpc" (target unit "vpc") (unit app)

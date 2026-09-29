@@ -1,0 +1,31 @@
+# (a) no mocks and the output is declared: the absence of mocks never
+# manufactures a diagnostic.
+exec gruntled-exit 0 check declared
+! stdout .
+
+# (b) no mocks and the output is missing: plain GRT001.
+exec gruntled-exit 1 check missing
+cmp stdout want.txt
+
+-- declared/vpc/terragrunt.hcl --
+-- declared/vpc/main.tf --
+output "vpc_id" { value = "x" }
+-- declared/app/terragrunt.hcl --
+dependency "vpc" {
+  config_path = "../vpc"
+}
+inputs = { id = dependency.vpc.outputs.vpc_id }
+-- declared/app/main.tf --
+variable "id" {}
+-- missing/vpc/terragrunt.hcl --
+-- missing/vpc/main.tf --
+output "vpc_id" { value = "x" }
+-- missing/app/terragrunt.hcl --
+dependency "vpc" {
+  config_path = "../vpc"
+}
+inputs = { id = dependency.vpc.outputs.vpc_idd }
+-- missing/app/main.tf --
+variable "id" {}
+-- want.txt --
+app/terragrunt.hcl:4:17: GRT001 dependency "vpc" output "vpc_idd" is not declared by module "vpc" (target unit "vpc") (unit app)

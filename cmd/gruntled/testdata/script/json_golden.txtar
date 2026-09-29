@@ -1,0 +1,86 @@
+# JSON golden: same fixture as text_golden, --format json. No stderr summary.
+exec gruntled-exit 1 check . --format json
+cmp stdout want.json
+! stderr .
+
+-- vpc/terragrunt.hcl --
+-- vpc/main.tf --
+output "vpc_id" { value = "x" }
+-- app/terragrunt.hcl --
+dependency "vpc" {
+  config_path = "../vpc"
+}
+inputs = { id = dependency.vpc.outputs.vpc_idd }
+-- app/main.tf --
+variable "id" {}
+-- dns/terragrunt.hcl --
+terraform {
+  source = "git::https://example.com/x.git"
+}
+-- root.hcl --
+dependency "vpc" {
+  config_path = "${get_terragrunt_dir()}/../vpc"
+}
+inputs = { net = dependency.vpc.outputs.subnet_id }
+-- web/terragrunt.hcl --
+include "root" {
+  path = find_in_parent_folders("root.hcl")
+}
+-- web/main.tf --
+variable "net" {}
+-- api/terragrunt.hcl --
+include "root" {
+  path = find_in_parent_folders("root.hcl")
+}
+-- api/main.tf --
+variable "net" {}
+-- want.json --
+{
+  "version": 1,
+  "diagnostics": [
+    {
+      "code": "GRT001",
+      "severity": "error",
+      "file": "app/terragrunt.hcl",
+      "line": 4,
+      "column": 17,
+      "unit": "app",
+      "message": "dependency \"vpc\" output \"vpc_idd\" is not declared by module \"vpc\" (target unit \"vpc\")"
+    },
+    {
+      "code": "GRT001",
+      "severity": "error",
+      "file": "root.hcl",
+      "line": 4,
+      "column": 18,
+      "unit": "api",
+      "message": "dependency \"vpc\" output \"subnet_id\" is not declared by module \"vpc\" (target unit \"vpc\")"
+    },
+    {
+      "code": "GRT001",
+      "severity": "error",
+      "file": "root.hcl",
+      "line": 4,
+      "column": 18,
+      "unit": "web",
+      "message": "dependency \"vpc\" output \"subnet_id\" is not declared by module \"vpc\" (target unit \"vpc\")"
+    }
+  ],
+  "unknown_units": [
+    {
+      "path": "dns",
+      "status": "module-unknown",
+      "reason": "remote-source"
+    }
+  ],
+  "unknown_modules": [],
+  "summary": {
+    "units": 5,
+    "resolved": 4,
+    "module_unknown": 1,
+    "config_unknown": 0,
+    "unknown_modules": 0,
+    "errors": 3,
+    "warnings": 0
+  }
+}
