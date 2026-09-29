@@ -13,7 +13,10 @@ const (
 	// ReasonUnreadableConfig means the unit's own terragrunt.hcl, or an
 	// include file it resolved to, could not be read (fs.ReadFile, or the
 	// fs.Stat that hclconv.ReadFileLimited does first, failed), even though
-	// it was found by discovery or by the include's own fs.Stat.
+	// it was found by discovery or by the include's own fs.Stat, or an
+	// include path whose symlinks could not be resolved (a link loop, a
+	// backslash link target, an Lstat/ReadLink error, or an fs.FS that
+	// cannot report links), so which file it names is unknown.
 	ReasonUnreadableConfig = "unreadable-config"
 	// ReasonJSONConfigUnsupported means the unit directory holds
 	// terragrunt.hcl.json. Terragrunt itself prefers the JSON variant over
@@ -37,7 +40,8 @@ const (
 	ReasonIncludeDynamicPath = "include-dynamic-path"
 	// ReasonIncludeOutsideRepo means an include's evaluated path escapes
 	// the repository (a real absolute path, or a relative path resolving
-	// above the repo root).
+	// above the repo root), or reaches its target through a symlink that
+	// escapes the repository.
 	ReasonIncludeOutsideRepo = "include-outside-repo"
 	// ReasonIncludeNotFound means an include's resolved path is not an
 	// existing regular file in the repository.
@@ -67,6 +71,9 @@ const (
 	// GRT001 reproduced at live/terragrunt.hcl:4:21 in the corpus). Its
 	// references are still checked, correctly, once per including unit:
 	// this only removes the parent's own, doubly-wrong self-interpretation.
+	// Targets are matched by canonical in-repo path (02-REVIEW G15): an
+	// include that reaches the parent through a symlinked directory, a
+	// symlinked file or a chain of links still marks the real parent.
 	// Catalogue STACK-09 ("included and independently runnable") becomes a
 	// documented false negative. An earlier config-unknown reason on the
 	// same unit is kept (the first check that applies always wins).

@@ -53,13 +53,13 @@ func (l *Loader) LoadUnits(ctx context.Context) (ports.LoadResult, error) {
 	})
 
 	cache := newFileCache(l.fsys)
-	located := map[string]bool{}
+	targets := newIncludeTargets()
 	units := make([]ports.UnitConfig, 0, len(entries))
 	for _, e := range entries {
 		if err := ctx.Err(); err != nil {
 			return ports.LoadResult{}, err
 		}
-		units = append(units, l.resolveUnit(cache, e, located))
+		units = append(units, l.resolveUnit(cache, e, targets))
 	}
 
 	// 13. Include-target post-pass (research Pattern 4 / G3): any unit
@@ -67,7 +67,11 @@ func (l *Loader) LoadUnits(ctx context.Context) (ports.LoadResult, error) {
 	// resolveIncludes becomes config-unknown ReasonIncludeTarget, UNLESS it
 	// already has an earlier config-unknown reason of its own (the first
 	// check that applies always wins, consistent with resolveUnit's fixed
-	// order). Its dependencies and references are dropped from this
+	// order). Targets are matched by canonical in-repo path (02-REVIEW
+	// G15): an include reaching the parent through a symlinked directory
+	// or file still marks the real parent, and unit directories are
+	// already canonical (discoverUnits never enters a symlinked
+	// directory). Its dependencies and references are dropped from this
 	// standalone interpretation; they are still checked, correctly, once
 	// per including unit, since mergeReferences attributes include-file
 	// facts to the including unit, not to the include-target unit itself.
@@ -75,7 +79,7 @@ func (l *Loader) LoadUnits(ctx context.Context) (ports.LoadResult, error) {
 		if u.ConfigUnknownReason != "" {
 			continue
 		}
-		if !located[path.Join(u.Path.String(), "terragrunt.hcl")] {
+		if !targets.isTarget(u.Path.String()) {
 			continue
 		}
 		units[i] = ports.UnitConfig{Path: u.Path, ConfigUnknownReason: ReasonIncludeTarget}
@@ -96,10 +100,11 @@ func (l *Loader) LoadUnits(ctx context.Context) (ports.LoadResult, error) {
 // given the checks already performed becomes config-unknown
 // ReasonInvalidDependency instead of propagating, so a future change to a
 // domain invariant fails closed here rather than crashing on user input.
-// located accumulates every include path any unit's resolveIncludes
-// resolves to an existing regular file, across the whole LoadUnits call, so
-// step 13 can find every include-target unit afterward.
-func (l *Loader) resolveUnit(cache *fileCache, e unitEntry, located map[string]bool) ports.UnitConfig {
+// targets accumulates, across the whole LoadUnits call, every include path
+// (lexical and canonical) any unit's resolveIncludes resolves to an
+// existing regular file, so step 13 can find every include-target unit
+// afterward.
+func (l *Loader) resolveUnit(cache *fileCache, e unitEntry, targets *includeTargets) ports.UnitConfig {
 	unitDir := e.dir
 	unitPath, err := repograph.NewRepoPath(unitDir)
 	if err != nil {
@@ -151,7 +156,7 @@ func (l *Loader) resolveUnit(cache *fileCache, e unitEntry, located map[string]b
 	// existing regular file inside the repo, read and parse it once
 	// (shared across every unit that includes it), and reject a second
 	// level of include.
-	resolved, reason := l.resolveIncludes(cache, unitDir, unitFile, childPF.includes, located)
+	resolved, reason := l.resolveIncludes(cache, unitDir, unitFile, childPF.includes, targets)
 	if reason != "" {
 		return ports.UnitConfig{Path: unitPath, ConfigUnknownReason: reason}
 	}
@@ -222,14 +227,21 @@ func (l *Loader) resolveUnit(cache *fileCache, e unitEntry, located map[string]b
 // resolveIncludes evaluates and resolves unitDir's already
 // structurally-valid include decls, in declaration order. unitFile is the
 // unit's own terragrunt.hcl (an include resolving back to it is
-// self-inclusion, invalid). located accumulates every include path that
-// stats as an existing regular in-repo file, recorded BEFORE the
-// JSON/limit/nested/syntax checks below: the file is a parent config even when
-// this including unit goes on to fail for an unrelated reason, and
-// over-marking a file as an include target only ever fails toward unknown
-// (research Pattern 4 / G3), it never fabricates a diagnostic. It returns
-// "" for reason on success.
-func (l *Loader) resolveIncludes(cache *fileCache, unitDir string, unitFile repograph.RepoPath, decls []includeDecl, located map[string]bool) ([]resolvedInclude, string) {
+// self-inclusion, invalid). Every include path that stats as an existing
+// regular in-repo file is canonicalized (canonicalPath, 02-REVIEW G15) and
+// recorded in targets under both its lexical and its canonical path,
+// BEFORE the JSON/limit/nested/syntax checks below: the file is a parent
+// config even when this including unit goes on to fail for an unrelated
+// reason, and over-marking a file as an include target only ever fails
+// toward unknown (research Pattern 4 / G3), it never fabricates a
+// diagnostic. A path reaching its target through a symlink that escapes
+// the repository is ReasonIncludeOutsideRepo; one whose symlinks cannot be
+// resolved is ReasonUnreadableConfig. The JSON refusal, the
+// duplicate-include check and the self-inclusion check compare canonical
+// paths, so an alias cannot hide either; the file itself is still read
+// through its lexical path, so reference positions keep the path the user
+// wrote. It returns "" for reason on success.
+func (l *Loader) resolveIncludes(cache *fileCache, unitDir string, unitFile repograph.RepoPath, decls []includeDecl, targets *includeTargets) ([]resolvedInclude, string) {
 	var resolved []resolvedInclude
 	seenFiles := map[string]bool{}
 
@@ -247,20 +259,27 @@ func (l *Loader) resolveIncludes(cache *fileCache, unitDir string, unitFile repo
 		if statErr != nil || !info.Mode().IsRegular() {
 			return nil, ReasonIncludeNotFound
 		}
-		located[p] = true
+		canon, cerr := canonicalPath(l.fsys, p)
+		switch cerr {
+		case canonOutside:
+			return nil, ReasonIncludeOutsideRepo
+		case canonUnresolvable:
+			return nil, ReasonUnreadableConfig
+		}
+		targets.markExact(p, canon)
 
 		// G5: Terragrunt's own DefaultTerragruntConfigPaths (and
 		// find_in_parent_folders' probe order, mirrored in
 		// pathfuncs.go) prefers terragrunt.hcl.json over terragrunt.hcl.
 		// This domain does not parse JSON Terragrunt configs.
-		if strings.HasSuffix(p, ".json") {
+		if strings.HasSuffix(p, ".json") || strings.HasSuffix(canon, ".json") {
 			return nil, ReasonIncludeJSONUnsupported
 		}
 
-		if seenFiles[p] || p == unitFile.String() {
+		if seenFiles[canon] || canon == unitFile.String() {
 			return nil, ReasonInvalidInclude
 		}
-		seenFiles[p] = true
+		seenFiles[canon] = true
 
 		file, pathErr := repograph.NewRepoPath(p)
 		if pathErr != nil {
