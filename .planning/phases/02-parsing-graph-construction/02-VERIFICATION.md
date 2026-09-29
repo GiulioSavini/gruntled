@@ -1,57 +1,42 @@
 ---
 phase: 02-parsing-graph-construction
-verified: 2026-09-28T08:49:26Z
-status: gaps_found
-score: 5/5 roadmap success criteria verified; 32/33 gap-closure must-have truths verified (1 partial)
-gaps:
-  - truth: "A terragrunt.hcl that another unit includes is config-unknown include-target; its references are still checked once per including unit (02-07 must-have, 02-REVIEW G3)"
-    status: partial
-    reason: >
-      The include-target post-pass keys `located` by the lexical include path
-      (loader.go resolveIncludes: `located[p] = true`, then
-      `located[path.Join(u.Path.String(), "terragrunt.hcl")]` in LoadUnits).
-      When the include path reaches the parent config through an in-repo
-      symlink (a symlinked directory such as live/link -> parent, or a
-      symlinked file), the key is "live/link/terragrunt.hcl", never
-      "live/parent/terragrunt.hcl", so the parent stays resolved and is
-      analysed standalone. This is exactly the G3 false-GRT001 shape:
-      reproduced on a real os.OpenRoot tree, live/parent (config_path
-      "../vpc") resolves to live/vpc, whose module lacks output "id", while
-      the only real consumer live/x/app resolves the same text to
-      live/x/vpc, which declares it. With a plain path the same fixture
-      gives live/parent config-unknown include-target and no missing
-      output. fs.Stat and cache.get both follow the symlink, so the include
-      itself parses fine; only the include-target bookkeeping misses it.
-    artifacts:
-      - path: "internal/infrastructure/terragrunt/loader.go"
-        issue: "located map (resolveIncludes, LoadUnits step 13) is keyed by the lexical path, not the file's identity; a symlink alias bypasses the include-target guard"
-    missing:
-      - "Fail toward unknown when an include path traverses a symlink: either key located by the canonical in-repo path (resolve each path segment with fs.ReadLink/Lstat inside the repo), or make an include whose path crosses any symlink config-unknown with a new reason"
-      - "A failing test first: a real-FS fixture (t.TempDir + os.Symlink + os.OpenRoot, like realfs_test.go) where live/x/app includes ../../link/terragrunt.hcl with link -> parent, asserting live/parent is config-unknown include-target"
-      - "A catalogue row in 02-TERRAGRUNT-EDGECASES.md for the symlink-aliased include target"
+verified: 2026-09-29T00:00:00Z
+status: passed
+score: 5/5 roadmap success criteria verified; 14/14 plans' must-haves verified; 11/11 requirements satisfied; G15..G22 all closed
+re_verification:
+  previous_status: gaps_found
+  previous_score: "5/5 roadmap criteria; 32/33 gap-closure truths (1 partial)"
+  gaps_closed:
+    - "G3/G15: include-target guard bypassed by a symlinked include path (02-13: targets matched by canonical in-repo path)"
+    - "G16: parent only marked when its includer resolves (02-13: unknowable/failed includers mark ancestors; dynamic paths mark include-free units)"
+    - "G17: ternary nesting and long operator chains crash or exhaust memory (02-12)"
+    - "G18: FIFO named terragrunt.hcl / module file hangs the process (02-12)"
+    - "G19: generate output detector was a line regex (02-13: any 'output' substring or \\u escape may declare)"
+    - "G20: x.tofu shadowed x.tf (02-12: union surface)"
+    - "G21: awk import scan bypassable by a comment or ';' (02-14: go/parser scanner)"
+    - "G22: nested go.mod escaped the domain rules (02-14: single-module rule)"
+  gaps_remaining: []
+  regressions: []
 ---
 
 # Phase 2: Parsing & Graph Construction Verification Report
 
-**Phase Goal:** gruntled walks a real Terragrunt repository on disk and builds a complete, correctly-resolved `RepositoryGraph` (every unit, the module it resolves to, and that module's public surface) using only structural HCL decoding, never evaluating an expression to a value.
-**Verified:** 2026-09-28T08:49:26Z
-**Status:** gaps_found (one narrow, partial gap; all five roadmap success criteria hold)
-**Re-verification:** No, initial verification (02-REVIEW.md is a review input, not a previous VERIFICATION.md)
+**Phase Goal:** gruntled walks a real Terragrunt repository on disk and builds a complete, correctly-resolved `RepositoryGraph` (every unit, the module it resolves to, and that module's public surface) using only structural HCL decoding, never evaluating an expression to a value. Zero false positives is paramount.
+**Verified:** 2026-09-29 (master 8e8ec52)
+**Status:** passed
+**Re-verification:** Yes, after gap cycle 1 (plans 02-12, 02-13, 02-14). The previous report was `gaps_found` for one partial truth: the G3 include-target guard was bypassed through a symlinked include.
 
-## Commands run
+## Commands run (GOTOOLCHAIN=go1.27.0)
 
 | Command | Result |
 |---|---|
-| `GOTOOLCHAIN=go1.27.0 go test -count=1 ./...` | all packages ok (indexing, diagnostic, repograph, hclconv, sourceresolve, terragrunt, tfsurface, synthrepo) |
-| `GOTOOLCHAIN=go1.27.0 go vet ./...` | clean |
-| `bash scripts/check-architecture.sh` | `architecture: OK (2 domain packages, 2 application packages)`, exit 0 |
-| `bash scripts/test-check-architecture.sh` | every case PASS, including the G13/G14 probes (layout-unknown-dir, infra-from-tagged-file, testsupport-in-tagged-prod, hcl-windows-file-in-cmd, hcl-tagged-in-testsupport, hcl-aliased-import-block) |
-| `GRUNTLED_CORPUS=~/.cache/gruntled-phase4/corpus/primary go test -run TestCorpusSmoke -v` | PASS: 65 units, 3 config-unknown (duplicate `dependency "iam"` labels, documented), 0 module-unknown, 22 references, 0 missing outputs |
-| `GRUNTLED_CORPUS_SECRET=~/.cache/gruntled-phase4/corpus/secret go test -run TestIncludeTargetSecretCorpus -v` | PASS: parent `terragrunt` is include-target; acm/ecr/lambda resolve to aws/*; 4 refs, 0 missing |
-| `go test -run '^$' -fuzz FuzzLoadUnits -fuzztime 30s` | 121k execs, no crasher |
-| `git status --short` after all runs | clean (probes ran in a scratch copy, since deleted) |
-
-The corpus tests are env-gated: `TestCorpusSmoke` reads `GRUNTLED_CORPUS`, `TestIncludeTargetSecretCorpus` reads `GRUNTLED_CORPUS_SECRET`, and both skip when the variable is unset, so the plain `go test ./...` run does not exercise them. I ran both explicitly against the local checkouts.
+| `go vet ./...` | clean |
+| `go test -count=1 ./...` | all packages ok (incl. new `scripts/archscan`) |
+| `bash scripts/check-architecture.sh` | `architecture: OK (2 domain packages, 2 application packages, 1 interfaces packages)` |
+| `bash scripts/test-check-architecture.sh` | 56 PASS, "all architecture self-tests passed", exit 0. Includes hcl-comment-in-import-block, hcl-semicolon-import-block, infra-comment-in-import-block, testsupport-semicolon-in-tagged-prod, nested-go-mod, nested-go-mod-dot-dir, go-work, and the no-trip cases hcl-mention-in-comment-allowed and unrelated-go-mod-in-dot-dir-allowed |
+| `TestCorpusSmoke` (`GRUNTLED_CORPUS=.../corpus/primary`) and `TestIncludeTargetSecretCorpus` (`GRUNTLED_CORPUS_SECRET=.../corpus/secret`) | both PASS |
+| `go test -run '^$' -fuzz FuzzLoadUnits -fuzztime 30s` | PASS, about 247k execs, no crasher |
+| `git status --short` after all runs | clean; every probe ran in a mktemp copy, since deleted |
 
 ## Goal Achievement
 
@@ -59,95 +44,67 @@ The corpus tests are env-gated: `TestCorpusSmoke` reads `GRUNTLED_CORPUS`, `Test
 
 | # | Truth | Status | Evidence |
 |---|---|---|---|
-| 1 | Only `include`, `terraform.source`, `dependency` (plus `generate` for the output guard) are read structurally; the six path functions are evaluated correctly | VERIFIED | parse.go switches on block.Type only; eval.go `evalPath` uses `hcl.EvalContext{Functions: s.functions()}` with Variables nil and exactly the six functions (pathfuncs.go). find_in_parent_folders starts at the parent dir and probes terragrunt.hcl.json first, matching Terragrunt. S0/S1/S2 scopes are implemented per research Pattern 4. Tests: TestPathFuncs* (9), TestEvalPathFailsClosed, TestStructuralOnly. Probe: `get_env`, `local.x` in include/source fail closed |
-| 2 | Each include file is parsed exactly once and shared | VERIFIED | parse.go `fileCache.get` memoizes by path; TestParseOnce (50 units, root.hcl ReadFile count == 1, every file <= 1), TestLoaderParseOnceIncludes, and a shared over-limit include read once (02-11) |
-| 3 | Local source, absent source (own dir), and remote/dynamic source classified offline | VERIFIED | loader.go resolveSource + sourceresolve.Classify (pure string classification; no net/exec import in non-test code). Probe: `tfr:///...` gives module-unknown remote-source; `${local.x}/mod` and `get_env("X")` give source-dynamic-path; absent source gives module = unit dir |
-| 4 | Dependency resolved through both hops; surface extracted when the unit dir differs from the module dir | VERIFIED | TestTwoHop (live/app -> aws/lambda, dep in include). Independent probe: live/vpc with `source = "${get_parent_terragrunt_dir()}/../modules//vpc"` resolves to modules/vpc; app's `vpc_id` ref is found, `nope` is reported missing, and a ternary-branch ref is dropped (G1). Primary corpus: 22/22 refs land on declared outputs |
-| 5 | Unresolvable constructs give unknown; invalid HCL gives a diagnostic, never a crash; cache/.terraform/vendor/symlinks are not walked | VERIFIED | reasons.go catalogue (config-unknown, module-unknown, unresolved-dependency); probe: mid-edit `inputs = { a = [` gives config-unknown syntax-error + one GRT100 at e/terragrunt.hcl:3:1; hclconv limits (4 MiB, depth 1000) stop the G7 stack-overflow crash (TestDeepNestingNoCrash, TestDeepSharedIncludeNoCrash, TestDeepModuleFileEndToEnd); walk.go skips .git/.terraform/.terragrunt-cache/vendor and every symlink DirEntry (TestWalk* incl. symlink cycle and outside symlink) |
+| 1 | Only include / terraform.source / dependency (plus generate for the output guard) read structurally; six path functions evaluated | VERIFIED | Unchanged from the previous report; tests green, no regression in parse.go, pathfuncs.go, eval.go |
+| 2 | Each include file parsed exactly once and shared | VERIFIED | TestParseOnce and include parse-once tests pass. 02-12 moved ReadFileLimited to a single Open + `io.LimitReader`; parse-once tests still prove one read per file |
+| 3 | Local, absent and remote/dynamic source classified offline | VERIFIED | sourceresolve tests green; no net/exec imports |
+| 4 | Dependency resolved through both hops; surface extracted | VERIFIED | TestTwoHop; primary corpus 65 units, 22 refs, 0 missing |
+| 5 | Unresolvable gives unknown; invalid HCL gives a diagnostic, never a crash; cache/.terraform/vendor/symlinks not walked | VERIFIED | G17/G18 closed (below); fuzz clean; walk tests green |
 
-**Score:** 5/5 roadmap success criteria verified.
+**Score:** 5/5.
 
-### Gap-closure must-haves (02-06..02-11, from 02-REVIEW.md G1..G14)
+### Gap closure G15..G22 (reproduced in a scratch copy on a real os.OpenRoot tree)
 
-| Plan | Gap | Status | Evidence |
-|---|---|---|---|
-| 02-06 | G1 lazy evaluation | VERIFIED | refs.go `lazyRanges` (ternary branches, &&/\|\| operands, for key/value/cond; condition and for collection still count); TestExtractRefsLazyEvaluation, TestExtractRefsLazySiblingAttributesKeepPosition; probe confirmed |
-| 02-07 | G2 stack target | VERIFIED | resolveOneDependency: stack file or dir holding one gives config-path-stack (wins over sibling terragrunt.hcl); loader_test rows |
-| 02-07 | G3 include-target | PARTIAL | Works for lexical paths (TestIncludeTargetCorpusReproduction, TestIncludeTargetExplicitPath, secret corpus). Bypassed by a symlink alias, see Gaps |
-| 02-07 | G4 non-default file | VERIFIED | config-path-nondefault-file for any regular file other than terragrunt.hcl |
-| 02-07 | G5 JSON include | VERIFIED | `.json` include gives include-json-unsupported before parsing, so no GRT100 |
-| 02-07 | G6 overlay ReadDir failure | VERIFIED | unitDirOverlaysModule returns module-file-unreadable |
-| 02-07 | G8 invalid config_path | VERIFIED | config-path-invalid affects only that dependency |
-| 02-07 | G9 malformed generate | VERIFIED | validateEffectiveFile gives invalid-generate |
-| 02-07 | G11 comment | VERIFIED | loader.go resolveUnit comment now states the zero UnitConfig fails loudly in indexing.Build (NewRepositoryGraph/constructors reject a zero path) |
-| 02-08 | G12 zero values | VERIFIED | position/unit/module/graph constructors reject zero Position, invalid Tristate, zero entries, zero-path units/modules, invalid UnitStatus, unknown module without reason |
-| 02-09 | G13/G14 arch holes | VERIFIED | rules internal-layout, infrastructure-importers, testsupport-only-in-tests, source-level HCL import scan; self-tests PASS |
-| 02-10 | G7a module files | VERIFIED | tfsurface refuses oversize/overdeep before parsing (module-file-too-large / -too-deep) |
-| 02-11 | G7b unit/include files, G10 fuzz, catalogue | VERIFIED | config-too-large/-too-deep, no GRT100; FuzzLoadUnits fuzzes body + shared root.hcl/main.tf; STACK-09 and STACK-11 rows in 02-TERRAGRUNT-EDGECASES.md |
-
-### Required Artifacts
-
-| Artifact | Status | Details |
+| Gap | Status | Independent evidence |
 |---|---|---|
-| internal/infrastructure/terragrunt/{walk,parse,refs,pathfuncs,eval,merge,depfacts,loader,reasons}.go | VERIFIED | substantive, implements ports.UnitLoader, used by indexing.Build in integration and corpus tests |
-| internal/infrastructure/tfsurface/reader.go | VERIFIED | implements ports.SurfaceReader; .tf/.tf.json/.tofu precedence, override dedup, limits |
-| internal/infrastructure/hclconv/{hclconv,limits}.go | VERIFIED | byte-column positions, FirstSyntaxError, ReadFileLimited, CheckNativeDepth/CheckJSONDepth; used by parse.go and reader.go |
-| internal/infrastructure/sourceresolve/classify.go | VERIFIED | offline classifier used by loader.resolveSource |
-| internal/application/indexing/build.go, ports/ports.go | VERIFIED | Build wires loader, then surfaces once per distinct module, then graph |
-| internal/domain/repograph/* | VERIFIED | unknown states, unresolved deps, DependencyOptions, G12 invariants; architecture check proves no HCL/fs imports |
+| G15 symlinked include | CLOSED | Fixture: live/terragrunt.hcl has dependency `./vpc` (lacks `id`); live/x/app includes it. symlinked dir (`live/link -> .`), symlinked file, alias of an ancestor dir: `live` = config-unknown/include-target, missing outputs = 0. Escaping, looping, backslash and unresolvable links: the includer goes to include-not-found, never resolved against a guessed path |
+| G16 failing/dynamic includers | CLOSED | `${get_repo_root()}/...`, `${get_path_to_repo_root()}/...`, `local.*`, `get_env()`: `live` include-target, missing=0. `find_in_parent_folders()` plus a syntax error: `live` include-target. First include failing, second explicit: `live` still include-target. Dynamic path with a fixed non-terragrunt.hcl name marks ancestors only (residual catalogued) |
+| G17 ternary/chain depth | CLOSED | 1M-link else-chain (4 MB), 100k true-chain, 2M `+` chain, 5000 parens, ternary inside call args, newline-in-parens and template interpolation: all config-unknown/config-too-deep, no crash (worst case 3.8 s). Module file with a 1M else-chain: surface unknown, module-file-too-deep |
+| G18 FIFO | CLOSED | FIFO `terragrunt.hcl` is not a unit; FIFO `extra.tf`: surface unknown, module-file-unreadable; build finishes, no hang |
+| G19 generate detector | CLOSED | contents with a `/* */` comment prefix, `;`-prefixed, indented, JSON, `o` escape, `file()`, `local.*`, quoted and templated forms: all module-unknown/generate-may-declare-outputs, missing=0. Contents with no "output" still resolve (real finding preserved) |
+| G20 tf/tofu | CLOSED | outputs.tf `id` plus outputs.tofu `other` (and reverse, and .tf.json/.tofu.json): both names present, missing=0 |
+| G21 awk scan | CLOSED | go/parser ImportsOnly helper in scripts/archscan (own unit tests); comment and `;` bypass probes fail by rule name in the self-test |
+| G22 nested go.mod | CLOSED | single-module rule; nested-go-mod, dot-dir variant and go.work each fail by name; an unrelated go.mod under a dot dir is allowed |
 
-### Key Link Verification
+### Plan must-haves 02-01..02-14
 
-| From | To | Via | Status |
-|---|---|---|---|
-| indexing.Build | terragrunt.Loader | ports.UnitLoader.LoadUnits | WIRED |
-| indexing.Build | tfsurface.Reader | ports.SurfaceReader.ReadSurface per distinct resolved module | WIRED |
-| loader.resolveUnit | fileCache | cache.get (parse once) | WIRED |
-| loader | sourceresolve.Classify | resolveSource | WIRED |
-| parse.go / tfsurface | hclconv limits | ReadFileLimited + depth check before hclsyntax | WIRED |
-| RepositoryGraph | two-hop queries | DependencyTarget -> ModuleOf -> Surface | WIRED |
-| cmd/gruntled/main.go | indexing.Build | composition root | NOT WIRED, by design: the CLI is Phase 3 (CLI-01..05); Phase 2 is proven through the corpus tests on os.OpenRoot |
+02-01..02-05 (parsing, path functions, includes, sources, graph, surface) and 02-06..02-11 (G1..G14) were verified in the previous report and remain green: the full test suite, the corpus smokes and the fuzz run show no regression. 02-12, 02-13 and 02-14 truths are covered by the G15..G22 table plus the green self-test. The 02-13 catalogue truth holds: 02-TERRAGRUNT-EDGECASES.md has INC-14/15/16, SRC-16/17, STACK-13/14, the STACK-09 revision and a "Gap closure (02-12..02-14)" list.
 
 ### Requirements Coverage
 
-| Requirement | Description | Status | Evidence |
-|---|---|---|---|
-| PARSE-01 | Structural decode of include/terraform.source/dependency | SATISFIED | parse.go, TestStructuralOnly |
-| PARSE-02 | Six pure path functions | SATISFIED | pathfuncs.go, TestPathFuncs* |
-| PARSE-03 | Includes, merge strategy, parse once | SATISFIED | merge.go precedence/no_merge/deep, TestIncludePrecedence, TestParseOnce |
-| PARSE-04 | Unknown when offline-unresolvable; no diagnostic for unknown units | SATISFIED (see gap for one include-target alias) | reasons.go catalogue; only file-level GRT100 is emitted, no unit-scoped diagnostic |
-| PARSE-05 | Invalid HCL gives a diagnostic, no crash | SATISFIED | GRT100 via FirstSyntaxError; limits prevent unrecoverable stack overflow; fuzz |
-| PARSE-06 | Skip cache/.terraform/vendor/symlinks | SATISFIED | walk.go skipDirNames + ModeSymlink guard, TestWalk* |
-| GRAPH-01 | Module via terraform.source | SATISFIED | resolveSource, TestSourceForms |
-| GRAPH-02 | Module = own dir when source absent | SATISFIED | resolveSource fallback |
-| GRAPH-03 | Remote classified without download, unit unknown | SATISFIED | Classify + ReasonRemoteSource, TestModuleUnknownBlastRadius |
-| GRAPH-04 | Two-hop dependency resolution | SATISFIED | TestTwoHop, corpus 22/22 |
-| GRAPH-05 | variable/output names from .tf and .tf.json | SATISFIED | tfsurface reader tests incl. JSON object form and mixed union |
+| Requirement | Status | Evidence |
+|---|---|---|
+| PARSE-01..PARSE-06 | SATISFIED | parse.go, pathfuncs.go, merge.go, reasons.go, walk.go; PARSE-05 is now also crash- and hang-proof (G17/G18). PARSE-04's include-target caveat from the previous report is closed |
+| GRAPH-01..GRAPH-05 | SATISFIED | resolveSource, Classify, TestTwoHop, tfsurface (now union of tf/tofu) |
 
 No orphaned requirements: REQUIREMENTS.md maps exactly PARSE-01..06 and GRAPH-01..05 to Phase 2.
 
+### Accepted false-negative trade-off (not a gap)
+
+02-13-SUMMARY measured the include-free rule on denis256: include-target units rise from 53 to 719 of 1146, and the two genuine findings (`issue-2631/main`, `mocks/module1`) become hidden. This is documented in 02-13-SUMMARY (key decisions and the measurement table) and in 02-TERRAGRUNT-EDGECASES.md (STACK-09 revision, "Measured on denis256: 53 to 719 of 1146"), under the stated policy "ten false negatives beat one false positive". It produces unknowns only; I found no false positive from it. Phase 4 denis256 expectations must account for it.
+
+### Key Link Verification
+
+All links from the previous report remain WIRED. New: LoadUnits step 13 uses `includeTargets.isTarget` (canonical path, ancestor, include-free flag); resolveUnit calls `markIncludeDecls` before validation; `check-architecture.sh` calls `go run ./scripts/archscan`. `cmd/gruntled/main.go` still does not call indexing.Build, by design (CLI is Phase 3).
+
 ### Anti-Patterns Found
 
-| File | Line | Pattern | Severity | Impact |
-|---|---|---|---|---|
-| (none in production code) | - | no TODO/FIXME/XXX/HACK in non-test Go files | - | - |
-| cmd/gruntled/main.go | 13-14 | stub main ("no commands implemented yet") | Info | expected: Phase 3 wires the CLI |
-| .planning/ROADMAP.md | 71-76 | gap-closure plans 02-06..02-11 still `[ ]` while the phase is `[x]` | Info | bookkeeping only |
-| 02-VALIDATION.md | per-task map | GC rows still "pending" | Info | bookkeeping only |
+| File | Pattern | Severity | Impact |
+|---|---|---|---|
+| cmd/gruntled/main.go | stub main | Info | expected, Phase 3 |
+| .planning/ROADMAP.md lines 29, 79-81 | Phase 2 still `[ ]`; plans 02-12..02-14 still `[ ]` (line 29 says 11/14 executed) | Info | bookkeeping only; the orchestrator should tick them |
+| 02-VALIDATION.md | GC rows may still read "pending" | Info | bookkeeping only |
+
+No TODO/FIXME in production code.
 
 ### Human Verification Required
 
-None needed for the phase goal. Everything above was checked programmatically, including the env-gated corpus runs.
+None.
 
 ### Gaps Summary
 
-The phase goal is met. All five roadmap success criteria and all 11 requirements are backed by real code and passing tests, including both real-corpus checks and a short fuzz run. Every 02-REVIEW gap (G1..G14) is closed as specified, with one exception: the G3 include-target guard.
-
-That guard identifies a parent config by the lexical path an including unit used. If a unit includes the parent through an in-repo symlink (`include { path = "../../link/terragrunt.hcl" }` with `link -> parent`), the parent is not marked include-target. It is then analysed standalone against the wrong directory. I reproduced this on a real filesystem: a reference in the parent lands on a module that lacks the output, which is the same false-GRT001 shape G3 was meant to remove. Without the symlink, the same fixture behaves correctly.
-
-This is a narrow edge case, and nothing in the checked corpora hits it. The primary corpus only symlinks module `.tf` files, and denis256's symlinked `terragrunt.hcl` files are skipped by discovery. Still, it breaks the plan's own must-have, and the project's zero-false-positive rule means it should fail toward unknown. The fix is small and local to loader.go: canonicalize the include path, or mark a symlink-traversing include config-unknown. It should come with a real-FS test like the ones in realfs_test.go.
+No gaps. All five roadmap criteria, all 11 requirements and gaps G15..G22 are verified against the code and by independent reproduction. The accepted include-free coverage cost is documented. Every new failure mode fails toward unknown, and I found no false positive.
 
 ---
 
-_Verified: 2026-09-28T08:49:26Z_
+_Verified: 2026-09-29_
 _Verifier: gsd-verifier_
