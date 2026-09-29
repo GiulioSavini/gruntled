@@ -13,7 +13,7 @@ read-only constraints in PROJECT.md apply to every requirement below.
 
 - [ ] **MORE-01**: User sees `GRT002` when a `dependency` block's literal `config_path` resolves to a directory that contains no unit; a non-literal or unresolvable `config_path` stays silent
 - [ ] **MORE-02**: User sees `GRT003` once per dependency cycle, with cycle members listed in a deterministic order starting from the lexically smallest unit path
-- [ ] **MORE-06**: On the three-repo corpus, `GRT002` and `GRT003` report nothing on the unmutated repositories and catch every injected mutation (a `config_path` pointed at a missing directory, a back-edge that closes a cycle), recorded in `docs/validation.md`
+- [ ] **MORE-06**: On the three-repo corpus, `GRT002` and `GRT003` report nothing on unmutated iso20022 and cds-snc/secret, report on denis256 (a deliberately broken suite) exactly the set an independent oracle derives, and catch every injected mutation (a `config_path` pointed at a missing directory, a back-edge that closes a cycle), recorded in `docs/validation.md`
 
 ### Integration
 

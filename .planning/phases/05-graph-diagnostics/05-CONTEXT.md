@@ -21,6 +21,15 @@ Decisions come from the user (Q&A) unless marked *[auto]*. The user asked Claude
 the planner-level questions on its own: *[auto]* items follow the question agent's
 recommendations after review.
 
+**Corrections (recorded in 05-01, after research):**
+- The pinned oracle is `~/.cache/gruntled-phase4/bin/terragrunt_linux_amd64` (v1.1.6), not the
+  PATH `terragrunt` (v0.99.3).
+- The oracle command is `run --all --non-interactive --tf-path <tofu> -- version` on scratch
+  copies. `hcl validate` does NOT detect missing targets; `dag graph` only warns on cycles.
+- Include merge of `dependencies` is a union in both shallow and deep merge (see below).
+- denis256 is a deliberately broken suite: on the unmutated corpus it must report exactly the set
+  an independent oracle derives, not nothing (ROADMAP SC3 / MORE-06 amended).
+
 ### GRT002 trigger (user)
 - Fires only when a resolved dependency target directory is missing, or holds no unit config
   file on disk. A directory that holds a config file the walk skipped (hidden dir,
@@ -96,9 +105,11 @@ recommendations after review.
   (`local.x`, `concat`) is recorded as Unknown (not absent), so it gives no edges and no GRT002,
   and Phase 6 can show it.
 - Resolution shares one helper with `resolveOneDependency` (file, stack, escape classification).
-- Include merge: shallow, the highest-precedence file's block wins; deep, concatenate and
-  deduplicate. Before coding, verify this against terragrunt v1.1.6 `config/include.go` and cite
-  it in the plan.
+- Include merge: UNION with de-duplication in BOTH shallow and deep merge. CORRECTED per
+  research: terragrunt v1.1.6 `pkg/config/include.go` Merge (~L402-407) calls
+  `ModuleDependencies.Merge` (`pkg/config/config.go`) which appends absent paths, and DeepMerge
+  (~L506-545) also unions. Edges are deduped by target so cycles are unaffected; `no_merge`
+  includes contribute nothing.
 - A structurally invalid `dependencies` block (duplicate, label, missing or non-list `paths`)
   drops only the path edges. The unit stays resolved, so pinned corpus counts and GRT001 are
   unchanged.
@@ -138,9 +149,10 @@ recommendations after review.
   oracle (grep + `test -d` for GRT002, coreutils `tsort` for cycles), and document why.
   Optionally, also run terragrunt on a scratch copy of secret with the include named, recorded
   separately.
-- Oracle commands: `terragrunt dag graph` / `find --dag` for cycles, `hcl validate` for missing
-  directories. Before planning, verify each on a hand-made tree and pin the exact command and
-  expected error text. Never `run --all plan` (not offline).
+- Oracle commands: pinned terragrunt v1.1.6 (`~/.cache/gruntled-phase4/bin/terragrunt_linux_amd64`)
+  `run --all --non-interactive --tf-path <tofu> -- version` on scratch copies; it fails on both a
+  missing dependency target and a cycle. `hcl validate` does NOT detect missing targets and
+  `dag graph` only warns on cycles, so neither is the oracle. Never `run --all plan` (not offline).
 - Mutation sites are resolved units only (not iso20022's `iac.cicd/codebuild_project`
   config-unknown units). Mutations are pinned via the existing `corpusMutation{File, Old, New}`
   exact-occurrence check. The self-loop is spelled `config_path = "../<self>"`; `"."` is covered

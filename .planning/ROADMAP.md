@@ -42,9 +42,15 @@ See `milestones/v0.1-ROADMAP.md`.
 **Success Criteria** (what must be TRUE):
   1. `gruntled check` reports `GRT002` on a unit whose `dependency` block has a literal `config_path` resolving to a directory that holds no unit, and stays silent when the `config_path` is non-literal or unresolvable
   2. `gruntled check` reports `GRT003` exactly once per dependency cycle, with members listed starting from the lexically smallest unit path, identical across repeated runs
-  3. On the unmutated three-repo corpus (iso20022, cds-snc/secret, denis256), `GRT002` and `GRT003` report nothing
-  4. On the same corpus, every injected mutation (a `config_path` pointed at a missing directory, a back-edge closing a cycle) is caught, and the results are recorded in `docs/validation.md`
-**Plans**: TBD
+  3. On the unmutated corpus, iso20022 and cds-snc/secret report no `GRT002`/`GRT003`; denis256 (a deliberately broken suite) reports exactly the set an independent oracle derives
+  4. On the same corpus, every injected mutation (a `config_path` pointed at a missing directory, a back-edge closing a cycle) is caught (denis256 validated against its exact set plus mutations), and the results are recorded in `docs/validation.md`
+**Plans**: 6 plans
+- [ ] 05-01-PLAN.md — domain foundation
+- [ ] 05-02-PLAN.md — analyzers
+- [ ] 05-03-PLAN.md — loader target state
+- [ ] 05-04-PLAN.md — dependencies paths
+- [ ] 05-05-PLAN.md — goldens+docs
+- [ ] 05-06-PLAN.md — corpus validation
 
 ### Phase 6: Machine-Readable Output
 **Goal**: Users and tooling can consume gruntled's graph and diagnostics as stable, deterministic documents, including one GitHub code scanning accepts.
