@@ -22,7 +22,7 @@ hand-derived references on that corpus (0/8). See
 | VALID-04 | Every reference broken by an injected rename or deletion is reported, and nothing else | PASS | [VALID-04](#valid-04-injected-mutations) |
 | VALID-05 | Plain `terragrunt hcl validate` does not report those mutations | PASS | [VALID-05](#valid-05-terragrunt-hcl-validate-on-the-same-mutated-trees) |
 | VALID-06 | `gruntled check` is faster than `terragrunt hcl validate` on the same repository | PASS | [VALID-06](#valid-06-benchmark) |
-| Secondary corpus denis256 (supplementary to VALID-02) | No panic, deterministic output, and an exact GRT001 set | PASS (0 false positives, 0/8 recall) | [Secondary corpus](#secondary-corpus-denis256terragrunt-tests) |
+| Secondary corpus denis256 (supplementary to VALID-02) | No panic, deterministic output, and an exact GRT001 set | PARTIAL: precision PASS (0 false positives); recall FAIL (0/8 known references reported, all hidden by the 02-13 include-target rule) | [Secondary corpus](#secondary-corpus-denis256terragrunt-tests) |
 
 ## Environment
 
