@@ -435,3 +435,15 @@ func TestGoldenFixtures(t *testing.T) {
 		})
 	}
 }
+
+// TestGoldenFixtureCount keeps a deleted fixture from silently shrinking
+// TestGoldenFixtures' coverage.
+func TestGoldenFixtureCount(t *testing.T) {
+	paths, err := filepath.Glob(filepath.Join("testdata", "golden", "*.txtar"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(paths) < 10 {
+		t.Fatalf("found %d golden fixtures, want at least 10: %v", len(paths), paths)
+	}
+}

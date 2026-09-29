@@ -1,0 +1,45 @@
+Two inline units share one output declaration through a symlinked
+common.tf pointing at shared/common.tf. The worker's reference to the
+api's region output, declared only in the symlinked file, is clean; its
+reference to api_endpoint, declared nowhere, is reported.
+-- shared/common.tf --
+output "region" {
+  value = "eu-south-1"
+}
+-- svc/api/terragrunt.hcl --
+inputs = {
+  port = 8080
+}
+-- svc/api/main.tf --
+variable "port" {
+  type = number
+}
+
+output "api_url" {
+  value = "http://api.internal:${var.port}"
+}
+-- svc/worker/terragrunt.hcl --
+dependency "api" {
+  config_path = "../api"
+}
+
+inputs = {
+  region       = dependency.api.outputs.region
+  api_endpoint = dependency.api.outputs.api_endpoint
+}
+-- svc/worker/main.tf --
+variable "region" {
+  type = string
+}
+
+variable "api_endpoint" {
+  type = string
+}
+-- _golden/symlinks --
+svc/api/common.tf -> ../../shared/common.tf
+svc/worker/common.tf -> ../../shared/common.tf
+-- _golden/exit --
+1
+-- _golden/want --
+# svc/worker/terragrunt.hcl line 7: "  api_endpoint = " is 17 bytes.
+GRT001 error svc/worker/terragrunt.hcl:7:18 svc/worker

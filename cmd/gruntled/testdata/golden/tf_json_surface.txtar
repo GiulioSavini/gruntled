@@ -1,0 +1,30 @@
+A module whose whole surface is declared in JSON syntax (outputs.tf.json and
+variables.tf.json). The consumer's reference to the declared bucket_arn is
+clean; the reference to bucket_name, which the JSON module does not declare,
+is reported.
+-- modules/bucket/outputs.tf.json --
+{"output": {"bucket_arn": {"value": "x"}}}
+-- modules/bucket/variables.tf.json --
+{"variable": {"bucket_prefix": {"type": "string"}}}
+-- storage/bucket/terragrunt.hcl --
+terraform {
+  source = "../../modules/bucket"
+}
+
+inputs = {
+  bucket_prefix = "golden"
+}
+-- storage/consumer/terragrunt.hcl --
+dependency "bucket" {
+  config_path = "../bucket"
+}
+
+inputs = {
+  arn  = dependency.bucket.outputs.bucket_arn
+  name = dependency.bucket.outputs.bucket_name
+}
+-- _golden/exit --
+1
+-- _golden/want --
+# storage/consumer/terragrunt.hcl line 7: "  name = " is 9 bytes.
+GRT001 error storage/consumer/terragrunt.hcl:7:10 storage/consumer

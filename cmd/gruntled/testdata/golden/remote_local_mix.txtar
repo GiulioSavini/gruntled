@@ -1,0 +1,52 @@
+One consumer depends on two units with remote module sources (git:: and
+tfr:///) and on one local inline unit. References into the remote units name
+made-up outputs and stay silent, because their module surface is unknown and
+gruntled never downloads it. Only the missing output of the local unit is
+reported.
+-- live/vpc/terragrunt.hcl --
+terraform {
+  source = "git::https://example.com/modules.git//vpc?ref=v1.0.0"
+}
+-- live/dns/terragrunt.hcl --
+terraform {
+  source = "tfr:///terraform-aws-modules/route53/aws?version=2.0.0"
+}
+-- live/queue/terragrunt.hcl --
+inputs = {
+  name = "jobs"
+}
+-- live/queue/main.tf --
+variable "name" {
+  type = string
+}
+
+output "queue_url" {
+  value = "https://queue.example/${var.name}"
+}
+-- live/app/terragrunt.hcl --
+dependency "vpc" {
+  config_path = "../vpc"
+}
+
+dependency "dns" {
+  config_path = "../dns"
+}
+
+dependency "queue" {
+  config_path = "../queue"
+}
+
+inputs = {
+  vpc_id    = dependency.vpc.outputs.made_up_vpc_id
+  zone_id   = dependency.dns.outputs.made_up_zone_id
+  queue_url = dependency.queue.outputs.queue_url
+  queue_arn = dependency.queue.outputs.queue_arn
+}
+-- _golden/exit --
+1
+-- _golden/want --
+# live/app/terragrunt.hcl line 17: "  queue_arn = " is 14 bytes.
+GRT001 error live/app/terragrunt.hcl:17:15 live/app
+-- _golden/unknown --
+live/dns module-unknown remote-source
+live/vpc module-unknown remote-source

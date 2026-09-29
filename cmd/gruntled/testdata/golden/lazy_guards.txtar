@@ -1,0 +1,33 @@
+Missing outputs referenced only where HCL may never evaluate them: inside
+try() and can(), a ternary branch, the right operand of &&, and a for
+expression body. All stay silent (02-06 G1). The one plain reference to a
+missing output, outside every guard, is reported.
+-- guards/base/terragrunt.hcl --
+inputs = {}
+-- guards/base/main.tf --
+output "ok" {
+  value = 1
+}
+-- guards/app/terragrunt.hcl --
+locals {
+  flag = get_env("GOLDEN_FLAG", "") != ""
+}
+
+dependency "base" {
+  config_path = "../base"
+}
+
+inputs = {
+  a = try(dependency.base.outputs.nope1, "d")
+  b = can(dependency.base.outputs.nope2)
+  c = local.flag ? dependency.base.outputs.nope3 : "d"
+  d = local.flag && dependency.base.outputs.nope4
+  e = [for s in ["x", "y"] : dependency.base.outputs.nope5]
+  f = dependency.base.outputs.ok
+  g = dependency.base.outputs.nope6
+}
+-- _golden/exit --
+1
+-- _golden/want --
+# guards/app/terragrunt.hcl line 16: "  g = " is 6 bytes.
+GRT001 error guards/app/terragrunt.hcl:16:7 guards/app

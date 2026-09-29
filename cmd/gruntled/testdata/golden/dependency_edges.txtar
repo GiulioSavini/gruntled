@@ -1,0 +1,64 @@
+Dependency targets gruntled cannot map to a module stay silent: a directory
+without terragrunt.hcl, a directory holding only terragrunt.stack.hcl
+(02-07 G2), a config_path naming a non-default file (02-07 G4), and a label
+no dependency block declares. The one missing output of a valid target is
+reported. A unit with a duplicate dependency label is config-unknown.
+-- edge/target/terragrunt.hcl --
+inputs = {}
+-- edge/target/alt.hcl --
+inputs = {}
+-- edge/target/main.tf --
+output "out" {
+  value = 1
+}
+-- edge/nodir/README.md --
+Not a unit: this directory has no terragrunt.hcl.
+-- edge/stack/terragrunt.stack.hcl --
+unit "inner" {
+  source = "../target"
+  path   = "inner"
+}
+-- edge/consumer/terragrunt.hcl --
+dependency "nodir" {
+  config_path = "../nodir"
+}
+
+dependency "stack" {
+  config_path = "../stack"
+}
+
+dependency "alt" {
+  config_path = "../target/alt.hcl"
+}
+
+dependency "good" {
+  config_path = "../target"
+}
+
+inputs = {
+  a = dependency.nodir.outputs.missing_a
+  b = dependency.stack.outputs.missing_b
+  c = dependency.alt.outputs.missing_c
+  d = dependency.ghost.outputs.missing_d
+  e = dependency.good.outputs.out
+  f = dependency.good.outputs.missing
+}
+-- edge/dup/terragrunt.hcl --
+dependency "same" {
+  config_path = "../target"
+}
+
+dependency "same" {
+  config_path = "../target"
+}
+
+inputs = {
+  x = dependency.same.outputs.missing_x
+}
+-- _golden/exit --
+1
+-- _golden/want --
+# edge/consumer/terragrunt.hcl line 23: "  f = " is 6 bytes.
+GRT001 error edge/consumer/terragrunt.hcl:23:7 edge/consumer
+-- _golden/unknown --
+edge/dup config-unknown invalid-dependency

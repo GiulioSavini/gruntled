@@ -1,0 +1,51 @@
+A mid-edit terragrunt.hcl and a module .tf file each end in a stray `@`
+line after otherwise valid blocks: exactly one file-level GRT100 per broken
+file, at the `@`. A reference into the unit sourcing the broken module is
+silent (surface unknown), and a genuine missing output between two healthy
+units is still reported.
+-- live/midedit/terragrunt.hcl --
+dependency "x" {
+  config_path = "../ok_b"
+}
+@
+-- modules/broken/main.tf --
+output "ok" {
+  value = 1
+}
+@
+-- live/uses_broken/terragrunt.hcl --
+terraform {
+  source = "../../modules/broken"
+}
+-- live/dependant/terragrunt.hcl --
+dependency "b" {
+  config_path = "../uses_broken"
+}
+
+inputs = {
+  v = dependency.b.outputs.not_declared
+}
+-- live/ok_b/terragrunt.hcl --
+inputs = {}
+-- live/ok_b/main.tf --
+output "value" {
+  value = "b"
+}
+-- live/ok_a/terragrunt.hcl --
+dependency "b" {
+  config_path = "../ok_b"
+}
+
+inputs = {
+  good = dependency.b.outputs.value
+  bad  = dependency.b.outputs.valeu
+}
+-- _golden/exit --
+1
+-- _golden/want --
+# GRT100: one per broken file (hclconv.FirstSyntaxError), file-level so no
+# unit, at the `@` on line 4 column 1.
+GRT100 error live/midedit/terragrunt.hcl:4:1 -
+GRT100 error modules/broken/main.tf:4:1 -
+# live/ok_a/terragrunt.hcl line 7: "  bad  = " is 9 bytes.
+GRT001 error live/ok_a/terragrunt.hcl:7:10 live/ok_a

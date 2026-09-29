@@ -1,0 +1,73 @@
+One target module declares only `id`. Its consumers cover the DIAG-03
+shapes: mock_outputs never suppress a missing output (merged with state and
+allowed for apply, or allowed for validate only), while skip_outputs = true
+and enabled = false keep the reference silent. A reference to the declared
+id is clean.
+-- mocks/core/terragrunt.hcl --
+inputs = {
+  prefix = "core"
+}
+-- mocks/core/main.tf --
+variable "prefix" {
+  type = string
+}
+
+output "id" {
+  value = "${var.prefix}-1"
+}
+-- mocks/c_corpus/terragrunt.hcl --
+dependency "core" {
+  config_path = "../core"
+
+  mock_outputs                            = { name = "m" }
+  mock_outputs_merge_with_state           = true
+  mock_outputs_allowed_terraform_commands = ["init", "validate", "plan", "apply"]
+}
+
+inputs = {
+  core_name = dependency.core.outputs.name
+}
+-- mocks/c_skip/terragrunt.hcl --
+dependency "core" {
+  config_path  = "../core"
+  skip_outputs = true
+}
+
+inputs = {
+  core_name = dependency.core.outputs.name
+}
+-- mocks/c_disabled/terragrunt.hcl --
+dependency "core" {
+  config_path = "../core"
+  enabled     = false
+}
+
+inputs = {
+  core_name = dependency.core.outputs.name
+}
+-- mocks/c_nomock_ok/terragrunt.hcl --
+dependency "core" {
+  config_path = "../core"
+}
+
+inputs = {
+  core_id = dependency.core.outputs.id
+}
+-- mocks/c_validate_only/terragrunt.hcl --
+dependency "core" {
+  config_path = "../core"
+
+  mock_outputs                            = { name = "m" }
+  mock_outputs_allowed_terraform_commands = ["validate"]
+}
+
+inputs = {
+  core_name = dependency.core.outputs.name
+}
+-- _golden/exit --
+1
+-- _golden/want --
+# mocks/c_corpus/terragrunt.hcl line 10: "  core_name = " is 14 bytes.
+GRT001 error mocks/c_corpus/terragrunt.hcl:10:15 mocks/c_corpus
+# mocks/c_validate_only/terragrunt.hcl line 9: "  core_name = " is 14 bytes.
+GRT001 error mocks/c_validate_only/terragrunt.hcl:9:15 mocks/c_validate_only
