@@ -43,7 +43,7 @@ machinery to prove it correct on real code.
 ### Validation
 
 - [x] **VALID-01**: a generator produces synthetic Terragrunt repositories from a spec — N units, nested includes, dependency chains — used for both golden tests and benchmarks
-- [ ] **VALID-02**: golden tests cover the fixture repositories, asserting the exact expected diagnostic set
+- [x] **VALID-02**: golden tests cover the fixture repositories, asserting the exact expected diagnostic set
 - [ ] **VALID-03**: gruntled reports zero diagnostics on the unmutated primary corpus (`guidance-for-iso20022-messaging-workflows-on-aws`)
 - [ ] **VALID-04**: gruntled reports every reference broken by a deliberate output rename or deletion injected into the corpus
 - [ ] **VALID-05**: `terragrunt hcl validate` is confirmed not to report those injected mutations, evidencing the gap
@@ -125,7 +125,7 @@ Deferred. Tracked, not in the current roadmap.
 | CLI-04 | Phase 3 | Complete |
 | CLI-05 | Phase 3 | Complete |
 | VALID-01 | Phase 1 | Complete |
-| VALID-02 | Phase 4 | Pending |
+| VALID-02 | Phase 4 | Complete |
 | VALID-03 | Phase 4 | Pending |
 | VALID-04 | Phase 4 | Pending |
 | VALID-05 | Phase 4 | Pending |

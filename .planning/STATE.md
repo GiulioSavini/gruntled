@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: milestone
-status: Phase 3 execution
-stopped_at: Completed 03-05-PLAN.md
-last_updated: "2026-09-29T09:59:17.833Z"
-last_activity: "2026-09-29 — 03-05 complete: CLI e2e guarantees tested; corpus gate clean (exit 0) and role_name mutation gives 8 GRT001"
+status: Phase 4 execution
+stopped_at: Completed 04-01-PLAN.md
+last_updated: "2026-09-29T12:00:00.000Z"
+last_activity: "2026-09-29 — 04-01 complete: VALID-02 goldens (4 synthrepo trees 400-600 units, 10 hand-written fixtures) all exact"
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 26
-  completed_plans: 22
-  percent: 85
+  completed_plans: 23
+  percent: 88
 ---
 
 # Project State
@@ -21,18 +21,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-01)
 
 **Core value:** Tell the user, before they run anything slow, that `dependency.X.outputs.Y` does not exist in the module it points to.
-**Current focus:** Phase 3 (GRT001 Diagnostic & CLI) — executing
+**Current focus:** Phase 4 (Real-Repo Validation Experiment) — executing
 
 ## Current Position
 
-Phase: 4 of 4 (Real-World Validation) — not started
-Plan: 0 of 4 in current phase
+Phase: 4 of 4 (Real-World Validation) — executing
+Plan: 1 of 4 in current phase (04-01 complete)
 Phase 3: complete — 5/5 plans, 03-VERIFICATION.md status: passed (2026-09-29)
 Phase 2: complete — 14/14 plans, 02-VERIFICATION.md status: passed (re-verified 2026-09-29 after gap cycle 1)
-Status: Phase 4 next
-Last activity: 2026-09-29 — Phase 3 verified (5/5 criteria) and marked complete
+Status: Phase 4 in progress (04-02, 04-04, 04-03 remaining)
+Last activity: 2026-09-29 — 04-01 VALID-02 golden tests landed (216ea30, 5ed436b)
 
-Progress: [████████░░] 85% (22 of 26 plans)
+Progress: [█████████░] 88% (23 of 26 plans)
 
 ## Performance Metrics
 
