@@ -5,7 +5,7 @@ milestone_name: milestone
 status: verifying
 stopped_at: Completed 04-03-PLAN.md
 last_updated: "2026-09-29T11:23:25.118Z"
-last_activity: "2026-09-29 — 04-03 benchmark (11aa6a7) and docs/validation.md (9415f21): VALID-02..06 all PASS; denis256 0 false positives, 0/8 recall (02-13 include-target limitation, v2 candidate)"
+last_activity: "2026-09-29 — 313f856 narrowed the 02-13 include-target rule (unreachable includes mark nothing); denis256 now 8/8 recall, 0 false positives, include-target 719→54 of 1146"
 progress:
   total_phases: 4
   completed_phases: 4
@@ -31,7 +31,7 @@ Phase 4: complete — 4/4 plans, 04-VERIFICATION.md status: passed (2026-09-29)
 Phase 3: complete — 5/5 plans, 03-VERIFICATION.md status: passed (2026-09-29)
 Phase 2: complete — 14/14 plans, 02-VERIFICATION.md status: passed (re-verified 2026-09-29 after gap cycle 1)
 Status: Milestone v1 complete (all 4 phases verified)
-Last activity: 2026-09-29 — Phase 4 verified (5/5) and marked complete; milestone v1 done. Open v2 item: include-target rule costs recall (denis256 0/8)
+Last activity: 2026-09-29 — 313f856 narrowed the 02-13 include-target rule (unreachable includes mark nothing); denis256 now 8/8 recall, 0 false positives, include-target 719→54 of 1146
 
 Progress: [██████████] 100% (26 of 26 plans)
 
@@ -110,6 +110,7 @@ Recent decisions affecting current work:
 - [Phase 04 P3]: VALID-06 PASS in 3 of 3 process-vs-process runs (terragrunt/gruntled median 2.81, 2.13, 1.99) on a loaded WSL2 machine (4 CPUs); all runs reported, none discarded
 - [Phase 04 P3]: docs/validation.md is the single record of VALID-02..06; TestValidationDocPins keeps its pins and denis256 positions in step with the tests
 - [Phase 04 P3]: denis256 recall 0/8 caused by the 02-13 include-target rule is documented as a known limitation and v2 refinement candidate
+- [Post-v1 fix 313f856]: an unevaluable include marks no include-free units when Terragrunt 1.1.6 rejects its path (variables other than `values` outside try/can) or when it is a `find_in_parent_folders` with no argument or a bare file name that finds nothing in the repo; this supersedes the 02-13 behavior for `local.*` include paths and resolves the denis256 recall limitation (8/8)
 
 ### Pending Todos
 
