@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v0.2
 milestone_name: CI-Ready
-status: defining-requirements
-stopped_at: Milestone v0.2 started
+status: ready-to-plan
+stopped_at: Roadmap v0.2 created
 last_updated: "2026-09-29T11:23:25.118Z"
 last_activity: "2026-09-29 — Milestone v0.2 CI-Ready started"
 progress:
-  total_phases: 0
+  total_phases: 3
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-29)
 
 **Core value:** Tell the user, before they run anything slow, that `dependency.X.outputs.Y` does not exist in the module it points to.
-**Current focus:** v0.2 CI-Ready — defining requirements
+**Current focus:** v0.2 CI-Ready — Phase 5 (Graph Diagnostics) ready to plan
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 5 of 7 (Graph Diagnostics) — v0.2 covers phases 5-7
 Plan: —
-Status: Defining requirements
-Last activity: 2026-09-29 — Milestone v0.2 started
+Status: Ready to plan
+Last activity: 2026-09-29 — v0.2 roadmap created
 
 ## Performance Metrics
 
@@ -118,5 +118,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-09-29
-Stopped at: Milestone v0.2 started
+Stopped at: Roadmap v0.2 created
 Resume file: None
