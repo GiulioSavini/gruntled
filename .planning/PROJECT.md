@@ -2,6 +2,17 @@
 
 > *Terragrunt, but gruntled.*
 
+## Current Milestone: v0.2 CI-Ready
+
+**Goal:** Make the validated `check` engine something a team can drop into pre-commit and CI
+today, and add the two diagnostics the existing graph already answers.
+
+**Target features:**
+- `GRT002` (`config_path` to no unit) and `GRT003` (dependency cycle)
+- `gruntled graph --json`
+- SARIF output, pre-commit hook, CI recipes
+- Tagged releases with static binaries
+
 ## What This Is
 
 A Go CLI (later a daemon) for Terragrunt repositories. It builds a graph of the
@@ -25,39 +36,30 @@ is built on top of that one answer being correct and trustworthy.
 
 ### Validated
 
-(None yet — ship to validate)
+- ✓ Structural HCL decoder, the six path functions, `include` merge, include parsed once — v0.1
+- ✓ Unit→module resolution via `terraform.source` or the unit's own directory; `unknown` on anything unresolvable offline — v0.1
+- ✓ Unit graph and module surface extraction — v0.1
+- ✓ `GRT001` and `GRT100` — v0.1
+- ✓ `gruntled check`: deterministic output, stable exit code, text and JSON — v0.1
+- ✓ Synthetic repo generator and golden tests — v0.1
+- ✓ Real-corpus experiment: 0 false positives, every injected mutation caught (denis256 8/8), faster than `terragrunt hcl validate` in 3 of 3 runs — v0.1
 
 ### Active
 
-**v0.1 — the falsifiable experiment**
+**v0.2 — CI-Ready**
 
-- [ ] Own structural HCL decoder: `include`, `terraform.source`, `dependency` blocks only
-- [ ] The six pure path functions (`find_in_parent_folders`, `path_relative_to_include`,
-      `path_relative_from_include`, `get_terragrunt_dir`, `get_parent_terragrunt_dir`,
-      `get_original_terragrunt_dir`) plus `include` merge resolution
-- [ ] Parse each `include` file once and share it across every unit that includes it
-- [ ] Resolve a unit to its module both via `terraform.source` and via the unit's own
-      directory when `source` is absent
-- [ ] Mark a unit `unknown` on any construct that cannot be resolved offline
-- [ ] Parse a Terragrunt repository and build the unit graph
-- [ ] Extract module surface (`variable` and `output` names) from `.tf` files
-- [ ] `GRT001`: report `dependency.X.outputs.Y` where `Y` is not an output of the target module
-- [ ] `GRT100`: report HCL syntax errors
-- [ ] `gruntled check` — one-shot, deterministic output, stable exit code
-- [ ] Synthetic Terragrunt repository generator (N units, nested includes, dependencies)
-- [ ] Golden tests over generated and hand-written fixtures
-- [ ] Proven on at least one real public Terragrunt repository
-
-- [ ] Beat `terragrunt hcl validate` on the corpus, measured
+- [ ] `GRT002`: `dependency.config_path` pointing at no unit
+- [ ] `GRT003`: dependency cycle between units
+- [ ] `gruntled graph --json`
+- [ ] SARIF output accepted by GitHub code scanning
+- [ ] pre-commit hook and CI recipes
+- [ ] Tagged releases with static binaries
 
 **Later**
 
-- [ ] `gruntled watch` — daemon with in-memory incremental reindexing
-- [ ] Status file + `gruntled report`
-- [ ] `gruntled blast` — Broken vs Impacted
-- [ ] Remaining diagnostics: `GRT002`-`GRT006`
-- [ ] `gruntled graph --json`
-- [ ] SARIF output, pre-commit hook, CI integration
+- [ ] `gruntled watch`: daemon with in-memory incremental reindexing, status file, `gruntled report` (v0.3)
+- [ ] `gruntled blast`: Broken vs Impacted (v0.3)
+- [ ] `GRT004`-`GRT006`
 
 ### Out of Scope
 
@@ -169,6 +171,7 @@ error — this needs an explicit, tested decision.
 | Open the repository once M1 passes its test | If the experiment fails, nothing was published and nothing needs explaining | — Pending |
 | Name: gruntled | Memorable, ownable, no relevant collision, and the joke carries the README | — Pending |
 | mock_outputs never suppresses GRT001, and severity stays error | With merge-with-state, a renamed output silently falls back to the mock value at `apply`, which is exactly the bug gruntled exists to catch. Mock facts only enrich the message. `enabled = false`, `skip_outputs = true` or any non-literal value for either keeps GRT001 silent, because Terragrunt then never reads the module's outputs. Suppressing would also make the Phase 4 mutation run report 0/8 on the primary corpus | ✓ Locked (Phase 3) |
+| v0.2 is adoption (CI, SARIF, releases, GRT002/003) before the daemon | The one-shot engine is validated but not installable. GRT002/003 are pure graph queries; GRT004 needs a diff (belongs with blast), GRT005/006 overlap `terragrunt hcl validate --inputs` and carry merge-related false-positive risk | — Pending |
 | stdlib flag instead of cobra for v0.1 | One subcommand. cobra/pflag link `net`, `net/url` and `net/netip` plus `text/template`, while the stdlib keeps `binary-no-net-no-exec` a one-line CI proof. Revisit when v2 adds several subcommands | ✓ Locked (Phase 3) |
 
 ## Success Criteria for v0.1
@@ -198,4 +201,4 @@ files are parsed once and shared from day one, so `gruntled check` should alread
 import-the-library plan.
 
 ---
-*Last updated: 2026-09-25 after Phase 3 planning: DIAG-03 rule, stdlib flag*
+*Last updated: 2026-09-29 after starting milestone v0.2 CI-Ready*

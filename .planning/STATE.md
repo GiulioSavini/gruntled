@@ -1,39 +1,34 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.1
-milestone_name: milestone
-status: verifying
-stopped_at: Completed 04-03-PLAN.md
+milestone: v0.2
+milestone_name: CI-Ready
+status: defining-requirements
+stopped_at: Milestone v0.2 started
 last_updated: "2026-09-29T11:23:25.118Z"
-last_activity: "2026-09-29 — 313f856 narrowed the 02-13 include-target rule (unreachable includes mark nothing); denis256 now 8/8 recall, 0 false positives, include-target 719→54 of 1146"
+last_activity: "2026-09-29 — Milestone v0.2 CI-Ready started"
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 26
-  completed_plans: 26
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-09-01)
+See: .planning/PROJECT.md (updated 2026-09-29)
 
 **Core value:** Tell the user, before they run anything slow, that `dependency.X.outputs.Y` does not exist in the module it points to.
-**Current focus:** Phase 4 (Real-Repo Validation Experiment) — executing
+**Current focus:** v0.2 CI-Ready — defining requirements
 
 ## Current Position
 
-Phase: 4 of 4 (Real-World Validation) — complete
-Plan: 4 of 4 in current phase (04-01, 04-02, 04-03, 04-04 complete)
-Phase 4: complete — 4/4 plans, 04-VERIFICATION.md status: passed (2026-09-29)
-Phase 3: complete — 5/5 plans, 03-VERIFICATION.md status: passed (2026-09-29)
-Phase 2: complete — 14/14 plans, 02-VERIFICATION.md status: passed (re-verified 2026-09-29 after gap cycle 1)
-Status: Milestone v1 complete (all 4 phases verified)
-Last activity: 2026-09-29 — 313f856 narrowed the 02-13 include-target rule (unreachable includes mark nothing); denis256 now 8/8 recall, 0 false positives, include-target 719→54 of 1146
-
-Progress: [██████████] 100% (26 of 26 plans)
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-09-29 — Milestone v0.2 started
 
 ## Performance Metrics
 
@@ -122,6 +117,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-09-29T11:20:00.000Z
-Stopped at: Completed 04-03-PLAN.md
+Last session: 2026-09-29
+Stopped at: Milestone v0.2 started
 Resume file: None
