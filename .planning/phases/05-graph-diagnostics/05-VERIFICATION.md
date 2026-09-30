@@ -1,73 +1,69 @@
 ---
 phase: 05-graph-diagnostics
 verified: 2026-09-30T00:00:00Z
-status: gaps_found
-score: 4/4 roadmap criteria verified mechanically; 1 zero-false-positive gap (GRT003 on config_path = "")
-gaps:
-  - truth: "GRT003 carries the same zero-false-positive guarantee as GRT001 (goal clause)"
-    status: partial
-    reason: "dependency { config_path = \"\" } is reported as a GRT003 self-loop, but terragrunt v1.1.6 reports 'config_path could not be resolved' and no cycle; a single-unit run in that unit exits 0."
-    artifacts:
-      - path: "internal/infrastructure/terragrunt (config_path resolution)"
-        issue: "empty literal resolves to the unit's own dir, producing a self-edge"
-      - path: "cmd/gruntled/testdata golden grt002_missing_target"
-        issue: "pins the self-loop behaviour"
-      - path: "docs/validation.md (Open issue: config_path = \"\" on a block, ~line 682)"
-        issue: "records it as open, not fixed"
-    missing:
-      - "Treat empty-string literal config_path as unresolvable (silent), or report it under a separate code"
-      - "Update the golden and the docs section, and add a unit test"
+status: passed
+score: 4/4 roadmap criteria verified; zero-false-positive gap closed
+re_verification:
+  previous_status: gaps_found
+  previous_score: "4/4 roadmap criteria, 1 zero-false-positive gap"
+  gaps_closed:
+    - "dependency { config_path = \"\" } no longer reported as GRT003 self-loop (unresolved, silent)"
+  gaps_remaining: []
+  regressions: []
 ---
 
 # Phase 5: Graph Diagnostics Verification Report
 
 **Phase Goal:** Users see wiring mistakes that the existing graph already answers, a dependency pointing at no unit and a dependency cycle, with the same zero-false-positive guarantee as `GRT001`.
-**Status:** gaps_found
-**Re-verification:** No, initial verification
+**Verified:** 2026-09-30
+**Status:** passed
+**Re-verification:** Yes, after gap closure plan 05-07 (commits 829abec..3179751)
 
-## Automated checks (run by verifier)
+## Gap closure (05-07)
 
-- `go vet ./... && go test -count=1 ./... && bash scripts/check-architecture.sh`: all packages ok, `architecture: OK`.
-- Env-gated corpus command from 05-VALIDATION.md (primary, secret, denis256, terragrunt v1.1.6 binary): `TestCorpusGraphClean`, `TestCorpusGraphMutation` (41.8s), `TestCorpusClean`, `TestCorpusMutation`, `TestDenis256Corpus` all PASS.
+| Case | gruntled | terragrunt v1.1.6 (pinned binary) | Match |
+|------|----------|-----------------------------------|-------|
+| `dependency "x" { config_path = "" }` | 2 units, 0 errors, silent | "skipping dependency "x" ...: config_path could not be resolved" | yes |
+| `dependencies { paths = [""] }` | GRT003 self-loop `"a" -> "a"` at a/terragrunt.hcl:2:12 | "cycle detected during queue construction" | yes |
+| `dependencies { paths = ["../b", ""] }` | GRT003 self-loop `"a" -> "a"` at 2:20 | same class of cycle (self path) | consistent (user decision, reverses 05-04) |
+
+Scratch trees: `/tmp/claude-1000/-home-giulio/71cabc7b-8169-4e0d-bf2a-31904b8c07dd/scratchpad/o507/{blk,pth,pth2}`. Oracle was the pinned `~/.cache/gruntled-phase4/bin/terragrunt_linux_amd64`, not PATH.
+
+## Automated gate (run by verifier, all green)
+
+`gofmt -l`, `go mod tidy -diff`, `go vet ./...`, staticcheck v0.8.1 (GOTOOLCHAIN=go1.27.0), `go test ./... -count=1`, `scripts/check-architecture.sh`, `scripts/test-check-architecture.sh` ("all architecture self-tests passed").
+
+Env-gated corpus run (GRUNTLED_CORPUS, _SECRET, _DENIS256, GRUNTLED_TERRAGRUNT_BIN set), verbose, no SKIP lines:
+`TestCorpusGraphClean` PASS (21.7s), `TestCorpusGraphMutation` PASS (47.5s), `TestCorpusClean` PASS, `TestCorpusMutation` PASS, `TestDenis256Corpus` PASS.
 
 ## Success criteria
 
 | # | Criterion | Status | Evidence |
 |---|-----------|--------|----------|
-| 1 | GRT002 on literal missing-target config_path, silent on non-literal/unresolvable | VERIFIED | `analysis/grt002.go` + tests, golden suite green, loader TargetState (only `fs.ErrNotExist` gives DirMissing, else Unknown) |
-| 2 | GRT003 once per cycle, lexically smallest start, deterministic | VERIFIED | `analysis/grt003.go` + tests, ring/non-ring/self-loop goldens |
-| 3 | Unmutated iso20022 and secret clean; denis256 == oracle set | VERIFIED | TestCorpusGraphClean, TestDenis256Corpus pass |
-| 4 | Every mutation caught; results recorded in docs/validation.md | VERIFIED | TestCorpusGraphMutation pass; TestValidationDocPins pass in full suite |
+| 1 | GRT002 on literal missing-target config_path, silent on non-literal/unresolvable | VERIFIED | grt002 analysis + goldens; empty block config_path now silent (oracle-confirmed) |
+| 2 | GRT003 once per cycle, lexically smallest start, deterministic | VERIFIED | grt003 tests and ring/non-ring/self-loop goldens |
+| 3 | Unmutated iso20022 and secret clean; denis256 equals oracle set | VERIFIED | TestCorpusGraphClean, TestDenis256Corpus pass unskipped |
+| 4 | Every mutation caught; recorded in docs/validation.md | VERIFIED | TestCorpusGraphMutation pass; doc pins test passes in full suite |
 
 ## Requirements coverage
 
-| ID | Plans | Status |
-|----|-------|--------|
-| MORE-01 | 05-01..05-05 | SATISFIED |
-| MORE-02 | 05-01, 05-02, 05-04, 05-05 | SATISFIED |
-| MORE-06 | 05-01, 05-06 | SATISFIED on the corpus; see gap on the guarantee |
+Plan frontmatter IDs: MORE-01, MORE-02, MORE-06 (05-01..05-07). REQUIREMENTS.md: all three checked `[x]` and mapped Phase 5, Complete. No orphaned IDs.
 
-No orphaned requirements: REQUIREMENTS.md maps only MORE-01, MORE-02, MORE-06 to Phase 5, and all appear in plan frontmatter.
+| Requirement | Status |
+|-------------|--------|
+| MORE-01 | SATISFIED |
+| MORE-02 | SATISFIED |
+| MORE-06 | SATISFIED |
 
-## Judgement: `config_path = ""` reported as GRT003 self-loop
+## Anti-patterns / human verification
 
-**Classification: gap (low severity, narrow input), not an acceptable documented limitation.**
+None blocking. Working tree clean before this report. No human verification needed.
 
-Evidence:
-- The goal states the same zero-false-positive guarantee as GRT001, meaning gruntled must not assert something terragrunt contradicts. GRT003 asserts "a dependency cycle exists". For this input terragrunt v1.1.6 says the opposite: no cycle, the `config_path` "could not be resolved" (docs/validation.md ~682-698, verified by 05-06 on a scratch tree).
-- Terragrunt does not uniformly reject the input: a single-unit `run` in `a` exits 0, while gruntled `check` exits 1 with a cycle message. That is a false positive against a working invocation. Under `run --all` both tools fail, but for different reasons, so the diagnostic text is factually wrong.
-- Not a documented limitation: docs/validation.md and STATE.md label it an "open issue" with a candidate fix, and the golden `grt002_missing_target` pins the wrong behaviour. The project's own conventions (fail-silent on non-literal/unresolvable) point to the fix: treat `""` as unresolvable and stay silent.
-- Mitigating: no corpus contains an active empty `config_path` (the only two, in denis256 `deep-merge-fix/common.hcl`, are commented out), so all corpus criteria pass. Impact is limited to hand-written edge input, so this is not a blocker for the four success criteria, but it should be closed before claiming the guarantee.
+## Gaps Summary
 
-Recommended: a small gap-closure plan (`/gsd:plan-phase 5 --gaps`) to make empty literal silent (or a distinct code), update the golden, the docs section, and STATE.md.
+None. The single prior gap is closed and oracle-confirmed; no regressions.
 
-## Anti-patterns
-
-None blocking found in the reviewed paths; no stubs, all analyzers wired through `checking`.
-
-## Human verification
-
-None required.
+---
 
 _Verified: 2026-09-30_
 _Verifier: Claude (gsd-verifier)_
