@@ -2,6 +2,7 @@ package terragrunt
 
 import (
 	"context"
+	"errors"
 	"io/fs"
 	"path"
 	"slices"
@@ -447,68 +448,81 @@ func (l *Loader) resolveDependencies(unitDir string, childRefs []includeRef, byL
 	return deps, false
 }
 
-// resolveOneDependency evaluates cpExpr in scope and resolves it against
-// unitDir (always the CHILD unit dir, even when cpExpr is written in an
-// include -- research Pitfall 4), then builds a resolved or unresolved
-// repograph.Dependency. There are four outcomes:
+// resolveOneDependency resolves cpExpr through resolveTargetExpr and builds
+// a resolved or unresolved repograph.Dependency. A resolved dependency
+// carries the on-disk TargetState of its target directory (classifyTarget);
+// an unresolved one is always TargetUnknown.
 //
-//  1. cpExpr fails closed evaluation, or its evaluated path escapes the
-//     repository: unresolved, ReasonConfigPathDynamic / ReasonConfigPathOutsideRepo.
+// ok is false only on a domain constructor rejection ("should be
+// impossible" after the checks in resolveTargetExpr).
+func (l *Loader) resolveOneDependency(label string, cpExpr hcl.Expression, scope evalScope, unitDir string, pos, pathPos repograph.Position, opts repograph.DependencyOptions) (repograph.Dependency, bool) {
+	target, reason := l.resolveTargetExpr(cpExpr, scope, unitDir)
+	if reason != "" {
+		d, err := repograph.NewUnresolvedDependency(label, reason, pos, pathPos, opts)
+		return d, err == nil
+	}
+	d, err := repograph.NewDependency(label, target, pos, pathPos, l.classifyTarget(target.String()), opts)
+	return d, err == nil
+}
+
+// resolveTargetExpr evaluates expr in scope and resolves it against unitDir
+// (always the CHILD unit dir, even when expr is written in an include --
+// research Pitfall 4) to a repo-relative target directory. It is shared by
+// dependency blocks and dependencies.paths elements. Exactly one of target
+// and reason is set. The outcomes:
+//
+//  1. expr fails closed evaluation, or its evaluated path escapes the
+//     repository: ReasonConfigPathDynamic / ReasonConfigPathOutsideRepo.
 //  2. The resolved path is a regular file named terragrunt.stack.hcl, or a
 //     directory holding one (research Pattern 3: Terragrunt's
 //     getTerragruntOutput tries tryGetStackOutput first, so the stack
-//     always wins over a sibling terragrunt.hcl): unresolved,
-//     ReasonConfigPathStack.
-//  3. The resolved path is a regular file with any other name: unresolved,
+//     always wins over a sibling terragrunt.hcl): ReasonConfigPathStack.
+//  3. The resolved path is a regular file with any other name:
 //     ReasonConfigPathNondefaultFile (Terragrunt reads THAT file, which may
 //     set a different source than the directory's own terragrunt.hcl).
-//     Named "terragrunt.hcl" itself, it maps to its directory as before.
+//     Named "terragrunt.hcl" itself, it maps to its directory as before;
+//     a path named "terragrunt.hcl" that does not exist also maps to its
+//     parent directory, so a missing target is classified as that
+//     directory rather than as a directory called "terragrunt.hcl".
 //  4. The resulting target directory is not a valid RepoPath (for example a
 //     literal backslash surviving resolvePath as part of a path segment):
-//     unresolved, ReasonConfigPathInvalid. Only this one dependency is
-//     affected; the unit and its sibling dependencies stay resolved (G8).
-//
-// ok is false only on a domain constructor rejection ("should be
-// impossible" after the checks above).
-func (l *Loader) resolveOneDependency(label string, cpExpr hcl.Expression, scope evalScope, unitDir string, pos, pathPos repograph.Position, opts repograph.DependencyOptions) (repograph.Dependency, bool) {
-	raw, ok := evalPath(cpExpr, scope)
+//     ReasonConfigPathInvalid. Only this one dependency is affected; the
+//     unit and its sibling dependencies stay resolved (G8).
+func (l *Loader) resolveTargetExpr(expr hcl.Expression, scope evalScope, unitDir string) (repograph.RepoPath, string) {
+	raw, ok := evalPath(expr, scope)
 	if !ok {
-		d, err := repograph.NewUnresolvedDependency(label, ReasonConfigPathDynamic, pos, pathPos, opts)
-		return d, err == nil
+		return repograph.RepoPath{}, ReasonConfigPathDynamic
 	}
 	p, ok := resolvePath(unitDir, raw)
 	if !ok {
-		d, err := repograph.NewUnresolvedDependency(label, ReasonConfigPathOutsideRepo, pos, pathPos, opts)
-		return d, err == nil
+		return repograph.RepoPath{}, ReasonConfigPathOutsideRepo
 	}
 
 	targetDir := p
-	if info, statErr := fs.Stat(l.fsys, p); statErr == nil && info.Mode().IsRegular() {
+	info, statErr := fs.Stat(l.fsys, p)
+	switch {
+	case statErr == nil && info.Mode().IsRegular():
 		switch path.Base(p) {
 		case "terragrunt.hcl":
 			targetDir = path.Dir(p)
 		case "terragrunt.stack.hcl":
-			d, err := repograph.NewUnresolvedDependency(label, ReasonConfigPathStack, pos, pathPos, opts)
-			return d, err == nil
+			return repograph.RepoPath{}, ReasonConfigPathStack
 		default:
-			d, err := repograph.NewUnresolvedDependency(label, ReasonConfigPathNondefaultFile, pos, pathPos, opts)
-			return d, err == nil
+			return repograph.RepoPath{}, ReasonConfigPathNondefaultFile
 		}
+	case errors.Is(statErr, fs.ErrNotExist) && path.Base(p) == "terragrunt.hcl":
+		targetDir = path.Dir(p)
 	}
 
 	targetPath, pathErr := repograph.NewRepoPath(targetDir)
 	if pathErr != nil {
-		d, err := repograph.NewUnresolvedDependency(label, ReasonConfigPathInvalid, pos, pathPos, opts)
-		return d, err == nil
+		return repograph.RepoPath{}, ReasonConfigPathInvalid
 	}
 
 	if info, statErr := fs.Stat(l.fsys, path.Join(targetDir, "terragrunt.stack.hcl")); statErr == nil && info.Mode().IsRegular() {
-		d, err := repograph.NewUnresolvedDependency(label, ReasonConfigPathStack, pos, pathPos, opts)
-		return d, err == nil
+		return repograph.RepoPath{}, ReasonConfigPathStack
 	}
-
-	d, err := repograph.NewDependency(label, targetPath, pos, pathPos, repograph.TargetUnknown, opts)
-	return d, err == nil
+	return targetPath, ""
 }
 
 // resolveSource finds the highest-precedence effective file with a
