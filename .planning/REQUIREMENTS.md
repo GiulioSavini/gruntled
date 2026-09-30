@@ -11,9 +11,9 @@ read-only constraints in PROJECT.md apply to every requirement below.
 
 ### More diagnostics
 
-- [ ] **MORE-01**: User sees `GRT002` when a `dependency` block's literal `config_path` resolves to a directory that contains no unit; a non-literal or unresolvable `config_path` stays silent
-- [ ] **MORE-02**: User sees `GRT003` once per dependency cycle, with cycle members listed in a deterministic order starting from the lexically smallest unit path
-- [ ] **MORE-06**: On the three-repo corpus, `GRT002` and `GRT003` report nothing on unmutated iso20022 and cds-snc/secret, report on denis256 (a deliberately broken suite) exactly the set an independent oracle derives, and catch every injected mutation (a `config_path` pointed at a missing directory, a back-edge that closes a cycle), recorded in `docs/validation.md`
+- [x] **MORE-01**: User sees `GRT002` when a `dependency` block's literal `config_path` resolves to a directory that contains no unit; a non-literal or unresolvable `config_path` stays silent
+- [x] **MORE-02**: User sees `GRT003` once per dependency cycle, with cycle members listed in a deterministic order starting from the lexically smallest unit path
+- [x] **MORE-06**: On the three-repo corpus, `GRT002` and `GRT003` report nothing on unmutated iso20022 and cds-snc/secret, report on denis256 (a deliberately broken suite) exactly the set an independent oracle derives, and catch every injected mutation (a `config_path` pointed at a missing directory, a back-edge that closes a cycle), recorded in `docs/validation.md`
 
 ### Integration
 
@@ -74,9 +74,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MORE-01 | Phase 5 | Pending |
-| MORE-02 | Phase 5 | Pending |
-| MORE-06 | Phase 5 | Pending |
+| MORE-01 | Phase 5 | Complete |
+| MORE-02 | Phase 5 | Complete |
+| MORE-06 | Phase 5 | Complete |
 | INT-01 | Phase 6 | Pending |
 | INT-02 | Phase 6 | Pending |
 | INT-03 | Phase 7 | Pending |

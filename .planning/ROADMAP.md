@@ -50,7 +50,7 @@ See `milestones/v0.1-ROADMAP.md`.
 - [x] 05-03-PLAN.md — loader target state
 - [x] 05-04-PLAN.md — dependencies paths
 - [x] 05-05-PLAN.md — goldens+docs
-- [ ] 05-06-PLAN.md — corpus validation
+- [x] 05-06-PLAN.md — corpus validation
 
 ### Phase 6: Machine-Readable Output
 **Goal**: Users and tooling can consume gruntled's graph and diagnostics as stable, deterministic documents, including one GitHub code scanning accepts.
@@ -78,6 +78,6 @@ See `milestones/v0.1-ROADMAP.md`.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 5. Graph Diagnostics | 5/6 | In Progress | - |
+| 5. Graph Diagnostics | 6/6 | Complete | 2026-09-30 |
 | 6. Machine-Readable Output | 0/TBD | Not started | - |
 | 7. Distribution & CI Integration | 0/TBD | Not started | - |

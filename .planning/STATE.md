@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.2
 milestone_name: CI-Ready
-status: executing
-stopped_at: Completed 05-05-PLAN.md
-last_updated: "2026-09-30T10:15:00.000Z"
-last_activity: 2026-09-30 — completed 05-05 (goldens + docs)
+status: verifying
+stopped_at: Completed 05-06-PLAN.md
+last_updated: "2026-09-30T10:25:35.026Z"
+last_activity: 2026-09-30 — completed 05-06 (GRT002/GRT003 corpus validation, docs/validation.md v0.2)
 progress:
   total_phases: 3
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 6
-  completed_plans: 5
+  completed_plans: 6
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-29)
 
 **Core value:** Tell the user, before they run anything slow, that `dependency.X.outputs.Y` does not exist in the module it points to.
-**Current focus:** v0.2 CI-Ready — Phase 5 (Graph Diagnostics) ready to plan
+**Current focus:** v0.2 CI-Ready — Phase 5 (Graph Diagnostics) all plans complete, awaiting phase verification
 
 ## Current Position
 
 Phase: 5 of 7 (Graph Diagnostics) — v0.2 covers phases 5-7
-Plan: 5 of 6 complete (05-01..05-05)
-Status: In progress — next 05-06
-Last activity: 2026-09-30 — completed 05-05 (GRT002/GRT003 goldens, cli.md, README)
+Plan: 6 of 6 complete (05-01..05-06)
+Status: Phase 5 plans complete — next phase verification, then Phase 6
+Last activity: 2026-09-30 — completed 05-06 (GRT002/GRT003 corpus validation, docs/validation.md v0.2)
 
 ## Performance Metrics
 
@@ -64,6 +64,7 @@ Last activity: 2026-09-30 — completed 05-05 (GRT002/GRT003 goldens, cli.md, RE
 | Phase 05 P02 | 5 | 3 tasks | 7 files |
 | Phase 05 P04 | 6min | 3 tasks | 10 files |
 | Phase 05 P05 | 15min | 2 tasks | 9 files |
+| Phase 05 P06 | 35min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -118,6 +119,8 @@ Recent decisions affecting current work:
 - [Phase 05 P04]: E2E paths test lives in infrastructure/terragrunt (arch rule forbids application tests importing infrastructure)
 - [Phase 05 P05]: dependency_edges GRT002 (../nodir, no terragrunt.hcl) reviewed correct, golden updated by hand; goldens gain optional _golden/messages
 - [Phase 05 P05]: block config_path = "" is a GRT003 self-loop (matches Terragrunt filepath.Join); check -h exit line names GRT001-GRT003
+- [Phase 05]: 05-06: terragrunt oracle = queue-construction message of run --all --no-auto-init -- version on scratch copies (iso20022, secret, denis256 issue-2565 subtree); textual oracle graphOracle on all three
+- [Phase 05]: 05-06 OPEN ISSUE: config_path = "" is GRT003 self-loop in gruntled but 'config_path could not be resolved' in terragrunt v1.1.6; semantics unchanged, recorded in docs/validation.md
 
 ### Pending Todos
 
@@ -129,6 +132,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-09-30T10:15:00.000Z
-Stopped at: Completed 05-05-PLAN.md
+Last session: 2026-09-30T10:25:17.847Z
+Stopped at: Completed 05-06-PLAN.md
 Resume file: None
