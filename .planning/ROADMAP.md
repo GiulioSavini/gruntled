@@ -46,7 +46,7 @@ See `milestones/v0.1-ROADMAP.md`.
   4. On the same corpus, every injected mutation (a `config_path` pointed at a missing directory, a back-edge closing a cycle) is caught (denis256 validated against its exact set plus mutations), and the results are recorded in `docs/validation.md`
 **Plans**: 6 plans
 - [x] 05-01-PLAN.md — domain foundation
-- [ ] 05-02-PLAN.md — analyzers
+- [x] 05-02-PLAN.md — analyzers
 - [x] 05-03-PLAN.md — loader target state
 - [ ] 05-04-PLAN.md — dependencies paths
 - [ ] 05-05-PLAN.md — goldens+docs
@@ -78,6 +78,6 @@ See `milestones/v0.1-ROADMAP.md`.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 5. Graph Diagnostics | 2/6 | In Progress | - |
+| 5. Graph Diagnostics | 3/6 | In Progress | - |
 | 6. Machine-Readable Output | 0/TBD | Not started | - |
 | 7. Distribution & CI Integration | 0/TBD | Not started | - |

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.2
 milestone_name: CI-Ready
 status: executing
-stopped_at: Completed 05-03-PLAN.md
-last_updated: "2026-09-30T09:26:30.000Z"
+stopped_at: Completed 05-02-PLAN.md
+last_updated: "2026-09-30T09:32:09.000Z"
 last_activity: 2026-09-29 — v0.2 roadmap created
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 6
-  completed_plans: 2
+  completed_plans: 3
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-09-29)
 ## Current Position
 
 Phase: 5 of 7 (Graph Diagnostics) — v0.2 covers phases 5-7
-Plan: 2 of 6 complete (05-01, 05-03)
-Status: In progress — next 05-02 (05-03 ran ahead in wave 2)
-Last activity: 2026-09-30 — completed 05-03 (loader target state)
+Plan: 3 of 6 complete (05-01, 05-02, 05-03)
+Status: In progress — next 05-04
+Last activity: 2026-09-30 — completed 05-02 (GRT002/GRT003 analyzers, Check wiring)
 
 ## Performance Metrics
 
@@ -61,6 +61,7 @@ Last activity: 2026-09-30 — completed 05-03 (loader target state)
 | Phase 04 P03 | 35 | 2 tasks | 3 files |
 | Phase 05 P01 | interrupted | 3 tasks | 14 files |
 | Phase 05 P03 | 2 | 2 tasks | 4 files |
+| Phase 05 P02 | 5 | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -109,6 +110,8 @@ Recent decisions affecting current work:
 - [Post-v1 fix 313f856]: an unevaluable include marks no include-free units when Terragrunt 1.1.6 rejects its path (variables other than `values` outside try/can) or when it is a `find_in_parent_folders` with no argument or a bare file name that finds nothing in the repo; this supersedes the 02-13 behavior for `local.*` include paths and resolves the denis256 recall limitation (8/8)
 - [Phase 05]: Dependency carries config_path value pos + TargetState; path deps kept apart from Dependency; loader passes TargetUnknown until 05-03
 - [Phase 05 P03]: classifyTarget: only fs.ErrNotExist is DirMissing, any other fs error Unknown; resolveTargetExpr (shared with 05-04 paths) returns RepoPath; nonexistent .../terragrunt.hcl maps to parent dir
+- [Phase 05 P02]: GRT003 self-loop renders as one-member ring; multi-member anchor position ignores the anchor's self-edge; all analyzers in Check share Stage "analyze"
+- [Phase 05 P02]: dependency_edges golden is red (new GRT002) until 05-05 hand review
 
 ### Pending Todos
 
@@ -120,6 +123,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-09-30T09:26:30.000Z
-Stopped at: Completed 05-03-PLAN.md
+Last session: 2026-09-30T09:32:09.000Z
+Stopped at: Completed 05-02-PLAN.md
 Resume file: None
