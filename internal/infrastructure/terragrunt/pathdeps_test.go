@@ -136,7 +136,7 @@ func TestPathDepsEmptyIsSelf(t *testing.T) {
 	cases := map[string][]string{
 		"a": {`a|has-config|a/terragrunt.hcl:2:12|""`},
 		"m": {`b|has-config|m/terragrunt.hcl:2:12|../b`, `m|has-config|m/terragrunt.hcl:2:20|""`},
-		"t": {`t|has-config|t/terragrunt.hcl:2:12|${""}`},
+		"t": {`t|has-config|t/terragrunt.hcl:2:12|"${""}"`},
 		"c": {`c|has-config|inc.hcl:2:12|""`},
 	}
 	for dir, want := range cases {

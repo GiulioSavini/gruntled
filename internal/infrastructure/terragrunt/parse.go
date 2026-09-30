@@ -77,8 +77,9 @@ type pathElem struct {
 	expr hcl.Expression
 	pos  repograph.Position
 	// literal is the element as written: the string value for a plain
-	// string literal, otherwise its source text (surrounding quotes of a
-	// template stripped).
+	// string literal (`""` for an empty one, so it is never empty),
+	// otherwise its source text (surrounding quotes of a template
+	// stripped).
 	literal string
 }
 
@@ -349,10 +350,15 @@ func parsePathsDecl(p repograph.RepoPath, src []byte, block *hclsyntax.Block) pa
 
 // elemLiteral returns a paths element as written: the value of a plain
 // string literal, or the element's source text with a template's
-// surrounding quotes stripped.
+// surrounding quotes stripped. An empty string literal is returned as
+// `""`: it resolves to the unit itself (a self-edge) and the domain
+// requires a non-empty literal.
 func elemLiteral(src []byte, x hclsyntax.Expression) string {
 	if s, ok := literalString(x); ok {
 		if _, isTmpl := x.(*hclsyntax.TemplateExpr); isTmpl && !hasInterpolation(x) {
+			if s == "" {
+				return `""`
+			}
 			return s
 		}
 	}

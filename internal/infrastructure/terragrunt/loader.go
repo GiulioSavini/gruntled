@@ -461,14 +461,16 @@ func (l *Loader) resolveDependencies(unitDir string, childRefs []includeRef, byL
 }
 
 // resolveOneDependency resolves cpExpr through resolveTargetExpr and builds
-// a resolved or unresolved repograph.Dependency. A resolved dependency
+// a resolved or unresolved repograph.Dependency. A config_path evaluating
+// to "" is unresolved ReasonConfigPathEmpty, never a self-edge: Terragrunt
+// v1.1.6 skips it with "config_path could not be resolved" (no cycle). A resolved dependency
 // carries the on-disk TargetState of its target directory (classifyTarget);
 // an unresolved one is always TargetUnknown.
 //
 // ok is false only on a domain constructor rejection ("should be
 // impossible" after the checks in resolveTargetExpr).
 func (l *Loader) resolveOneDependency(label string, cpExpr hcl.Expression, scope evalScope, unitDir string, pos, pathPos repograph.Position, opts repograph.DependencyOptions) (repograph.Dependency, bool) {
-	target, reason := l.resolveTargetExpr(cpExpr, scope, unitDir)
+	target, reason := l.resolveTargetExpr(cpExpr, scope, unitDir, true)
 	if reason != "" {
 		d, err := repograph.NewUnresolvedDependency(label, reason, pos, pathPos, opts)
 		return d, err == nil
@@ -483,9 +485,10 @@ func (l *Loader) resolveOneDependency(label string, cpExpr hcl.Expression, scope
 // missing or a non-list literal (pathsInvalid). A paths expression that is
 // not a literal list is one unresolved entry at the paths value. Each list
 // element is resolved like a config_path (resolveTargetExpr, same scope and
-// child unitDir), so an element evaluating to "" is unresolved
-// ReasonConfigPathEmpty like an empty block config_path. An element a domain constructor rejects ("should be
-// impossible") is dropped, which can only lose an edge, never invent one.
+// child unitDir), except that an element evaluating to "" resolves to
+// unitDir itself: a self-edge, which Terragrunt v1.1.6 reports as "cycle
+// detected during queue construction". An element a domain constructor
+// rejects ("should be impossible") is dropped, which can only lose an edge, never invent one.
 func (l *Loader) filePathDependencies(unitDir string, childRefs []includeRef, ef effectiveFile) []repograph.PathDependency {
 	if len(ef.pf.pathDecls) != 1 {
 		return nil
@@ -511,7 +514,7 @@ func (l *Loader) filePathDependencies(unitDir string, childRefs []includeRef, ef
 	for _, e := range d.elems {
 		var pd repograph.PathDependency
 		var err error
-		if target, reason := l.resolveTargetExpr(e.expr, scope, unitDir); reason != "" {
+		if target, reason := l.resolveTargetExpr(e.expr, scope, unitDir, false); reason != "" {
 			pd, err = repograph.NewUnresolvedPathDependency(reason, e.pos)
 		} else {
 			pd, err = repograph.NewPathDependency(target, e.literal, e.pos, l.classifyTarget(target.String()))
@@ -530,9 +533,11 @@ func (l *Loader) filePathDependencies(unitDir string, childRefs []includeRef, ef
 // dependency blocks and dependencies.paths elements. Exactly one of target
 // and reason is set. The outcomes:
 //
-//  0. expr evaluates to "": ReasonConfigPathEmpty. Terragrunt v1.1.6
-//     reports "config_path could not be resolved" (no cycle), so an empty
-//     path is never resolved to unitDir as a self-edge.
+//  0. expr evaluates to "" and emptyUnresolved is set (dependency
+//     blocks): ReasonConfigPathEmpty. Terragrunt v1.1.6 reports
+//     "config_path could not be resolved" (no cycle) for a block, but a
+//     cycle for a `dependencies { paths }` element "", so paths pass
+//     emptyUnresolved false and "" resolves to unitDir (a self-edge).
 //  1. expr fails closed evaluation, or its evaluated path escapes the
 //     repository: ReasonConfigPathDynamic / ReasonConfigPathOutsideRepo.
 //  2. The resolved path is a regular file named terragrunt.stack.hcl, or a
@@ -550,12 +555,12 @@ func (l *Loader) filePathDependencies(unitDir string, childRefs []includeRef, ef
 //     literal backslash surviving resolvePath as part of a path segment):
 //     ReasonConfigPathInvalid. Only this one dependency is affected; the
 //     unit and its sibling dependencies stay resolved (G8).
-func (l *Loader) resolveTargetExpr(expr hcl.Expression, scope evalScope, unitDir string) (repograph.RepoPath, string) {
+func (l *Loader) resolveTargetExpr(expr hcl.Expression, scope evalScope, unitDir string, emptyUnresolved bool) (repograph.RepoPath, string) {
 	raw, ok := evalPath(expr, scope)
 	if !ok {
 		return repograph.RepoPath{}, ReasonConfigPathDynamic
 	}
-	if raw == "" {
+	if raw == "" && emptyUnresolved {
 		return repograph.RepoPath{}, ReasonConfigPathEmpty
 	}
 	p, ok := resolvePath(unitDir, raw)
