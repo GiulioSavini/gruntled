@@ -187,9 +187,10 @@ const (
 	// part of a path segment). Only this one dependency becomes unresolved;
 	// its sibling dependencies and the unit itself stay resolved (G8).
 	ReasonConfigPathInvalid = "config-path-invalid"
-	// ReasonConfigPathEmpty means a `dependencies { paths }` element
-	// evaluated to the empty string. It is kept unresolved (never a
-	// self-edge) and stays silent.
+	// ReasonConfigPathEmpty means a dependency block's config_path or a
+	// `dependencies { paths }` element evaluated to the empty string. It is
+	// kept unresolved (never a self-edge) and stays silent: Terragrunt
+	// v1.1.6 reports "config_path could not be resolved", not a cycle.
 	ReasonConfigPathEmpty = "config-path-empty"
 	// ReasonDependenciesPathsDynamic means a `dependencies` block's paths
 	// attribute is not a literal list (local.x, concat(...), a for

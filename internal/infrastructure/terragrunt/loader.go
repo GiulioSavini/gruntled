@@ -483,8 +483,8 @@ func (l *Loader) resolveOneDependency(label string, cpExpr hcl.Expression, scope
 // missing or a non-list literal (pathsInvalid). A paths expression that is
 // not a literal list is one unresolved entry at the paths value. Each list
 // element is resolved like a config_path (resolveTargetExpr, same scope and
-// child unitDir); an element evaluating to "" is unresolved
-// ReasonConfigPathEmpty. An element a domain constructor rejects ("should be
+// child unitDir), so an element evaluating to "" is unresolved
+// ReasonConfigPathEmpty like an empty block config_path. An element a domain constructor rejects ("should be
 // impossible") is dropped, which can only lose an edge, never invent one.
 func (l *Loader) filePathDependencies(unitDir string, childRefs []includeRef, ef effectiveFile) []repograph.PathDependency {
 	if len(ef.pf.pathDecls) != 1 {
@@ -511,9 +511,7 @@ func (l *Loader) filePathDependencies(unitDir string, childRefs []includeRef, ef
 	for _, e := range d.elems {
 		var pd repograph.PathDependency
 		var err error
-		if raw, ok := evalPath(e.expr, scope); ok && raw == "" {
-			pd, err = repograph.NewUnresolvedPathDependency(ReasonConfigPathEmpty, e.pos)
-		} else if target, reason := l.resolveTargetExpr(e.expr, scope, unitDir); reason != "" {
+		if target, reason := l.resolveTargetExpr(e.expr, scope, unitDir); reason != "" {
 			pd, err = repograph.NewUnresolvedPathDependency(reason, e.pos)
 		} else {
 			pd, err = repograph.NewPathDependency(target, e.literal, e.pos, l.classifyTarget(target.String()))
@@ -532,6 +530,9 @@ func (l *Loader) filePathDependencies(unitDir string, childRefs []includeRef, ef
 // dependency blocks and dependencies.paths elements. Exactly one of target
 // and reason is set. The outcomes:
 //
+//  0. expr evaluates to "": ReasonConfigPathEmpty. Terragrunt v1.1.6
+//     reports "config_path could not be resolved" (no cycle), so an empty
+//     path is never resolved to unitDir as a self-edge.
 //  1. expr fails closed evaluation, or its evaluated path escapes the
 //     repository: ReasonConfigPathDynamic / ReasonConfigPathOutsideRepo.
 //  2. The resolved path is a regular file named terragrunt.stack.hcl, or a
@@ -553,6 +554,9 @@ func (l *Loader) resolveTargetExpr(expr hcl.Expression, scope evalScope, unitDir
 	raw, ok := evalPath(expr, scope)
 	if !ok {
 		return repograph.RepoPath{}, ReasonConfigPathDynamic
+	}
+	if raw == "" {
+		return repograph.RepoPath{}, ReasonConfigPathEmpty
 	}
 	p, ok := resolvePath(unitDir, raw)
 	if !ok {
