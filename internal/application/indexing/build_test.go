@@ -158,7 +158,7 @@ func dump(r indexing.Result) string {
 func TestBuild_UnitStateMapping(t *testing.T) {
 	unitPath := mustPath(t, "live/app")
 	depPos := mustPos(t, "live/app/terragrunt.hcl", 1, 1)
-	dep, err := repograph.NewDependency("vpc", mustPath(t, "live/vpc"), depPos, repograph.DependencyOptions{})
+	dep, err := repograph.NewDependency("vpc", mustPath(t, "live/vpc"), depPos, depPos, repograph.TargetUnknown, repograph.DependencyOptions{})
 	if err != nil {
 		t.Fatalf("NewDependency: %v", err)
 	}
@@ -320,7 +320,7 @@ func TestBuild_TwoHopTraversal(t *testing.T) {
 	vpcModPath := mustPath(t, "modules/vpc")
 
 	depPos := mustPos(t, "live/app/terragrunt.hcl", 3, 1)
-	dep, err := repograph.NewDependency("vpc", vpcUnitPath, depPos, repograph.DependencyOptions{})
+	dep, err := repograph.NewDependency("vpc", vpcUnitPath, depPos, depPos, repograph.TargetUnknown, repograph.DependencyOptions{})
 	if err != nil {
 		t.Fatalf("NewDependency: %v", err)
 	}
@@ -366,7 +366,7 @@ func TestBuild_TwoHopTraversal(t *testing.T) {
 func TestBuild_UnresolvedDependencyKept(t *testing.T) {
 	unitPath := mustPath(t, "live/app")
 	pos := mustPos(t, "live/app/terragrunt.hcl", 4, 1)
-	dep, err := repograph.NewUnresolvedDependency("vpc", "config-path-dynamic", pos, repograph.DependencyOptions{})
+	dep, err := repograph.NewUnresolvedDependency("vpc", "config-path-dynamic", pos, pos, repograph.DependencyOptions{})
 	if err != nil {
 		t.Fatalf("NewUnresolvedDependency: %v", err)
 	}
@@ -410,7 +410,7 @@ func TestBuild_DependencyTargetNotAUnit(t *testing.T) {
 	unitPath := mustPath(t, "live/app")
 	missingTarget := mustPath(t, "live/missing")
 	pos := mustPos(t, "live/app/terragrunt.hcl", 5, 1)
-	dep, err := repograph.NewDependency("missing", missingTarget, pos, repograph.DependencyOptions{})
+	dep, err := repograph.NewDependency("missing", missingTarget, pos, pos, repograph.TargetUnknown, repograph.DependencyOptions{})
 	if err != nil {
 		t.Fatalf("NewDependency: %v", err)
 	}
@@ -525,7 +525,7 @@ func TestBuild_DeterministicRegardlessOfInputOrder(t *testing.T) {
 	modPath := mustPath(t, "modules/shared")
 
 	posA := mustPos(t, "live/a/terragrunt.hcl", 1, 1)
-	depA, err := repograph.NewDependency("b", unitB, posA, repograph.DependencyOptions{})
+	depA, err := repograph.NewDependency("b", unitB, posA, posA, repograph.TargetUnknown, repograph.DependencyOptions{})
 	if err != nil {
 		t.Fatalf("NewDependency: %v", err)
 	}

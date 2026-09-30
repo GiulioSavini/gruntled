@@ -127,13 +127,13 @@ func buildScenario(t *testing.T, s scenario) *repograph.RepositoryGraph {
 		if s.dep == depNotAUnit {
 			target = repograph.MustRepoPath("live/nowhere")
 		}
-		d, err := repograph.NewDependency("vpc", target, depPos, s.opts)
+		d, err := repograph.NewDependency("vpc", target, depPos, depPos, repograph.TargetUnknown, s.opts)
 		if err != nil {
 			t.Fatalf("NewDependency: %v", err)
 		}
 		deps = append(deps, d)
 	case depUnresolved:
-		d, err := repograph.NewUnresolvedDependency("vpc", "config-path-not-literal", depPos, s.opts)
+		d, err := repograph.NewUnresolvedDependency("vpc", "config-path-not-literal", depPos, depPos, s.opts)
 		if err != nil {
 			t.Fatalf("NewUnresolvedDependency: %v", err)
 		}
@@ -336,7 +336,7 @@ func TestDIAG03(t *testing.T) {
 
 func TestUnknownOutputsModuleUnknownReferencingUnit(t *testing.T) {
 	refPos := mustPos(t, vpcDepFile, 10, 5)
-	dep, err := repograph.NewDependency("vpc", vpcPath, mustPos(t, vpcDepFile, 1, 1), repograph.DefaultDependencyOptions())
+	dep, err := repograph.NewDependency("vpc", vpcPath, mustPos(t, vpcDepFile, 1, 1), mustPos(t, vpcDepFile, 1, 1), repograph.TargetUnknown, repograph.DefaultDependencyOptions())
 	if err != nil {
 		t.Fatalf("NewDependency: %v", err)
 	}
@@ -368,7 +368,7 @@ func sharedIncludeUnits(t *testing.T) ([]repograph.Unit, []repograph.Module) {
 	a := repograph.MustRepoPath("live/a")
 	b := repograph.MustRepoPath("live/b")
 	mk := func(unit, target repograph.RepoPath) repograph.Unit {
-		d, err := repograph.NewDependency("vpc", target, depPos, repograph.DefaultDependencyOptions())
+		d, err := repograph.NewDependency("vpc", target, depPos, depPos, repograph.TargetUnknown, repograph.DefaultDependencyOptions())
 		if err != nil {
 			t.Fatalf("NewDependency: %v", err)
 		}
@@ -411,7 +411,7 @@ func TestUnknownOutputsOrderAndDeterminism(t *testing.T) {
 	modules[1] = mustModule(t, repograph.MustRepoPath("live/good-vpc"), mustSurface(t))
 	// A second, earlier reference in another file.
 	early := repograph.MustRepoPath("_common/a.hcl")
-	d, err := repograph.NewDependency("vpc", repograph.MustRepoPath("live/bad-vpc"), mustPos(t, early, 1, 1), repograph.DefaultDependencyOptions())
+	d, err := repograph.NewDependency("vpc", repograph.MustRepoPath("live/bad-vpc"), mustPos(t, early, 1, 1), mustPos(t, early, 1, 1), repograph.TargetUnknown, repograph.DefaultDependencyOptions())
 	if err != nil {
 		t.Fatalf("NewDependency: %v", err)
 	}

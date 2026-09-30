@@ -50,6 +50,10 @@ type depDecl struct {
 	// pos is the position of the `dependency` keyword itself
 	// (block.TypeRange.Start).
 	pos repograph.Position
+	// cpPos is the position of the `config_path` attribute's value
+	// expression, falling back to pos when the attribute is absent or its
+	// position cannot be converted.
+	cpPos repograph.Position
 }
 
 // generateDecl is one top-level `generate` block.
@@ -217,12 +221,20 @@ func (c *fileCache) parse(p repograph.RepoPath) *parsedFile {
 				pos:    pos,
 			})
 		case "dependency":
+			cp := attrExpr(block.Body, "config_path")
+			cpPos := pos
+			if cp != nil {
+				if vp, err := hclconv.Position(p, src, cp.Range().Start); err == nil {
+					cpPos = vp
+				}
+			}
 			pf.deps = append(pf.deps, depDecl{
 				labels:       block.Labels,
-				configPath:   attrExpr(block.Body, "config_path"),
+				configPath:   cp,
 				hasExpansion: hasBlock(block.Body, "expansion"),
 				opts:         dependencyOptions(block.Body),
 				pos:          pos,
+				cpPos:        cpPos,
 			})
 		case "generate":
 			pf.generates = append(pf.generates, generateDecl{

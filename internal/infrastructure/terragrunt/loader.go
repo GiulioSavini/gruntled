@@ -412,12 +412,14 @@ func (l *Loader) resolveDependencies(unitDir string, childRefs []includeRef, byL
 		var found bool
 		var pos repograph.Position
 		var opts repograph.DependencyOptions
+		var pathPos repograph.Position
 
 		if len(occs) == 1 || !deep {
 			chosen = occs[0]
 			found = chosen.decl.configPath != nil
 			pos = chosen.decl.pos
 			opts = chosen.decl.opts
+			pathPos = chosen.decl.cpPos
 		} else {
 			pos = occs[0].decl.pos
 			opts = repograph.DependencyOptions{}
@@ -425,6 +427,7 @@ func (l *Loader) resolveDependencies(unitDir string, childRefs []includeRef, byL
 				if o.decl.configPath != nil {
 					chosen = o
 					found = true
+					pathPos = o.decl.cpPos
 					break
 				}
 			}
@@ -435,7 +438,7 @@ func (l *Loader) resolveDependencies(unitDir string, childRefs []includeRef, byL
 		}
 
 		scope := fileScope(l.fsys, unitDir, childRefs, chosen.ef)
-		dep, ok := l.resolveOneDependency(label, chosen.decl.configPath, scope, unitDir, pos, opts)
+		dep, ok := l.resolveOneDependency(label, chosen.decl.configPath, scope, unitDir, pos, pathPos, opts)
 		if !ok {
 			return nil, true
 		}
@@ -467,15 +470,15 @@ func (l *Loader) resolveDependencies(unitDir string, childRefs []includeRef, byL
 //
 // ok is false only on a domain constructor rejection ("should be
 // impossible" after the checks above).
-func (l *Loader) resolveOneDependency(label string, cpExpr hcl.Expression, scope evalScope, unitDir string, pos repograph.Position, opts repograph.DependencyOptions) (repograph.Dependency, bool) {
+func (l *Loader) resolveOneDependency(label string, cpExpr hcl.Expression, scope evalScope, unitDir string, pos, pathPos repograph.Position, opts repograph.DependencyOptions) (repograph.Dependency, bool) {
 	raw, ok := evalPath(cpExpr, scope)
 	if !ok {
-		d, err := repograph.NewUnresolvedDependency(label, ReasonConfigPathDynamic, pos, opts)
+		d, err := repograph.NewUnresolvedDependency(label, ReasonConfigPathDynamic, pos, pathPos, opts)
 		return d, err == nil
 	}
 	p, ok := resolvePath(unitDir, raw)
 	if !ok {
-		d, err := repograph.NewUnresolvedDependency(label, ReasonConfigPathOutsideRepo, pos, opts)
+		d, err := repograph.NewUnresolvedDependency(label, ReasonConfigPathOutsideRepo, pos, pathPos, opts)
 		return d, err == nil
 	}
 
@@ -485,26 +488,26 @@ func (l *Loader) resolveOneDependency(label string, cpExpr hcl.Expression, scope
 		case "terragrunt.hcl":
 			targetDir = path.Dir(p)
 		case "terragrunt.stack.hcl":
-			d, err := repograph.NewUnresolvedDependency(label, ReasonConfigPathStack, pos, opts)
+			d, err := repograph.NewUnresolvedDependency(label, ReasonConfigPathStack, pos, pathPos, opts)
 			return d, err == nil
 		default:
-			d, err := repograph.NewUnresolvedDependency(label, ReasonConfigPathNondefaultFile, pos, opts)
+			d, err := repograph.NewUnresolvedDependency(label, ReasonConfigPathNondefaultFile, pos, pathPos, opts)
 			return d, err == nil
 		}
 	}
 
 	targetPath, pathErr := repograph.NewRepoPath(targetDir)
 	if pathErr != nil {
-		d, err := repograph.NewUnresolvedDependency(label, ReasonConfigPathInvalid, pos, opts)
+		d, err := repograph.NewUnresolvedDependency(label, ReasonConfigPathInvalid, pos, pathPos, opts)
 		return d, err == nil
 	}
 
 	if info, statErr := fs.Stat(l.fsys, path.Join(targetDir, "terragrunt.stack.hcl")); statErr == nil && info.Mode().IsRegular() {
-		d, err := repograph.NewUnresolvedDependency(label, ReasonConfigPathStack, pos, opts)
+		d, err := repograph.NewUnresolvedDependency(label, ReasonConfigPathStack, pos, pathPos, opts)
 		return d, err == nil
 	}
 
-	d, err := repograph.NewDependency(label, targetPath, pos, opts)
+	d, err := repograph.NewDependency(label, targetPath, pos, pathPos, repograph.TargetUnknown, opts)
 	return d, err == nil
 }
 

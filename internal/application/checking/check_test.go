@@ -60,7 +60,7 @@ func mustSurface(t *testing.T, outputs ...string) repograph.Surface {
 // declares vpc_id.
 func repo(t *testing.T, output string) (fakeLoader, fakeSurfaces) {
 	t.Helper()
-	dep, err := repograph.NewDependency("vpc", repograph.MustRepoPath("live/vpc"), mustPos(t, "live/app/terragrunt.hcl", 1, 1), repograph.DefaultDependencyOptions())
+	dep, err := repograph.NewDependency("vpc", repograph.MustRepoPath("live/vpc"), mustPos(t, "live/app/terragrunt.hcl", 1, 1), mustPos(t, "live/app/terragrunt.hcl", 1, 1), repograph.TargetUnknown, repograph.DefaultDependencyOptions())
 	if err != nil {
 		t.Fatalf("NewDependency: %v", err)
 	}
