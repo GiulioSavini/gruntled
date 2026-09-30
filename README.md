@@ -141,7 +141,7 @@ way. All 8 known broken references there are still reported.
 
 **Not built yet:**
 - Everything under "Later" in the roadmap: the `gruntled watch` daemon,
-  `gruntled blast` (Broken vs Impacted), diagnostics `GRT002`-`GRT006`,
+  `gruntled blast` (Broken vs Impacted), diagnostics `GRT004`-`GRT006`,
   `gruntled graph --json`, SARIF output.
 
 ### Usage
@@ -161,7 +161,7 @@ versioned JSON document instead. Flags work before or after the path.
 | Exit code | Meaning |
 |---|---|
 | 0 | Analysis completed, no error diagnostics |
-| 1 | At least one error diagnostic (`GRT001`, `GRT100`) |
+| 1 | At least one error diagnostic (`GRT001`, `GRT002`, `GRT003`, `GRT100`) |
 | 2 | Usage error: unknown command or flag, invalid `--format`, more than one path |
 | 3 | Analysis could not run: path missing, not a directory or unreadable, or an internal failure |
 
@@ -327,23 +327,25 @@ explicitly instead of silently walking a zero path.
 ## Diagnostic codes
 
 A `Code` is always `"GRT"` followed by exactly three ASCII digits
-(`internal/domain/diagnostic/diagnostic.go`, `Code.Valid()`). Two are defined
+(`internal/domain/diagnostic/diagnostic.go`, `Code.Valid()`). Four are defined
 in code today:
 
 | Code | Constant | Meaning |
 |---|---|---|
 | `GRT001` | `CodeUnknownOutput` | A `dependency.X.outputs.Y` reference names an output the target module does not declare. |
+| `GRT002` | `CodeMissingDependencyTarget` | A `dependency` `config_path` or `dependencies` path resolves to a directory that does not exist or holds no `terragrunt.hcl`. |
+| `GRT003` | `CodeDependencyCycle` | Units depend on each other in a cycle (one diagnostic per cycle). |
 | `GRT100` | `CodeSyntaxError` | The HCL being analyzed is invalid. |
 
-Both are emitted by `gruntled check` (see [Usage](#usage)). `GRT001` comes
-from the analyzer in `internal/domain/analysis`; `GRT100` from the parsers,
-one per file that fails to parse.
+All four are emitted by `gruntled check` (see [Usage](#usage) and
+[docs/cli.md](docs/cli.md#diagnostics)). `GRT001`-`GRT003` come from the
+analyzers in `internal/domain/analysis`; `GRT100` from the parsers, one per
+file that fails to parse.
 
-`GRT002` through `GRT006` are named and scoped in the design document and the
-roadmap's "Later" section (`config_path` pointing nowhere, dependency
-cycles, a removed-but-still-referenced output, an `inputs` key with no
-matching `variable`, an unset `variable` with no default) but have no `Code`
-constant yet — they're deferred past v0.1.
+`GRT004` through `GRT006` are named and scoped in the design document and the
+roadmap's "Later" section (a removed-but-still-referenced output, an
+`inputs` key with no matching `variable`, an unset `variable` with no
+default) but have no `Code` constant yet.
 
 ## Determinism guarantees
 

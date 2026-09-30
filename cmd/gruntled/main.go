@@ -46,7 +46,7 @@ Flags:
 
 Exit codes:
   0  analysis completed, no error diagnostics
-  1  analysis completed, at least one error diagnostic (GRT001, GRT100)
+  1  analysis completed, at least one error diagnostic (GRT001-GRT003, GRT100)
   2  usage error: unknown command or flag, invalid --format, more than one path
   3  analysis could not run: path missing, not a directory or unreadable, or an internal failure
 `

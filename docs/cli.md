@@ -39,7 +39,7 @@ Flags:
 
 Exit codes:
   0  analysis completed, no error diagnostics
-  1  analysis completed, at least one error diagnostic (GRT001, GRT100)
+  1  analysis completed, at least one error diagnostic (GRT001-GRT003, GRT100)
   2  usage error: unknown command or flag, invalid --format, more than one path
   3  analysis could not run: path missing, not a directory or unreadable, or an internal failure
 ```
@@ -49,7 +49,7 @@ Exit codes:
 | Code | Meaning |
 |------|---------|
 | 0 | Analysis completed. No error diagnostic. |
-| 1 | Analysis completed. At least one error diagnostic (`GRT001`, `GRT100`). |
+| 1 | Analysis completed. At least one error diagnostic (`GRT001`, `GRT002`, `GRT003`, `GRT100`). |
 | 2 | Usage error: no or unknown command, unknown flag, invalid `--format`, more than one path. |
 | 3 | Analysis could not run: path missing, not a directory or unreadable, an internal failure, or a failed write to stdout. |
 
@@ -57,7 +57,7 @@ The same table as printed by `gruntled check -h`:
 
 ```
   0  analysis completed, no error diagnostics
-  1  analysis completed, at least one error diagnostic (GRT001, GRT100)
+  1  analysis completed, at least one error diagnostic (GRT001-GRT003, GRT100)
   2  usage error: unknown command or flag, invalid --format, more than one path
   3  analysis could not run: path missing, not a directory or unreadable, or an internal failure
 ```
@@ -187,9 +187,100 @@ A Terragrunt or Terraform file does not parse. One diagnostic per file,
 reporting the first error only, at its byte column. The unit or module that
 depends on the file becomes unknown, so GRT001 stays silent for it.
 
+### GRT002: dependency target has no unit (error)
+
+A `dependency` block's `config_path`, or an entry of a `dependencies { paths }`
+list, resolves to a directory that holds no unit: it does not exist, or it
+has no `terragrunt.hcl` (or `terragrunt.hcl.json`). Terragrunt refuses to run
+such a dependency, whatever `skip_outputs` or `mock_outputs` say.
+
+Messages:
+
+```
+dependency "<label>" config_path resolves to "<dir>": directory does not exist
+dependency "<label>" config_path resolves to "<dir>": directory has no terragrunt.hcl
+dependencies path "<entry>" resolves to "<dir>": directory does not exist
+dependencies path "<entry>" resolves to "<dir>": directory has no terragrunt.hcl
+```
+
+Example:
+
+```
+live/app/terragrunt.hcl:2:17: GRT002 dependency "gone" config_path resolves to "live/gone": directory does not exist (unit live/app)
+```
+
+The position is the `config_path` value, or the paths entry. For each
+dependency, the first matching row decides:
+
+| # | Situation | Result |
+|---|-----------|--------|
+| 1 | The target is not a literal gruntled can resolve (`local.x`, `get_env()`, a function call, `config_path = ""` in a paths entry, a stack, a non-default file, outside the repository) | silent |
+| 2 | The target directory holds a `terragrunt.hcl`, or gruntled could not read it (permission, not a directory, symlink escaping the root) | silent |
+| 3 | A block whose `enabled` is not literally `true` (absent counts as `true`; `false`, a non-literal and a value from a deep-merged label do not). Paths entries have no `enabled` and skip this row | silent |
+| 4 | The directory does not exist | GRT002 "directory does not exist" |
+| 5 | The directory exists without `terragrunt.hcl` (for example a module-only directory) | GRT002 "directory has no terragrunt.hcl" |
+
+- `skip_outputs` and `mock_outputs` never gate GRT002.
+- The diagnostic belongs to the unit that declares the dependency. A block
+  or paths list coming from a shared include gives one diagnostic per
+  including unit, all at the same `file:line:col` in the include.
+- `dependencies { paths }` entries are checked like `config_path`. Paths lists
+  from includes are merged as a union; a target listed twice is reported
+  once. A block and a paths entry naming the same missing directory both
+  fire.
+
+Rejected alternatives:
+
+- **Suppress when `skip_outputs = true` or mocks are set.** Terragrunt still
+  needs the directory to hold a unit, so the run would fail anyway.
+- **Use `terragrunt hcl validate` as the oracle.** It needs Terragrunt and
+  runs processes, which gruntled never does.
+
+### GRT003: dependency cycle (error)
+
+Units depend on each other in a cycle, which Terragrunt refuses to order.
+There is one diagnostic per cycle (strongly connected component), attributed
+to its lexically smallest unit, at that unit's first edge into the cycle.
+
+Messages:
+
+```
+dependency cycle: "<a>" -> "<b>" -> "<a>"
+dependency cycle among: "<a>", "<b>", "<c>"
+```
+
+Example:
+
+```
+ring/p/terragrunt.hcl:2:17: GRT003 dependency cycle: "ring/p" -> "ring/q" -> "ring/p" (unit ring/p)
+```
+
+| # | Situation | Result |
+|---|-----------|--------|
+| 1 | An edge whose `enabled` is not literally `true` | not an edge |
+| 2 | An edge whose target is unresolved or not a unit of the repository (missing, no config) | not an edge |
+| 3 | `skip_outputs = true` or mocks on an edge | still an edge: Terragrunt orders the units anyway |
+| 4 | A `dependency` block and a `dependencies` path to the same unit | one edge |
+| 5 | A unit depends on itself (`config_path = "."`, `"../<self>"`, or `""` on a block) | GRT003 `dependency cycle: "a" -> "a"` |
+| 6 | Every unit in the cycle has exactly one successor inside it | GRT003 ring: `"a" -> "b" -> "a"`, walking from the smallest unit |
+| 7 | Any other cycle, including one where a unit also loops on itself | GRT003 `among`: every member, sorted, no cap |
+
+The message is part of the diagnostic's identity, so adding or removing a
+unit in a cycle gives a new diagnostic.
+
+Rejected alternatives:
+
+- **One diagnostic per unit in the cycle.** It repeats the same finding N
+  times; one per cycle is what the user has to fix.
+- **Print the ring for every cycle.** A cycle with branches has no single
+  ring, and picking one would hide the other edges.
+- **Canonicalise symlink aliases** so two paths to the same directory become
+  one unit. Deferred: it needs symlink resolution for every target, and the
+  miss is only a false negative.
+
 ### Reserved codes
 
-Every other code is reserved. GRT002 to GRT006 are planned for later
+Every other code is reserved. GRT004 to GRT006 are planned for later
 versions.
 
 ## How GRT001 treats mock_outputs, enabled and skip_outputs (DIAG-03)
@@ -279,4 +370,13 @@ including unit instead.
 - A diagnostic's identity includes its position, so a line shift above a
   reference changes it.
 - Terragrunt stacks that have not been generated are invisible.
-- Undeclared dependency labels and dependency cycles are not reported in v0.1.
+- Undeclared dependency labels are not reported.
+- A config-unknown unit carries no dependency edges: a cycle through it is
+  not reported and its own dependencies are not checked for GRT002.
+- Symlink aliases are not canonicalised: an edge to a directory reached
+  through a symlink (or a vendored or cached copy) is not matched to the unit,
+  so a cycle through it is missed.
+- `exclude {}` blocks are not modelled: an excluded unit still counts in
+  GRT002 and GRT003.
+- `dependencies { paths }` from includes are merged as a union (both shallow
+  and deep merge), as Terragrunt does; `no_merge` includes contribute nothing.
