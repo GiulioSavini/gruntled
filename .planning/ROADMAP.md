@@ -51,6 +51,7 @@ See `milestones/v0.1-ROADMAP.md`.
 - [x] 05-04-PLAN.md — dependencies paths
 - [x] 05-05-PLAN.md — goldens+docs
 - [x] 05-06-PLAN.md — corpus validation
+- [ ] 05-07-PLAN.md — gap closure: empty config_path unresolved, not GRT003 self-loop
 
 ### Phase 6: Machine-Readable Output
 **Goal**: Users and tooling can consume gruntled's graph and diagnostics as stable, deterministic documents, including one GitHub code scanning accepts.
