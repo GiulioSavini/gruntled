@@ -22,7 +22,7 @@ layer must not import HCL and analyzers stay pure.
 
 ## Phases
 
-- [ ] **Phase 5: Graph Diagnostics** - `GRT002` (`config_path` to no unit) and `GRT003` (dependency cycle) as pure analyzers over the existing graph, validated on the three-repo corpus
+- [x] **Phase 5: Graph Diagnostics** - `GRT002` (`config_path` to no unit) and `GRT003` (dependency cycle) as pure analyzers over the existing graph, validated on the three-repo corpus (completed 2026-09-30)
 - [ ] **Phase 6: Machine-Readable Output** - `gruntled graph --json` and `gruntled check --format sarif`, both accepted by their consumers, over the final rule set
 - [ ] **Phase 7: Distribution & CI Integration** - Version injection, tagged static-binary releases, the pre-commit hook and GitHub Actions / GitLab CI recipes
 
@@ -79,6 +79,6 @@ See `milestones/v0.1-ROADMAP.md`.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 5. Graph Diagnostics | 7/7 | Complete | 2026-09-30 |
+| 5. Graph Diagnostics | 7/7 | Complete    | 2026-09-30 |
 | 6. Machine-Readable Output | 0/TBD | Not started | - |
 | 7. Distribution & CI Integration | 0/TBD | Not started | - |
