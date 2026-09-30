@@ -6,8 +6,9 @@ to a missing directory next to one to a real unit. Silent: a non-literal
 config_path (unresolved) and enabled = false. config_path = "" on a block
 is unresolved like a non-literal one (Terragrunt v1.1.6: "config_path could
 not be resolved", no cycle): no edge, no missing-target or cycle finding.
-A dependencies paths entry "" is unresolved the same way. No GRT001: no
-outputs are read.
+A dependencies paths entry "" is different: it resolves to live/app itself,
+a self-loop (Terragrunt v1.1.6: "cycle detected during queue
+construction"). No GRT001: no outputs are read.
 -- live/target/terragrunt.hcl --
 inputs = {}
 -- live/target/main.tf --
@@ -61,8 +62,11 @@ GRT002 error live/app/terragrunt.hcl:6:17 live/app
 GRT002 error live/app/terragrunt.hcl:10:18 live/app
 # line 28: "  paths = [" is 11 bytes, "\"../target\", " is 13 more.
 GRT002 error live/app/terragrunt.hcl:28:25 live/app
+# line 28: "\"../gone_path\", " is 16 more: the "" entry is a self-loop.
+GRT003 error live/app/terragrunt.hcl:28:41 live/app
 -- _golden/messages --
 GRT002 live/app/terragrunt.hcl:2:17 dependency "gone" config_path resolves to "live/gone": directory does not exist
 GRT002 live/app/terragrunt.hcl:6:17 dependency "modonly" config_path resolves to "live/modonly": directory has no terragrunt.hcl
 GRT002 live/app/terragrunt.hcl:10:18 dependency "skipped" config_path resolves to "live/gone_skip": directory does not exist
 GRT002 live/app/terragrunt.hcl:28:25 dependencies path "../gone_path" resolves to "live/gone_path": directory does not exist
+GRT003 live/app/terragrunt.hcl:28:41 dependency cycle: "live/app" -> "live/app"
