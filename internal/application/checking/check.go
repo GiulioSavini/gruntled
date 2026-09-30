@@ -1,5 +1,6 @@
 // Package checking holds the check use case: it builds the repository graph
-// through the indexing use case and runs the GRT001 analyzer over it. It is
+// through the indexing use case and runs the GRT001, GRT002 and GRT003
+// analyzers over it. It is
 // pure orchestration; every decision lives in the domain.
 package checking
 
@@ -18,13 +19,15 @@ type Report struct {
 	// Graph is the repository graph the diagnostics were computed over.
 	Graph *repograph.RepositoryGraph
 	// Diagnostics is the loader and surface diagnostics (GRT100) together
-	// with GRT001, in canonical order and deduplicated by Key.
+	// with GRT001 (unknown output), GRT002 (missing dependency target) and
+	// GRT003 (dependency cycle), in canonical order and deduplicated by Key.
 	Diagnostics diagnostic.Set
 }
 
 // Error reports that analysis failed after the graph was built.
 type Error struct {
-	// Stage is the step that failed; currently always "analyze".
+	// Stage is the step that failed; currently always "analyze" (every
+	// analyzer shares it; the wrapped error names the analyzer).
 	Stage string
 	Err   error
 }
@@ -39,8 +42,16 @@ func (e *Error) Unwrap() error {
 	return e.Err
 }
 
-// Check loads every unit, reads every module surface and reports GRT001
-// alongside the diagnostics gathered while loading. An error from graph
+// analyzers is every graph analyzer Check runs, in a fixed order. The order
+// does not affect the Report: the Set is canonical.
+var analyzers = []func(*repograph.RepositoryGraph) ([]diagnostic.Diagnostic, error){
+	analysis.UnknownOutputs,
+	analysis.MissingTargets,
+	analysis.DependencyCycles,
+}
+
+// Check loads every unit, reads every module surface and reports GRT001,
+// GRT002 and GRT003 alongside the diagnostics gathered while loading. An error from graph
 // construction is returned unchanged (an *indexing.Error); an analyzer
 // failure is returned as an *Error. On error the Report is zero.
 func Check(ctx context.Context, units ports.UnitLoader, surfaces ports.SurfaceReader) (Report, error) {
@@ -48,10 +59,13 @@ func Check(ctx context.Context, units ports.UnitLoader, surfaces ports.SurfaceRe
 	if err != nil {
 		return Report{}, err
 	}
-	grt001, err := analysis.UnknownOutputs(res.Graph)
-	if err != nil {
-		return Report{}, &Error{Stage: "analyze", Err: err}
+	all := res.Diagnostics.All()
+	for _, analyze := range analyzers {
+		ds, err := analyze(res.Graph)
+		if err != nil {
+			return Report{}, &Error{Stage: "analyze", Err: err}
+		}
+		all = append(all, ds...)
 	}
-	all := append(res.Diagnostics.All(), grt001...)
 	return Report{Graph: res.Graph, Diagnostics: diagnostic.NewSet(all...)}, nil
 }

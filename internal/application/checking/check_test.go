@@ -192,3 +192,60 @@ func TestErrorMessageAndUnwrap(t *testing.T) {
 		t.Errorf("Unwrap does not reach inner")
 	}
 }
+
+// TestCheckAllAnalyzers builds a graph with one broken reference (GRT001),
+// one dependency on a missing directory (GRT002) and one cycle (GRT003),
+// and expects all three in one canonical Set.
+func TestCheckAllAnalyzers(t *testing.T) {
+	loader, surfaces := repo(t, "vpc_idd")
+	mustDep := func(name, target, file string, line int, state repograph.TargetState) repograph.Dependency {
+		t.Helper()
+		pos := mustPos(t, file, line, 17)
+		d, err := repograph.NewDependency(name, repograph.MustRepoPath(target), pos, pos, state, repograph.DefaultDependencyOptions())
+		if err != nil {
+			t.Fatalf("NewDependency: %v", err)
+		}
+		return d
+	}
+	units := loader.res.Units
+	units[0].Dependencies = append(units[0].Dependencies,
+		mustDep("gone", "live/gone", "live/app/terragrunt.hcl", 2, repograph.TargetDirMissing))
+	units = append(units,
+		ports.UnitConfig{
+			Path:                repograph.MustRepoPath("live/x"),
+			ModuleUnknownReason: "source-remote",
+			Dependencies:        []repograph.Dependency{mustDep("y", "live/y", "live/x/terragrunt.hcl", 1, repograph.TargetHasConfig)},
+		},
+		ports.UnitConfig{
+			Path:                repograph.MustRepoPath("live/y"),
+			ModuleUnknownReason: "source-remote",
+			Dependencies:        []repograph.Dependency{mustDep("x", "live/x", "live/y/terragrunt.hcl", 1, repograph.TargetHasConfig)},
+		},
+	)
+	loader.res.Units = units
+
+	rep, err := checking.Check(context.Background(), loader, surfaces)
+	if err != nil {
+		t.Fatalf("Check: %v", err)
+	}
+	type row struct {
+		Code diagnostic.Code
+		Pos  string
+		Msg  string
+	}
+	var got []row
+	for _, d := range rep.Diagnostics.All() {
+		got = append(got, row{d.Code(), d.Pos().String(), d.Message()})
+	}
+	want := []row{
+		{diagnostic.CodeMissingDependencyTarget, "live/app/terragrunt.hcl:2:17", `dependency "gone" config_path resolves to "live/gone": directory does not exist`},
+		{diagnostic.CodeUnknownOutput, "live/app/terragrunt.hcl:6:12", `dependency "vpc" output "vpc_idd" is not declared by module "modules/vpc" (target unit "live/vpc")`},
+		{diagnostic.CodeDependencyCycle, "live/x/terragrunt.hcl:1:17", `dependency cycle: "live/x" -> "live/y" -> "live/x"`},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got  %#v\nwant %#v", got, want)
+	}
+	if !rep.Diagnostics.Equal(diagnostic.NewSet(rep.Diagnostics.All()...)) {
+		t.Errorf("Set is not canonical")
+	}
+}
