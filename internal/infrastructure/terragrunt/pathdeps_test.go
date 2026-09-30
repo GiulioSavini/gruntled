@@ -81,7 +81,7 @@ func TestPathDependencies(t *testing.T) {
 			"plain|no-config|" + at(`"../plain"`) + "|../plain",
 			"nodir|dir-missing|" + at(`"../nodir"`) + "|../nodir",
 			"!" + ReasonConfigPathDynamic + "|" + at(`local.x`),
-			"!" + ReasonConfigPathEmpty + "|" + at(`""`),
+			"u|has-config|" + at(`""`) + `|""`,
 			"!" + ReasonConfigPathStack + "|" + at(`"../stk"`),
 			"!" + ReasonConfigPathOutsideRepo + "|" + at(`"../../../esc"`),
 		}
@@ -118,6 +118,38 @@ func TestPathDependencies(t *testing.T) {
 
 // wantPathDepUnresolved asserts a resolved unit whose only path dependency
 // is unresolved with reason.
+// TestPathDepsEmptyIsSelf pins that a `dependencies { paths }` element
+// evaluating to "" resolves to the unit's own directory (a self-edge),
+// also when inherited from an include: terragrunt v1.1.6 reports "cycle
+// detected during queue construction" for it. A dependency block's empty
+// config_path is different (unresolved, see loader_test).
+func TestPathDepsEmptyIsSelf(t *testing.T) {
+	fsys := filesFS(map[string]string{
+		"a/terragrunt.hcl": "dependencies {\n  paths = [\"\"]\n}\n",
+		"m/terragrunt.hcl": "dependencies {\n  paths = [\"../b\", \"\"]\n}\n",
+		"t/terragrunt.hcl": "dependencies {\n  paths = [\"${\"\"}\"]\n}\n",
+		"c/terragrunt.hcl": "include \"r\" {\n  path = \"../inc.hcl\"\n}\n",
+		"inc.hcl":          "dependencies {\n  paths = [\"\"]\n}\n",
+		"b/terragrunt.hcl": "",
+	})
+	res := loadUnits(t, fsys)
+	cases := map[string][]string{
+		"a": {`a|has-config|a/terragrunt.hcl:2:12|""`},
+		"m": {`b|has-config|m/terragrunt.hcl:2:12|../b`, `m|has-config|m/terragrunt.hcl:2:20|""`},
+		"t": {`t|has-config|t/terragrunt.hcl:2:12|${""}`},
+		"c": {`c|has-config|inc.hcl:2:12|""`},
+	}
+	for dir, want := range cases {
+		t.Run(dir, func(t *testing.T) {
+			u := unitByPath(t, res, dir)
+			assertResolvedUnit(t, u)
+			if got := pdStrings(u); !slices.Equal(got, want) {
+				t.Errorf("path deps:\n got  %q\n want %q", got, want)
+			}
+		})
+	}
+}
+
 func wantPathDepUnresolved(reason string) func(*testing.T, ports.UnitConfig) {
 	return func(t *testing.T, uc ports.UnitConfig) {
 		t.Helper()

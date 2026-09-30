@@ -715,13 +715,6 @@ dependency "good" { config_path = "../vpc" }
 			check: wantDepUnresolved("bad", ReasonConfigPathInvalid, "good"),
 		},
 		{
-			name:   "config-path-empty",
-			reason: ReasonConfigPathEmpty,
-			fsys:   filesFS(map[string]string{"u/terragrunt.hcl": `dependencies { paths = [""] }`}),
-			unit:   "u",
-			check:  wantPathDepUnresolved(ReasonConfigPathEmpty),
-		},
-		{
 			// Terragrunt v1.1.6: "config_path could not be resolved", no
 			// cycle. An empty block config_path is never a self-edge.
 			name:   "config-path-empty/block",
