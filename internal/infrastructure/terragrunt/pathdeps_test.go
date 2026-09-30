@@ -130,3 +130,57 @@ func wantPathDepUnresolved(reason string) func(*testing.T, ports.UnitConfig) {
 		}
 	}
 }
+
+// TestPathDepsMerge covers the include merge of `dependencies`: a union
+// de-duplicated by resolved target in shallow and deep mode, no_merge
+// contributing nothing.
+func TestPathDepsMerge(t *testing.T) {
+	inc := func(name, strategy string) string {
+		s := "include \"r\" {\n  path = \"../inc/" + name + ".hcl\"\n"
+		if strategy != "" {
+			s += "  merge_strategy = \"" + strategy + "\"\n"
+		}
+		return s + "}\n"
+	}
+	// The child's own dependencies block always comes first, on line 1.
+	const childDeps = "dependencies { paths = [\"../a\"] }\n"
+	fsys := filesFS(map[string]string{
+		"a/terragrunt.hcl": "",
+		"b/terragrunt.hcl": "",
+		"inc/b.hcl":        "dependencies { paths = [\"../b\"] }\n",
+		"inc/ab.hcl":       "dependencies { paths = [\"../a\", \"../b\"] }\n",
+		"inc/dyn.hcl":      "dependencies { paths = local.x }\n",
+
+		"shallow/terragrunt.hcl": childDeps + inc("b", ""),
+		"deep/terragrunt.hcl":    childDeps + inc("b", "deep"),
+		"dup/terragrunt.hcl":     childDeps + inc("ab", ""),
+		"nomerge/terragrunt.hcl": childDeps + inc("b", "no_merge"),
+		"inconly/terragrunt.hcl": inc("b", ""),
+		"incdyn/terragrunt.hcl":  childDeps + inc("dyn", ""),
+	})
+	res := loadUnits(t, fsys)
+
+	a := func(u string) string { return "a|has-config|" + u + "/terragrunt.hcl:1:25|../a" }
+	cases := []struct {
+		unit string
+		want []string
+	}{
+		{"shallow", []string{a("shallow"), "b|has-config|inc/b.hcl:1:25|../b"}},
+		{"deep", []string{a("deep"), "b|has-config|inc/b.hcl:1:25|../b"}},
+		{"dup", []string{a("dup"), "b|has-config|inc/ab.hcl:1:33|../b"}},
+		{"nomerge", []string{a("nomerge")}},
+		{"inconly", []string{"b|has-config|inc/b.hcl:1:25|../b"}},
+		{"incdyn", []string{"!" + ReasonDependenciesPathsDynamic + "|inc/dyn.hcl:1:24", a("incdyn")}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.unit, func(t *testing.T) {
+			u := unitByPath(t, res, tc.unit)
+			assertResolvedUnit(t, u)
+			want := slices.Clone(tc.want)
+			slices.Sort(want)
+			if got := pdStrings(u); !slices.Equal(got, want) {
+				t.Errorf("path deps:\n got  %q\n want %q", got, want)
+			}
+		})
+	}
+}

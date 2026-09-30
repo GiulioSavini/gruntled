@@ -658,3 +658,62 @@ func TestBuild_CancelledContextBeforeLoadUnits(t *testing.T) {
 		t.Errorf("ReadSurface called %v, want none", surfaces.calls)
 	}
 }
+
+// --- dependencies { paths } attached to graph units ------------------------
+
+func TestBuild_PathDependencies(t *testing.T) {
+	unitA := mustPath(t, "live/a")
+	unitB := mustPath(t, "live/b")
+	unitM := mustPath(t, "live/m")
+	unitC := mustPath(t, "live/c")
+
+	pdA, err := repograph.NewPathDependency(unitB, "../b", mustPos(t, "live/a/terragrunt.hcl", 2, 12), repograph.TargetHasConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pdM, err := repograph.NewUnresolvedPathDependency("config-path-dynamic", mustPos(t, "live/m/terragrunt.hcl", 1, 5))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	units := []ports.UnitConfig{
+		{Path: unitA, Module: unitA, PathDependencies: []repograph.PathDependency{pdA}},
+		{Path: unitB, Module: unitB},
+		{Path: unitC, ConfigUnknownReason: "syntax-error", PathDependencies: []repograph.PathDependency{pdA}},
+		{Path: unitM, ModuleUnknownReason: "remote-source", PathDependencies: []repograph.PathDependency{pdM}},
+	}
+	surfaces := &fakeSurfaces{t: t, bySurface: map[string]ports.SurfaceResult{
+		unitA.String(): {Surface: mustSurface(t, nil, nil)},
+		unitB.String(): {Surface: mustSurface(t, nil, nil)},
+	}}
+	res, err := indexing.Build(context.Background(), fakeLoader{res: ports.LoadResult{Units: units}}, surfaces)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+
+	want := map[string][]repograph.PathDependency{
+		"live/a": {pdA},
+		"live/b": nil,
+		"live/c": nil,
+		"live/m": {pdM},
+	}
+	for p, wantPDs := range want {
+		u, ok := res.Graph.Unit(mustPath(t, p))
+		if !ok {
+			t.Fatalf("unit %s missing", p)
+		}
+		if got := u.PathDependencies(); len(got) != len(wantPDs) || (len(got) > 0 && !reflect.DeepEqual(got, wantPDs)) {
+			t.Errorf("%s PathDependencies = %v, want %v", p, got, wantPDs)
+		}
+	}
+}
+
+func TestBuild_ZeroPathDependencyIsAssembleError(t *testing.T) {
+	unitA := mustPath(t, "live/a")
+	units := []ports.UnitConfig{{Path: unitA, Module: unitA, PathDependencies: []repograph.PathDependency{{}}}}
+	_, err := indexing.Build(context.Background(), fakeLoader{res: ports.LoadResult{Units: units}}, &fakeSurfaces{t: t})
+	var ie *indexing.Error
+	if !errors.As(err, &ie) || ie.Stage != "assemble" || ie.Path != "live/a" {
+		t.Fatalf("err = %v, want *indexing.Error{Stage: assemble, Path: live/a}", err)
+	}
+}
