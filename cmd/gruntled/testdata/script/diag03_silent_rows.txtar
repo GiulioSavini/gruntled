@@ -16,7 +16,8 @@ exec gruntled-exit 0 check row3a
 # row 3b: skip_outputs is not a literal
 exec gruntled-exit 0 check row3b
 ! stdout .
-# row 4: config_path points at a directory that is not a unit
+# row 4: config_path points at a directory that is not a unit. It holds a
+# terragrunt.hcl the walk skips (under vendor/), so GRT002 is silent too.
 exec gruntled-exit 0 check row4
 ! stdout .
 # row 5a: target unit has a remote source (module-unknown)
@@ -89,11 +90,12 @@ dependency "vpc" {
 inputs = { id = dependency.vpc.outputs.vpc_idd }
 -- row3b/app/main.tf --
 variable "id" {}
--- row4/not-a-unit/main.tf --
+-- row4/vendor/not-a-unit/terragrunt.hcl --
+-- row4/vendor/not-a-unit/main.tf --
 output "vpc_id" { value = "x" }
 -- row4/app/terragrunt.hcl --
 dependency "vpc" {
-  config_path = "../not-a-unit"
+  config_path = "../vendor/not-a-unit"
 }
 inputs = { id = dependency.vpc.outputs.vpc_idd }
 -- row4/app/main.tf --
