@@ -45,7 +45,7 @@ See `milestones/v0.1-ROADMAP.md`.
   3. On the unmutated corpus, iso20022 and cds-snc/secret report no `GRT002`/`GRT003`; denis256 (a deliberately broken suite) reports exactly the set an independent oracle derives
   4. On the same corpus, every injected mutation (a `config_path` pointed at a missing directory, a back-edge closing a cycle) is caught (denis256 validated against its exact set plus mutations), and the results are recorded in `docs/validation.md`
 **Plans**: 6 plans
-- [ ] 05-01-PLAN.md — domain foundation
+- [x] 05-01-PLAN.md — domain foundation
 - [ ] 05-02-PLAN.md — analyzers
 - [ ] 05-03-PLAN.md — loader target state
 - [ ] 05-04-PLAN.md — dependencies paths
@@ -78,6 +78,6 @@ See `milestones/v0.1-ROADMAP.md`.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 5. Graph Diagnostics | 0/TBD | Not started | - |
+| 5. Graph Diagnostics | 1/6 | In Progress | - |
 | 6. Machine-Readable Output | 0/TBD | Not started | - |
 | 7. Distribution & CI Integration | 0/TBD | Not started | - |

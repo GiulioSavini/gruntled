@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.2
 milestone_name: CI-Ready
-status: planning
-stopped_at: Phase 5 context gathered
-last_updated: "2026-09-29T13:36:43.897Z"
+status: executing
+stopped_at: Completed 05-01-PLAN.md
+last_updated: "2026-09-30T09:22:47.257Z"
 last_activity: 2026-09-29 — v0.2 roadmap created
 progress:
   total_phases: 3
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 6
+  completed_plans: 1
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-09-29)
 ## Current Position
 
 Phase: 5 of 7 (Graph Diagnostics) — v0.2 covers phases 5-7
-Plan: —
-Status: Ready to plan
-Last activity: 2026-09-29 — v0.2 roadmap created
+Plan: 1 of 6 complete (05-01)
+Status: In progress — next 05-02
+Last activity: 2026-09-30 — completed 05-01 (domain contracts)
 
 ## Performance Metrics
 
@@ -59,6 +59,7 @@ Last activity: 2026-09-29 — v0.2 roadmap created
 | Phase 03 P03 | 40 | 3 tasks | 16 files |
 | Phase 03 P05 | 14 | 2 tasks | 2 files |
 | Phase 04 P03 | 35 | 2 tasks | 3 files |
+| Phase 05 P01 | interrupted | 3 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -105,6 +106,7 @@ Recent decisions affecting current work:
 - [Phase 04 P3]: docs/validation.md is the single record of VALID-02..06; TestValidationDocPins keeps its pins and denis256 positions in step with the tests
 - [Phase 04 P3]: denis256 recall 0/8 caused by the 02-13 include-target rule is documented as a known limitation and v2 refinement candidate
 - [Post-v1 fix 313f856]: an unevaluable include marks no include-free units when Terragrunt 1.1.6 rejects its path (variables other than `values` outside try/can) or when it is a `find_in_parent_folders` with no argument or a bare file name that finds nothing in the repo; this supersedes the 02-13 behavior for `local.*` include paths and resolves the denis256 recall limitation (8/8)
+- [Phase 05]: Dependency carries config_path value pos + TargetState; path deps kept apart from Dependency; loader passes TargetUnknown until 05-03
 
 ### Pending Todos
 
@@ -116,6 +118,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-09-29T13:36:43.878Z
-Stopped at: Phase 5 context gathered
-Resume file: .planning/phases/05-graph-diagnostics/05-CONTEXT.md
+Last session: 2026-09-30T09:22:47.255Z
+Stopped at: Completed 05-01-PLAN.md
+Resume file: None
