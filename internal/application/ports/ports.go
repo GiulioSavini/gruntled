@@ -63,6 +63,11 @@ type UnitConfig struct {
 	// References is drawn from the unit's entire effective body, including
 	// merged include files.
 	References []repograph.Reference
+	// PathDependencies is every entry of the unit's `dependencies { paths }`
+	// blocks, already include-merged (union, de-duplicated by resolved
+	// target). May contain unresolved entries. Empty for a config-unknown
+	// unit.
+	PathDependencies []repograph.PathDependency
 }
 
 // SurfaceReader reads a local module directory's variable and output

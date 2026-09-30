@@ -187,4 +187,13 @@ const (
 	// part of a path segment). Only this one dependency becomes unresolved;
 	// its sibling dependencies and the unit itself stay resolved (G8).
 	ReasonConfigPathInvalid = "config-path-invalid"
+	// ReasonConfigPathEmpty means a `dependencies { paths }` element
+	// evaluated to the empty string. It is kept unresolved (never a
+	// self-edge) and stays silent.
+	ReasonConfigPathEmpty = "config-path-empty"
+	// ReasonDependenciesPathsDynamic means a `dependencies` block's paths
+	// attribute is not a literal list (local.x, concat(...), a for
+	// expression). The whole block is one unresolved entry at the paths
+	// value: no edges, no GRT002, but not absent either.
+	ReasonDependenciesPathsDynamic = "dependencies-paths-dynamic"
 )

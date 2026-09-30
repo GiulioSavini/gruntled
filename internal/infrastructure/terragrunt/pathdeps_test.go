@@ -115,3 +115,18 @@ func TestPathDependencies(t *testing.T) {
 		})
 	}
 }
+
+// wantPathDepUnresolved asserts a resolved unit whose only path dependency
+// is unresolved with reason.
+func wantPathDepUnresolved(reason string) func(*testing.T, ports.UnitConfig) {
+	return func(t *testing.T, uc ports.UnitConfig) {
+		t.Helper()
+		assertResolvedUnit(t, uc)
+		if len(uc.PathDependencies) != 1 {
+			t.Fatalf("path deps = %d, want 1", len(uc.PathDependencies))
+		}
+		if got := uc.PathDependencies[0].UnresolvedReason(); got != reason {
+			t.Fatalf("reason = %q, want %q", got, reason)
+		}
+	}
+}

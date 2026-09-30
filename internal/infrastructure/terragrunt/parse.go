@@ -56,6 +56,42 @@ type depDecl struct {
 	cpPos repograph.Position
 }
 
+// pathsShape is the syntactic shape of a `dependencies` block's paths
+// attribute, decided on the raw AST and never by evaluating it.
+type pathsShape int
+
+const (
+	// pathsInvalid: the block is structurally invalid (paths missing, or a
+	// literal that is not a list, or an element position that cannot be
+	// converted). Its path edges are dropped; the unit is unaffected.
+	pathsInvalid pathsShape = iota
+	// pathsList: paths is a literal tuple; elems holds its elements.
+	pathsList
+	// pathsUnknown: paths is some other expression (a reference, a function
+	// call, a for expression, "${...}") whose value may be a list.
+	pathsUnknown
+)
+
+// pathElem is one element of a literal `paths` list.
+type pathElem struct {
+	expr hcl.Expression
+	pos  repograph.Position
+	// literal is the element as written: the string value for a plain
+	// string literal, otherwise its source text (surrounding quotes of a
+	// template stripped).
+	literal string
+}
+
+// pathsDecl is one top-level `dependencies` block.
+type pathsDecl struct {
+	labels []string
+	shape  pathsShape
+	// pathsPos is the position of the paths value, set when shape is
+	// pathsList or pathsUnknown.
+	pathsPos repograph.Position
+	elems    []pathElem
+}
+
 // generateDecl is one top-level `generate` block.
 type generateDecl struct {
 	labels []string
@@ -97,6 +133,7 @@ type parsedFile struct {
 	includes   []includeDecl
 	terraforms []terraformDecl
 	deps       []depDecl
+	pathDecls  []pathsDecl
 	generates  []generateDecl
 	refs       []repograph.Reference
 }
@@ -236,6 +273,8 @@ func (c *fileCache) parse(p repograph.RepoPath) *parsedFile {
 				pos:          pos,
 				cpPos:        cpPos,
 			})
+		case "dependencies":
+			pf.pathDecls = append(pf.pathDecls, parsePathsDecl(p, src, block))
 		case "generate":
 			pf.generates = append(pf.generates, generateDecl{
 				labels:   block.Labels,
@@ -271,6 +310,71 @@ func attrExpr(body *hclsyntax.Body, name string) hcl.Expression {
 func hasBlock(body *hclsyntax.Body, blockType string) bool {
 	for _, b := range body.Blocks {
 		if b.Type == blockType {
+			return true
+		}
+	}
+	return false
+}
+
+// parsePathsDecl reads one `dependencies` block's shape from the raw AST,
+// like extractRefs: it never evaluates paths to decide what it is.
+func parsePathsDecl(p repograph.RepoPath, src []byte, block *hclsyntax.Block) pathsDecl {
+	d := pathsDecl{labels: block.Labels}
+	attr, ok := block.Body.Attributes["paths"]
+	if !ok {
+		return d
+	}
+	vp, err := hclconv.Position(p, src, attr.Expr.Range().Start)
+	if err != nil {
+		return d
+	}
+	switch e := attr.Expr.(type) {
+	case *hclsyntax.TupleConsExpr:
+		elems := make([]pathElem, 0, len(e.Exprs))
+		for _, x := range e.Exprs {
+			pos, err := hclconv.Position(p, src, x.Range().Start)
+			if err != nil {
+				return d
+			}
+			elems = append(elems, pathElem{expr: x, pos: pos, literal: elemLiteral(src, x)})
+		}
+		d.shape, d.pathsPos, d.elems = pathsList, vp, elems
+	case *hclsyntax.LiteralValueExpr, *hclsyntax.TemplateExpr, *hclsyntax.ObjectConsExpr:
+		// A literal string, number, bool or object: never a list.
+	default:
+		d.shape, d.pathsPos = pathsUnknown, vp
+	}
+	return d
+}
+
+// elemLiteral returns a paths element as written: the value of a plain
+// string literal, or the element's source text with a template's
+// surrounding quotes stripped.
+func elemLiteral(src []byte, x hclsyntax.Expression) string {
+	if s, ok := literalString(x); ok {
+		if _, isTmpl := x.(*hclsyntax.TemplateExpr); isTmpl && !hasInterpolation(x) {
+			return s
+		}
+	}
+	r := x.Range()
+	if r.Start.Byte < 0 || r.End.Byte > len(src) || r.Start.Byte >= r.End.Byte {
+		return ""
+	}
+	text := string(src[r.Start.Byte:r.End.Byte])
+	if _, isTmpl := x.(*hclsyntax.TemplateExpr); isTmpl && len(text) >= 2 && text[0] == '"' && text[len(text)-1] == '"' {
+		text = text[1 : len(text)-1]
+	}
+	return text
+}
+
+// hasInterpolation reports whether a template has any non-literal part.
+func hasInterpolation(x hclsyntax.Expression) bool {
+	tmpl, ok := x.(*hclsyntax.TemplateExpr)
+	if !ok {
+		return true
+	}
+	for _, part := range tmpl.Parts {
+		if _, ok := part.(*hclsyntax.LiteralValueExpr); !ok {
 			return true
 		}
 	}

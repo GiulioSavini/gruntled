@@ -204,6 +204,10 @@ func (l *Loader) resolveUnit(cache *fileCache, e unitEntry, targets *includeTarg
 	// 8. References, from every effective file, sorted by position.
 	refs := mergeReferences(files)
 
+	// 8b. dependencies { paths } entries. A structurally invalid block only
+	// drops its own path edges; it never changes the unit's status.
+	pathDeps := l.filePathDependencies(unitDir, childRefs, files[0])
+
 	// Config is now fully known. 9. Resolve the module via terraform.source
 	// (GRAPH-01/02/03).
 	modulePath, moduleUnknownReason := l.resolveSource(unitDir, childRefs, files)
@@ -235,13 +239,15 @@ func (l *Loader) resolveUnit(cache *fileCache, e unitEntry, targets *includeTarg
 			ModuleUnknownReason: moduleUnknownReason,
 			Dependencies:        deps,
 			References:          refs,
+			PathDependencies:    pathDeps,
 		}
 	}
 	return ports.UnitConfig{
-		Path:         unitPath,
-		Module:       modulePath,
-		Dependencies: deps,
-		References:   refs,
+		Path:             unitPath,
+		Module:           modulePath,
+		Dependencies:     deps,
+		References:       refs,
+		PathDependencies: pathDeps,
 	}
 }
 
@@ -463,6 +469,55 @@ func (l *Loader) resolveOneDependency(label string, cpExpr hcl.Expression, scope
 	}
 	d, err := repograph.NewDependency(label, target, pos, pathPos, l.classifyTarget(target.String()), opts)
 	return d, err == nil
+}
+
+// filePathDependencies resolves one effective file's `dependencies` block
+// into path dependencies, in element order. The file contributes nothing
+// when it has no block, more than one, a labeled one, or one whose paths is
+// missing or a non-list literal (pathsInvalid). A paths expression that is
+// not a literal list is one unresolved entry at the paths value. Each list
+// element is resolved like a config_path (resolveTargetExpr, same scope and
+// child unitDir); an element evaluating to "" is unresolved
+// ReasonConfigPathEmpty. An element a domain constructor rejects ("should be
+// impossible") is dropped, which can only lose an edge, never invent one.
+func (l *Loader) filePathDependencies(unitDir string, childRefs []includeRef, ef effectiveFile) []repograph.PathDependency {
+	if len(ef.pf.pathDecls) != 1 {
+		return nil
+	}
+	d := ef.pf.pathDecls[0]
+	if len(d.labels) != 0 {
+		return nil
+	}
+	switch d.shape {
+	case pathsUnknown:
+		pd, err := repograph.NewUnresolvedPathDependency(ReasonDependenciesPathsDynamic, d.pathsPos)
+		if err != nil {
+			return nil
+		}
+		return []repograph.PathDependency{pd}
+	case pathsList:
+	default:
+		return nil
+	}
+
+	scope := fileScope(l.fsys, unitDir, childRefs, ef)
+	out := make([]repograph.PathDependency, 0, len(d.elems))
+	for _, e := range d.elems {
+		var pd repograph.PathDependency
+		var err error
+		if raw, ok := evalPath(e.expr, scope); ok && raw == "" {
+			pd, err = repograph.NewUnresolvedPathDependency(ReasonConfigPathEmpty, e.pos)
+		} else if target, reason := l.resolveTargetExpr(e.expr, scope, unitDir); reason != "" {
+			pd, err = repograph.NewUnresolvedPathDependency(reason, e.pos)
+		} else {
+			pd, err = repograph.NewPathDependency(target, e.literal, e.pos, l.classifyTarget(target.String()))
+		}
+		if err != nil {
+			continue
+		}
+		out = append(out, pd)
+	}
+	return out
 }
 
 // resolveTargetExpr evaluates expr in scope and resolves it against unitDir

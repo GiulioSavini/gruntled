@@ -715,6 +715,20 @@ dependency "good" { config_path = "../vpc" }
 			check: wantDepUnresolved("bad", ReasonConfigPathInvalid, "good"),
 		},
 		{
+			name:   "config-path-empty",
+			reason: ReasonConfigPathEmpty,
+			fsys:   filesFS(map[string]string{"u/terragrunt.hcl": `dependencies { paths = [""] }`}),
+			unit:   "u",
+			check:  wantPathDepUnresolved(ReasonConfigPathEmpty),
+		},
+		{
+			name:   "dependencies-paths-dynamic",
+			reason: ReasonDependenciesPathsDynamic,
+			fsys:   filesFS(map[string]string{"u/terragrunt.hcl": `dependencies { paths = local.p }`}),
+			unit:   "u",
+			check:  wantPathDepUnresolved(ReasonDependenciesPathsDynamic),
+		},
+		{
 			name:   "config-path-default-file-regression",
 			reason: ReasonConfigPathOutsideRepo, // regression only; reuses an already-covered reason
 			fsys: filesFS(map[string]string{
