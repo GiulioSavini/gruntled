@@ -389,3 +389,81 @@ func TestDenis256Corpus(t *testing.T) {
 		t.Fatalf("corpus digest changed: %s -> %s", d0, d1)
 	}
 }
+
+// denisGraphEntry is one expected GRT002/GRT003 diagnostic on denis256.
+type denisGraphEntry struct {
+	Code      string
+	File      string
+	Line, Col int
+	Unit      string
+	Msg       string
+	Why       string
+}
+
+func (e denisGraphEntry) pos() string {
+	return e.File + ":" + strconv.Itoa(e.Line) + ":" + strconv.Itoa(e.Col)
+}
+
+func (e denisGraphEntry) finding() graphFinding {
+	return graphFinding{e.Code, e.File, e.Line, e.Col, e.Unit, e.Msg}
+}
+
+// denisExpectedGraph is the exact GRT002/GRT003 set gruntled must report
+// on the unmutated denis256 checkout. It was derived with graphOracle (a
+// textual oracle independent of gruntled) and every entry was checked by
+// hand. denis256 is a suite of deliberately broken reproductions, so these
+// are true positives. No cycle exists (graphOracle and coreutils tsort on
+// the same 660 unit pairs agree).
+var denisExpectedGraph = []denisGraphEntry{
+	{
+		Code: "GRT002", File: "5728-broken-includes/test.hcl", Line: 1, Col: 37, Unit: "5728-broken-includes",
+		Msg: `dependency "borked" config_path resolves to "5728-broken-includes/not-here": directory does not exist`,
+		Why: `Reproduction of "inclusion of broken dependencies": the included test.hcl declares ${get_terragrunt_dir()}/not-here on purpose; it is reported for the including unit at the include's position.`,
+	},
+	{
+		Code: "GRT002", File: "hcl/terragrunt.hcl", Line: 19, Col: 17, Unit: "hcl",
+		Msg: `dependency "vpc" config_path resolves to "vpc": directory does not exist`,
+		Why: "Standalone HCL sample: ../vpc from hcl is the repository root's vpc, which does not exist.",
+	},
+	{
+		Code: "GRT002", File: "module-output-broken/m1/terragrunt.hcl", Line: 3, Col: 17, Unit: "module-output-broken/m1",
+		Msg: `dependency "m2" config_path resolves to "module-output-broken/m2": directory does not exist`,
+		Why: "Deliberately broken fixture: module-output-broken holds only app and m1, there is no m2.",
+	},
+	{
+		Code: "GRT002", File: "tf-lint-regeneration/dev/template/terragrunt.hcl", Line: 24, Col: 45, Unit: "tf-lint-regeneration/dev/template",
+		Msg: `dependency "vpc" config_path resolves to "tf-lint-regeneration/vpc": directory does not exist`,
+		Why: `Template that copy-app.sh copies to dev/apps/app-N, where ../../vpc is dev/vpc (all 100 copies resolve and stay silent). In place it points to tf-lint-regeneration/vpc, which does not exist; skip_outputs = "true" does not gate GRT002.`,
+	},
+}
+
+// denisGraphOracleOnly lists what graphOracle reports and gruntled, by
+// design, does not: every unit here is config-unknown
+// (include-dynamic-path: include { path = find_in_parent_folders() } finds
+// no terragrunt.hcl above it), and a config-unknown unit carries no
+// dependencies (docs/cli.md, Known limitations). These are templates that
+// init.sh copies under code/, where ../../deps and ../common exist; in
+// place the targets are missing, so Terragrunt would fail on them. They are
+// false negatives of gruntled, never false positives.
+var denisGraphOracleOnly = []denisGraphEntry{
+	denisTemplateDep("perf-tests-v2/test/app-template", 6, "dep_1", "perf-tests-v2/deps/dep-1"),
+	denisTemplateDep("perf-tests-v2/test/app-template", 13, "dep_2", "perf-tests-v2/deps/dep-2"),
+	denisTemplateDep("perf-tests-v2/test/app-template", 20, "dep_3", "perf-tests-v2/deps/dep-3"),
+	denisTemplateDep("perf-tests-v2/test/app-template", 27, "dep_4", "perf-tests-v2/deps/dep-4"),
+	denisTemplateDep("perf-tests-v2/test/app-template", 34, "dep_5", "perf-tests-v2/deps/dep-5"),
+	denisTemplateDep("perf-tests-v2/test/dependency-template", 6, "common", "perf-tests-v2/common"),
+	denisTemplateDep("perf-tests/code-v2/app-template", 6, "dep_1", "perf-tests/deps/dep-1"),
+	denisTemplateDep("perf-tests/code-v2/app-template", 13, "dep_2", "perf-tests/deps/dep-2"),
+	denisTemplateDep("perf-tests/code-v2/app-template", 20, "dep_3", "perf-tests/deps/dep-3"),
+	denisTemplateDep("perf-tests/code-v2/app-template", 27, "dep_4", "perf-tests/deps/dep-4"),
+	denisTemplateDep("perf-tests/code-v2/app-template", 34, "dep_5", "perf-tests/deps/dep-5"),
+	denisTemplateDep("perf-tests/code-v2/dependency-template", 6, "common", "perf-tests/common"),
+}
+
+func denisTemplateDep(unit string, line int, label, target string) denisGraphEntry {
+	return denisGraphEntry{
+		Code: "GRT002", File: unit + "/terragrunt.hcl", Line: line, Col: 45, Unit: unit,
+		Msg: "dependency " + strconv.Quote(label) + " config_path resolves to " + strconv.Quote(target) + ": directory does not exist",
+		Why: "config-unknown unit (include-dynamic-path): gruntled models no dependencies for it",
+	}
+}
