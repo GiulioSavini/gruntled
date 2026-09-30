@@ -319,7 +319,7 @@ func hasBlock(body *hclsyntax.Body, blockType string) bool {
 // parsePathsDecl reads one `dependencies` block's shape from the raw AST,
 // like extractRefs: it never evaluates paths to decide what it is.
 func parsePathsDecl(p repograph.RepoPath, src []byte, block *hclsyntax.Block) pathsDecl {
-	d := pathsDecl{labels: block.Labels}
+	d := pathsDecl{labels: block.Labels, shape: pathsInvalid}
 	attr, ok := block.Body.Attributes["paths"]
 	if !ok {
 		return d
