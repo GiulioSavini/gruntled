@@ -47,7 +47,7 @@ See `milestones/v0.1-ROADMAP.md`.
 **Plans**: 6 plans
 - [x] 05-01-PLAN.md — domain foundation
 - [ ] 05-02-PLAN.md — analyzers
-- [ ] 05-03-PLAN.md — loader target state
+- [x] 05-03-PLAN.md — loader target state
 - [ ] 05-04-PLAN.md — dependencies paths
 - [ ] 05-05-PLAN.md — goldens+docs
 - [ ] 05-06-PLAN.md — corpus validation
@@ -78,6 +78,6 @@ See `milestones/v0.1-ROADMAP.md`.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 5. Graph Diagnostics | 1/6 | In Progress | - |
+| 5. Graph Diagnostics | 2/6 | In Progress | - |
 | 6. Machine-Readable Output | 0/TBD | Not started | - |
 | 7. Distribution & CI Integration | 0/TBD | Not started | - |
