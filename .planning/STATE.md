@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.2
 milestone_name: CI-Ready
 status: executing
-stopped_at: Completed 05-02-PLAN.md
-last_updated: "2026-09-30T09:32:09.000Z"
-last_activity: 2026-09-29 — v0.2 roadmap created
+stopped_at: Completed 05-04-PLAN.md
+last_updated: "2026-09-30T09:38:44.179Z"
+last_activity: 2026-09-30 — completed 05-04 (dependencies paths)
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 6
-  completed_plans: 3
+  completed_plans: 4
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-09-29)
 ## Current Position
 
 Phase: 5 of 7 (Graph Diagnostics) — v0.2 covers phases 5-7
-Plan: 3 of 6 complete (05-01, 05-02, 05-03)
-Status: In progress — next 05-04
-Last activity: 2026-09-30 — completed 05-02 (GRT002/GRT003 analyzers, Check wiring)
+Plan: 4 of 6 complete (05-01, 05-02, 05-03, 05-04)
+Status: In progress — next 05-05
+Last activity: 2026-09-30 — completed 05-04 (dependencies paths parse, union merge, indexing)
 
 ## Performance Metrics
 
@@ -62,6 +62,7 @@ Last activity: 2026-09-30 — completed 05-02 (GRT002/GRT003 analyzers, Check wi
 | Phase 05 P01 | interrupted | 3 tasks | 14 files |
 | Phase 05 P03 | 2 | 2 tasks | 4 files |
 | Phase 05 P02 | 5 | 3 tasks | 7 files |
+| Phase 05 P04 | 6min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -112,6 +113,8 @@ Recent decisions affecting current work:
 - [Phase 05 P03]: classifyTarget: only fs.ErrNotExist is DirMissing, any other fs error Unknown; resolveTargetExpr (shared with 05-04 paths) returns RepoPath; nonexistent .../terragrunt.hcl maps to parent dir
 - [Phase 05 P02]: GRT003 self-loop renders as one-member ring; multi-member anchor position ignores the anchor's self-edge; all analyzers in Check share Stage "analyze"
 - [Phase 05 P02]: dependency_edges golden is red (new GRT002) until 05-05 hand review
+- [Phase 05 P04]: dependencies paths shape from raw AST; non-list literal drops path edges, dynamic paths = one unresolved entry; union merge dedup by target child-first
+- [Phase 05 P04]: E2E paths test lives in infrastructure/terragrunt (arch rule forbids application tests importing infrastructure)
 
 ### Pending Todos
 
@@ -123,6 +126,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-09-30T09:32:09.000Z
-Stopped at: Completed 05-02-PLAN.md
+Last session: 2026-09-30T09:38:44.177Z
+Stopped at: Completed 05-04-PLAN.md
 Resume file: None
