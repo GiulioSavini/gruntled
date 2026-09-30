@@ -210,6 +210,34 @@ func collectDependencyLabels(files []effectiveFile) map[string][]depOccurrence {
 	return byLabel
 }
 
+// mergePathDeps merges every effective file's `dependencies` entries,
+// given per file in precedence order (child first, then non-no_merge
+// includes last-to-first; no_merge includes are already excluded from the
+// effective files). The merge is a UNION de-duplicated by resolved target,
+// keeping the first (highest-precedence) occurrence, in BOTH shallow and
+// deep mode. Verified against terragrunt v1.1.6: pkg/config/include.go
+// Merge (~L402-407) calls ModuleDependencies.Merge (pkg/config/config.go),
+// which appends only paths not already present, and DeepMerge (~L506-545)
+// unions the same way. Unresolved entries (an element or a whole paths
+// expression that could not be evaluated) are all kept: they carry no edge,
+// so they cannot duplicate one.
+func mergePathDeps(perFile [][]repograph.PathDependency) []repograph.PathDependency {
+	var out []repograph.PathDependency
+	seen := map[repograph.RepoPath]bool{}
+	for _, pds := range perFile {
+		for _, pd := range pds {
+			if target, ok := pd.Target(); ok {
+				if seen[target] {
+					continue
+				}
+				seen[target] = true
+			}
+			out = append(out, pd)
+		}
+	}
+	return out
+}
+
 // mergeReferences concatenates every effective file's references (no_merge
 // includes are already excluded from files) and sorts the result by
 // Position, then Dependency, then Output -- matching the tie-break the

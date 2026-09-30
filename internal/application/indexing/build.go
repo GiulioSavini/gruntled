@@ -115,16 +115,24 @@ func Build(ctx context.Context, units ports.UnitLoader, surfaces ports.SurfaceRe
 
 // assembleUnit maps one UnitConfig to a domain Unit, applying the
 // precedence documented on ports.UnitConfig: config-unknown, then
-// module-unknown, then resolved.
+// module-unknown, then resolved. Path dependencies are attached to
+// module-unknown and resolved units only; a config-unknown unit stays
+// dep-free whatever the UnitConfig carries.
 func assembleUnit(uc ports.UnitConfig) (repograph.Unit, error) {
+	var u repograph.Unit
+	var err error
 	switch {
 	case uc.ConfigUnknownReason != "":
 		return repograph.NewConfigUnknownUnit(uc.Path, uc.ConfigUnknownReason)
 	case uc.ModuleUnknownReason != "":
-		return repograph.NewModuleUnknownUnit(uc.Path, uc.ModuleUnknownReason, uc.Dependencies, uc.References)
+		u, err = repograph.NewModuleUnknownUnit(uc.Path, uc.ModuleUnknownReason, uc.Dependencies, uc.References)
 	default:
-		return repograph.NewResolvedUnit(uc.Path, uc.Module, uc.Dependencies, uc.References)
+		u, err = repograph.NewResolvedUnit(uc.Path, uc.Module, uc.Dependencies, uc.References)
 	}
+	if err != nil || len(uc.PathDependencies) == 0 {
+		return u, err
+	}
+	return u.WithPathDependencies(uc.PathDependencies)
 }
 
 // distinctResolvedModules returns the distinct Module paths of every

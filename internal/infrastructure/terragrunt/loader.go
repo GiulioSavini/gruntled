@@ -204,9 +204,15 @@ func (l *Loader) resolveUnit(cache *fileCache, e unitEntry, targets *includeTarg
 	// 8. References, from every effective file, sorted by position.
 	refs := mergeReferences(files)
 
-	// 8b. dependencies { paths } entries. A structurally invalid block only
-	// drops its own path edges; it never changes the unit's status.
-	pathDeps := l.filePathDependencies(unitDir, childRefs, files[0])
+	// 8b. dependencies { paths } entries from every effective file, each
+	// evaluated in the CHILD unit dir, merged as a union (mergePathDeps). A
+	// structurally invalid block only drops its own path edges; it never
+	// changes the unit's status.
+	perFile := make([][]repograph.PathDependency, 0, len(files))
+	for _, ef := range files {
+		perFile = append(perFile, l.filePathDependencies(unitDir, childRefs, ef))
+	}
+	pathDeps := mergePathDeps(perFile)
 
 	// Config is now fully known. 9. Resolve the module via terraform.source
 	// (GRAPH-01/02/03).
