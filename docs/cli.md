@@ -214,7 +214,7 @@ dependency, the first matching row decides:
 
 | # | Situation | Result |
 |---|-----------|--------|
-| 1 | The target is not a literal gruntled can resolve (`local.x`, `get_env()`, a function call, `config_path = ""` in a paths entry, a stack, a non-default file, outside the repository) | silent |
+| 1 | The target is not a literal gruntled can resolve (`local.x`, `get_env()`, a function call, an empty block `config_path = ""`, a stack, a non-default file, outside the repository) | silent |
 | 2 | The target directory holds a `terragrunt.hcl`, or gruntled could not read it (permission, not a directory, symlink escaping the root) | silent |
 | 3 | A block whose `enabled` is not literally `true` (absent counts as `true`; `false`, a non-literal and a value from a deep-merged label do not). Paths entries have no `enabled` and skip this row | silent |
 | 4 | The directory does not exist | GRT002 "directory does not exist" |
@@ -261,7 +261,7 @@ ring/p/terragrunt.hcl:2:17: GRT003 dependency cycle: "ring/p" -> "ring/q" -> "ri
 | 2 | An edge whose target is unresolved or not a unit of the repository (missing, no config) | not an edge |
 | 3 | `skip_outputs = true` or mocks on an edge | still an edge: Terragrunt orders the units anyway |
 | 4 | A `dependency` block and a `dependencies` path to the same unit | one edge |
-| 5 | A unit depends on itself (`config_path = "."`, `"../<self>"`, or `""` on a block) | GRT003 `dependency cycle: "a" -> "a"` |
+| 5 | A unit depends on itself (`config_path = "."`, `"../<self>"`, or a paths entry `""`) | GRT003 `dependency cycle: "a" -> "a"` |
 | 6 | Every unit in the cycle has exactly one successor inside it | GRT003 ring: `"a" -> "b" -> "a"`, walking from the smallest unit |
 | 7 | Any other cycle, including one where a unit also loops on itself | GRT003 `among`: every member, sorted, no cap |
 

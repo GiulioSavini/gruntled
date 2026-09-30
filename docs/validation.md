@@ -679,23 +679,25 @@ The denis256 copy leaves out the 29 ELF terragrunt binaries the repository check
 (1.85 GB, more than the tmpfs holds). gruntled never reads them; fidelity is proven by
 requiring gruntled's JSON on the copy to equal the JSON on the checkout, byte for byte.
 
-### Open issue: `config_path = ""` on a block
+### Resolved: `config_path = ""` (plan 05-07)
 
-gruntled resolves an empty block `config_path` to the unit's own directory and reports a
-GRT003 self-loop (pinned in the `grt002_missing_target` golden since 05-05). The pinned
-terragrunt v1.1.6 disagrees on a two-unit scratch tree (`a` with
-`dependency "x" { config_path = "" }`, `b` empty):
+Through 05-06 gruntled resolved an empty block `config_path` to the unit's own directory
+and reported a GRT003 self-loop, and kept a `dependencies { paths }` entry `""` unresolved
+and silent. The pinned terragrunt v1.1.6 does the opposite on both. Two-unit scratch trees
+(`a` holding the case, `b` empty), `run --all --non-interactive --no-auto-init -- version`:
 
-```
-ERROR  skipping dependency "x" in "<tree>/a": config_path could not be resolved
-```
+| Case in `a/terragrunt.hcl` | terragrunt v1.1.6 | gruntled since 05-07 |
+|----------------------------|-------------------|----------------------|
+| `dependency "x" { config_path = "" }` | `ERROR  skipping dependency "x" in "<tree>/a": config_path could not be resolved`, no cycle message (exit 1; a single-unit `run` in `a` exits 0) | unresolved (`config-path-empty`), silent: no edge, no GRT002, no GRT003 |
+| `dependencies { paths = [""] }` | `ERROR  cycle detected during queue construction` | self-edge: GRT003 `dependency cycle: "a" -> "a"` at the `""` entry |
+| `dependencies { paths = ["../b", ""] }` | `ERROR  cycle detected during queue construction` | edge to `b` plus the self-edge: GRT003 at the `""` entry, no GRT002 (`b` is a unit) |
 
-exit 1, no cycle message; a single-unit `run` in `a` exits 0. Both tools reject the tree,
-but terragrunt treats it as an unresolvable `config_path`, not a cycle, so the GRT003
-message is wrong for this input. gruntled's semantics are unchanged in v0.2; this is
-recorded as an open issue (candidate fix: treat `""` like a non-literal and stay silent,
-or report it under a separate code). No corpus contains an empty `config_path` (the only
-two occurrences, in denis256 `deep-merge-fix/common.hcl`, are commented out).
+gruntled now matches terragrunt per case: the empty check applies to dependency blocks
+only, while a paths entry `""` resolves to the unit's own directory, like `"."`. The
+`grt002_missing_target` golden pins both (silent block, GRT003 on the paths entry), and
+the loader tests cover the plain, `"${""}"` and include-inherited forms. No corpus holds
+an active empty `config_path` or paths entry (the only two `config_path = ""`, in denis256
+`deep-merge-fix/common.hcl`, are commented out), so the corpus counts are unchanged.
 
 ### The include-merge correction
 

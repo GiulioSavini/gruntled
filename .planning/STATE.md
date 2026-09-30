@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.2
 milestone_name: CI-Ready
 status: verifying
-stopped_at: Completed 05-06-PLAN.md
+stopped_at: Completed 05-07-PLAN.md
 last_updated: "2026-09-30T10:25:35.026Z"
-last_activity: 2026-09-30 — completed 05-06 (GRT002/GRT003 corpus validation, docs/validation.md v0.2)
+last_activity: 2026-09-30 — completed 05-07 (gap closure: empty config_path matches terragrunt per case)
 progress:
   total_phases: 3
   completed_phases: 1
-  total_plans: 6
-  completed_plans: 6
+  total_plans: 7
+  completed_plans: 7
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-09-29)
 ## Current Position
 
 Phase: 5 of 7 (Graph Diagnostics) — v0.2 covers phases 5-7
-Plan: 6 of 6 complete (05-01..05-06)
-Status: Phase 5 plans complete — next phase verification, then Phase 6
-Last activity: 2026-09-30 — completed 05-06 (GRT002/GRT003 corpus validation, docs/validation.md v0.2)
+Plan: 7 of 7 complete (05-01..05-07)
+Status: Phase 5 plans complete incl. gap closure 05-07 — next phase re-verification, then Phase 6
+Last activity: 2026-09-30 — completed 05-07 (gap closure: empty config_path matches terragrunt per case)
 
 ## Performance Metrics
 
@@ -118,9 +118,10 @@ Recent decisions affecting current work:
 - [Phase 05 P04]: dependencies paths shape from raw AST; non-list literal drops path edges, dynamic paths = one unresolved entry; union merge dedup by target child-first
 - [Phase 05 P04]: E2E paths test lives in infrastructure/terragrunt (arch rule forbids application tests importing infrastructure)
 - [Phase 05 P05]: dependency_edges GRT002 (../nodir, no terragrunt.hcl) reviewed correct, golden updated by hand; goldens gain optional _golden/messages
-- [Phase 05 P05]: block config_path = "" is a GRT003 self-loop (matches Terragrunt filepath.Join); check -h exit line names GRT001-GRT003
+- [Phase 05 P05]: block config_path = "" is a GRT003 self-loop (matches Terragrunt filepath.Join) — SUPERSEDED by 05-07; check -h exit line names GRT001-GRT003
 - [Phase 05]: 05-06: terragrunt oracle = queue-construction message of run --all --no-auto-init -- version on scratch copies (iso20022, secret, denis256 issue-2565 subtree); textual oracle graphOracle on all three
-- [Phase 05]: 05-06 OPEN ISSUE: config_path = "" is GRT003 self-loop in gruntled but 'config_path could not be resolved' in terragrunt v1.1.6; semantics unchanged, recorded in docs/validation.md
+- [Phase 05]: 05-06 open issue (config_path = "" GRT003 vs terragrunt 'config_path could not be resolved') RESOLVED by 05-07, see docs/validation.md "Resolved: config_path = """
+- [Phase 05 P07]: empty config_path matches terragrunt v1.1.6 per case: dependency block "" unresolved config-path-empty, silent; dependencies paths entry "" resolves to the unit itself, GRT003 self-loop (terragrunt: "cycle detected during queue construction"); reverses the 05-04 rule that a paths "" is never a self-edge
 
 ### Pending Todos
 
@@ -133,5 +134,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-09-30T10:25:17.847Z
-Stopped at: Completed 05-06-PLAN.md
+Stopped at: Completed 05-07-PLAN.md
 Resume file: None
