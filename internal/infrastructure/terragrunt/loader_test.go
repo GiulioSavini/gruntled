@@ -722,6 +722,48 @@ dependency "good" { config_path = "../vpc" }
 			check:  wantPathDepUnresolved(ReasonConfigPathEmpty),
 		},
 		{
+			// Terragrunt v1.1.6: "config_path could not be resolved", no
+			// cycle. An empty block config_path is never a self-edge.
+			name:   "config-path-empty/block",
+			reason: ReasonConfigPathEmpty,
+			fsys: filesFS(map[string]string{
+				"u/terragrunt.hcl": `
+dependency "e" { config_path = "" }
+dependency "good" { config_path = "../vpc" }
+`,
+				"vpc/terragrunt.hcl": "",
+			}),
+			unit:  "u",
+			check: wantDepUnresolved("e", ReasonConfigPathEmpty, "good"),
+		},
+		{
+			name:   "config-path-empty/block-template",
+			reason: ReasonConfigPathEmpty,
+			fsys: filesFS(map[string]string{
+				"u/terragrunt.hcl": `
+dependency "e" { config_path = "${""}" }
+dependency "good" { config_path = "../vpc" }
+`,
+				"vpc/terragrunt.hcl": "",
+			}),
+			unit:  "u",
+			check: wantDepUnresolved("e", ReasonConfigPathEmpty, "good"),
+		},
+		{
+			name:   "config-path-empty/block-in-include",
+			reason: ReasonConfigPathEmpty,
+			fsys: filesFS(map[string]string{
+				"root.hcl": `
+dependency "e" { config_path = "" }
+dependency "good" { config_path = "../vpc" }
+`,
+				"u/terragrunt.hcl":   `include "root" { path = "../root.hcl" }`,
+				"vpc/terragrunt.hcl": "",
+			}),
+			unit:  "u",
+			check: wantDepUnresolved("e", ReasonConfigPathEmpty, "good"),
+		},
+		{
 			name:   "dependencies-paths-dynamic",
 			reason: ReasonDependenciesPathsDynamic,
 			fsys:   filesFS(map[string]string{"u/terragrunt.hcl": `dependencies { paths = local.p }`}),
