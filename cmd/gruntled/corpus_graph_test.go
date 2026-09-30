@@ -12,11 +12,14 @@ package main
 // listed by hand with its reason (denisGraphOracleOnly).
 
 import (
+	"bytes"
 	"cmp"
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"regexp"
@@ -24,6 +27,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 // graphFinding is one GRT002/GRT003 diagnostic, observed or expected.
@@ -748,4 +752,430 @@ func TestDenisExpectedGraphShape(t *testing.T) {
 			t.Errorf("oracle-only %s: needs a reason and must not be expected from gruntled", e.pos())
 		}
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Env-gated corpus tests.
+
+// graphTSort cross-checks the oracle's cycle verdict with coreutils tsort
+// on the same pairs (self-loops dropped: tsort treats "a a" as a node).
+func graphTSort(t testing.TB, pairs []string, wantLoop bool) {
+	t.Helper()
+	bin, err := exec.LookPath("tsort")
+	if err != nil {
+		t.Logf("tsort not on PATH; cross-check skipped")
+		return
+	}
+	var in []string
+	for _, p := range pairs {
+		a, b, ok := strings.Cut(p, " ")
+		if !ok || strings.Contains(b, " ") {
+			t.Fatalf("tsort cannot take pair %q", p)
+		}
+		if a != b {
+			in = append(in, p)
+		}
+	}
+	cmd := exec.Command(bin)
+	cmd.Stdin = strings.NewReader(strings.Join(in, "\n") + "\n")
+	out, err := cmd.CombinedOutput()
+	loop := err != nil && strings.Contains(string(out), "input contains a loop")
+	if err != nil && !loop {
+		t.Fatalf("tsort: %v\n%s", err, out)
+	}
+	if loop != wantLoop {
+		t.Errorf("tsort loop=%v, want %v (%d pairs)", loop, wantLoop, len(in))
+	}
+}
+
+// graphTGRun runs the pinned terragrunt oracle
+//
+//	terragrunt run --all --non-interactive --no-auto-init --tf-path <tofu> -- version
+//
+// in dir (always a scratch copy: it may write .terragrunt-cache) and
+// returns its normalized output with root replaced by <ROOT>.
+// --no-auto-init keeps it from asking for backend input; the graph checks
+// (missing unit, cycle) happen during queue construction, before any unit
+// runs. The exit code is not the signal: on the clean corpora units fail
+// later because dependency outputs need state.
+func graphTGRun(t testing.TB, bin, root, dir string) string {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, bin, "run", "--all", "--non-interactive", "--no-auto-init", "--no-color",
+		"--tf-path", filepath.Join(filepath.Dir(bin), "tofu"), "--", "version")
+	cmd.Env = tgEnv(t, bin)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	var ee *exec.ExitError
+	if err != nil && !errors.As(err, &ee) {
+		t.Fatalf("terragrunt: %v", err)
+	}
+	return strings.Join(tgNormalize(string(out), root), "\n")
+}
+
+// graphTGMarkers are the queue-construction errors of terragrunt v1.1.6.
+var graphTGMarkers = []string{
+	"does not contain a terragrunt.hcl file",
+	"cycle detected during queue construction",
+}
+
+func graphTGClean(t testing.TB, bin, root, dir string) {
+	t.Helper()
+	out := graphTGRun(t, bin, root, dir)
+	for _, m := range graphTGMarkers {
+		if strings.Contains(out, m) {
+			t.Errorf("terragrunt reports %q on the unmutated tree:\n%s", m, out)
+		}
+	}
+	t.Logf("terragrunt: clean queue construction, %d units printed a tofu version", strings.Count(out, "OpenTofu v"))
+}
+
+// graphIsELF reports whether p starts with the ELF magic.
+func graphIsELF(p string) bool {
+	f, err := os.Open(p)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	var b [4]byte
+	n, _ := f.Read(b[:])
+	return n == 4 && string(b[:]) == "\x7fELF"
+}
+
+// graphRepo is one pinned corpus.
+type graphRepo struct {
+	Name    string
+	Require func(testing.TB) string
+	// Copy makes the scratch copy. denis256 checks in 29 ELF terragrunt
+	// binaries (1.85 GB) that gruntled never reads and a tmpfs cannot hold;
+	// its copy leaves them out, and every test proves fidelity by requiring
+	// gruntled's JSON on the copy to equal, byte for byte, the JSON on the
+	// checkout.
+	Copy func(testing.TB, string) string
+}
+
+var graphRepos = []graphRepo{
+	{"iso20022", corpusRequire, corpusCopy},
+	{"secret", secretRequire, corpusCopy},
+	{"denis256", denisRequire, func(t testing.TB, src string) string { return corpusCopyFiltered(t, src, graphIsELF) }},
+}
+
+// graphMutation is one injected graph error: applied alone to a fresh copy,
+// it must add exactly Want to gruntled's output and to the oracle's.
+type graphMutation struct {
+	Repo      string
+	M         corpusMutation // only Name, File, Old, New are used
+	Want      graphFinding
+	Synthetic bool   // adds a block or entry instead of editing a value
+	TSortLoop bool   // a multi-unit cycle tsort must see
+	TGDir     string // where the pinned terragrunt runs, relative to the copy
+	TGWant    string // what it must print (<ROOT> = the copy)
+}
+
+const graphTGCycle = "cycle detected during queue construction"
+
+func graphTGMissing(target string) string {
+	return `Path: "<ROOT>/` + target + `/terragrunt.hcl"`
+}
+
+var graphMutations = []graphMutation{
+	// iso20022: iac.src/ecr_health depends on iac.src/s3_runtime and is
+	// depended on by iac.src/lambda_health.
+	{
+		Repo: "iso20022",
+		M:    corpusMutation{Name: "config_path_missing_dir", File: "iac.src/ecr_health/terragrunt.hcl", Old: `config_path  = "../s3_runtime"`, New: `config_path  = "../s3_runtime_gone"`},
+		Want: graphFinding{"GRT002", "iac.src/ecr_health/terragrunt.hcl", 2, 18, "iac.src/ecr_health",
+			`dependency "s3" config_path resolves to "iac.src/s3_runtime_gone": directory does not exist`},
+		TGDir: ".", TGWant: graphTGMissing("iac.src/s3_runtime_gone"),
+	},
+	{
+		Repo: "iso20022",
+		M:    corpusMutation{Name: "paths_missing_dir", File: "iac.src/ecr_health/terragrunt.hcl", Old: "inputs = {\n", New: "dependencies {\n  paths = [\"../gone_unit\"]\n}\n\ninputs = {\n"},
+		Want: graphFinding{"GRT002", "iac.src/ecr_health/terragrunt.hcl", 13, 12, "iac.src/ecr_health",
+			`dependencies path "../gone_unit" resolves to "iac.src/gone_unit": directory does not exist`},
+		Synthetic: true, TGDir: ".", TGWant: graphTGMissing("iac.src/gone_unit"),
+	},
+	{
+		Repo: "iso20022",
+		M:    corpusMutation{Name: "back_edge_cycle", File: "iac.src/ecr_health/terragrunt.hcl", Old: "inputs = {\n", New: "dependency \"back\" {\n  config_path = \"../lambda_health\"\n}\n\ninputs = {\n"},
+		Want: graphFinding{"GRT003", "iac.src/ecr_health/terragrunt.hcl", 13, 17, "iac.src/ecr_health",
+			`dependency cycle: "iac.src/ecr_health" -> "iac.src/lambda_health" -> "iac.src/ecr_health"`},
+		Synthetic: true, TSortLoop: true, TGDir: ".", TGWant: graphTGCycle,
+	},
+	{
+		Repo: "iso20022",
+		M:    corpusMutation{Name: "self_loop", File: "iac.src/ecr_health/terragrunt.hcl", Old: "inputs = {\n", New: "dependency \"self\" {\n  config_path = \"../ecr_health\"\n}\n\ninputs = {\n"},
+		Want: graphFinding{"GRT003", "iac.src/ecr_health/terragrunt.hcl", 13, 17, "iac.src/ecr_health",
+			`dependency cycle: "iac.src/ecr_health" -> "iac.src/ecr_health"`},
+		Synthetic: true, TGDir: ".", TGWant: graphTGCycle,
+	},
+	{
+		Repo: "iso20022",
+		M:    corpusMutation{Name: "config_path_module_only_dir", File: "iac.src/ecr_health/terragrunt.hcl", Old: `config_path  = "../s3_runtime"`, New: `config_path  = "../s3_crr"`},
+		Want: graphFinding{"GRT002", "iac.src/ecr_health/terragrunt.hcl", 2, 18, "iac.src/ecr_health",
+			`dependency "s3" config_path resolves to "iac.src/s3_crr": directory has no terragrunt.hcl`},
+		TGDir: ".", TGWant: graphTGMissing("iac.src/s3_crr"),
+	},
+
+	// secret: real edges ecr -> acm, lambda -> acm, lambda -> ecr.
+	{
+		Repo: "secret",
+		M:    corpusMutation{Name: "config_path_missing_dir", File: "terragrunt/ecr/terragrunt.hcl", Old: `config_path = "../acm"`, New: `config_path = "../acm_gone"`},
+		Want: graphFinding{"GRT002", "terragrunt/ecr/terragrunt.hcl", 12, 17, "terragrunt/ecr",
+			`dependency "acm" config_path resolves to "terragrunt/acm_gone": directory does not exist`},
+		TGDir: ".", TGWant: graphTGMissing("terragrunt/acm_gone"),
+	},
+	{
+		Repo: "secret",
+		M:    corpusMutation{Name: "paths_missing_dir", File: "terragrunt/ecr/terragrunt.hcl", Old: `paths = ["../acm"]`, New: `paths = ["../acm", "../gone"]`},
+		Want: graphFinding{"GRT002", "terragrunt/ecr/terragrunt.hcl", 8, 22, "terragrunt/ecr",
+			`dependencies path "../gone" resolves to "terragrunt/gone": directory does not exist`},
+		Synthetic: true, TGDir: ".", TGWant: graphTGMissing("terragrunt/gone"),
+	},
+	{
+		Repo: "secret",
+		M:    corpusMutation{Name: "back_edge_cycle", File: "terragrunt/acm/terragrunt.hcl", Old: "terraform {\n  source = \"../../aws//acm\"\n}\n", New: "terraform {\n  source = \"../../aws//acm\"\n}\n\ndependency \"back\" {\n  config_path = \"../ecr\"\n}\n"},
+		Want: graphFinding{"GRT003", "terragrunt/acm/terragrunt.hcl", 8, 17, "terragrunt/acm",
+			`dependency cycle: "terragrunt/acm" -> "terragrunt/ecr" -> "terragrunt/acm"`},
+		Synthetic: true, TSortLoop: true, TGDir: ".", TGWant: graphTGCycle,
+	},
+	{
+		Repo: "secret",
+		M:    corpusMutation{Name: "self_loop", File: "terragrunt/ecr/terragrunt.hcl", Old: "terraform {\n  source = \"../../aws//ecr\"\n}\n", New: "terraform {\n  source = \"../../aws//ecr\"\n}\n\ndependency \"self\" {\n  config_path = \"../ecr\"\n}\n"},
+		Want: graphFinding{"GRT003", "terragrunt/ecr/terragrunt.hcl", 8, 17, "terragrunt/ecr",
+			`dependency cycle: "terragrunt/ecr" -> "terragrunt/ecr"`},
+		Synthetic: true, TGDir: ".", TGWant: graphTGCycle,
+	},
+
+	// denis256: issue-2565 is the chain C -> B -> A of resolved units with
+	// no other diagnostic. Terragrunt cannot build the queue for the whole
+	// repository (stack and function errors unrelated to the graph), so the
+	// pinned binary runs on the issue-2565 subtree; the textual oracle runs
+	// on the whole copy.
+	{
+		Repo: "denis256",
+		M:    corpusMutation{Name: "config_path_missing_dir", File: "issue-2565/B/terragrunt.hcl", Old: `config_path = "../A"`, New: `config_path = "../A_gone"`},
+		Want: graphFinding{"GRT002", "issue-2565/B/terragrunt.hcl", 5, 17, "issue-2565/B",
+			`dependency "A" config_path resolves to "issue-2565/A_gone": directory does not exist`},
+		TGDir: "issue-2565", TGWant: graphTGMissing("issue-2565/A_gone"),
+	},
+	{
+		Repo: "denis256",
+		M:    corpusMutation{Name: "paths_missing_dir", File: "issue-2565/B/terragrunt.hcl", Old: "dependency \"A\" {\n", New: "dependencies {\n  paths = [\"../gone\"]\n}\ndependency \"A\" {\n"},
+		Want: graphFinding{"GRT002", "issue-2565/B/terragrunt.hcl", 5, 12, "issue-2565/B",
+			`dependencies path "../gone" resolves to "issue-2565/gone": directory does not exist`},
+		Synthetic: true, TGDir: "issue-2565", TGWant: graphTGMissing("issue-2565/gone"),
+	},
+	{
+		Repo: "denis256",
+		M:    corpusMutation{Name: "back_edge_cycle", File: "issue-2565/A/terragrunt.hcl", Old: "terraform {\n  source = \"./\"\n}", New: "terraform {\n  source = \"./\"\n}\ndependency \"C\" {\n  config_path = \"../C\"\n}\n"},
+		Want: graphFinding{"GRT003", "issue-2565/A/terragrunt.hcl", 5, 17, "issue-2565/A",
+			`dependency cycle: "issue-2565/A" -> "issue-2565/C" -> "issue-2565/B" -> "issue-2565/A"`},
+		Synthetic: true, TSortLoop: true, TGDir: "issue-2565", TGWant: graphTGCycle,
+	},
+	{
+		Repo: "denis256",
+		M:    corpusMutation{Name: "self_loop", File: "issue-2565/B/terragrunt.hcl", Old: `config_path = "../A"`, New: `config_path = "../B"`},
+		Want: graphFinding{"GRT003", "issue-2565/B/terragrunt.hcl", 5, 17, "issue-2565/B",
+			`dependency cycle: "issue-2565/B" -> "issue-2565/B"`},
+		TGDir: "issue-2565", TGWant: graphTGCycle,
+	},
+}
+
+// graphOracleCheck requires the oracle's findings on root to equal want
+// exactly, and tsort to agree there is no multi-unit cycle.
+func graphOracleCheck(t testing.TB, root string, want []graphFinding) {
+	t.Helper()
+	res := graphOracle(t, root)
+	want = slices.Clone(want)
+	graphSort(want)
+	missing, extra := graphDiff(want, res.Findings)
+	for _, m := range missing {
+		t.Errorf("oracle MISS %s", m)
+	}
+	for _, e := range extra {
+		t.Errorf("oracle EXTRA %s", e)
+	}
+	keys := make([]string, 0, len(res.Notes))
+	for k := range res.Notes {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+	for _, k := range keys {
+		t.Logf("oracle left out: %s x%d", k, res.Notes[k])
+	}
+	t.Logf("oracle: %d edges, %d findings", len(res.Pairs), len(res.Findings))
+	graphTSort(t, res.Pairs, false)
+}
+
+// TestCorpusGraphClean: iso20022 and secret produce no GRT002/GRT003 and
+// their pinned baseline is unchanged; denis256 produces exactly
+// denisExpectedGraph. The textual oracle agrees on all three; the pinned
+// terragrunt builds its queue on scratch copies of iso20022 and secret.
+func TestCorpusGraphClean(t *testing.T) {
+	for _, repo := range graphRepos {
+		t.Run(repo.Name, func(t *testing.T) {
+			root := repo.Require(t)
+			d0 := corpusDigest(t, root)
+			rep, raw, code := corpusRunJSON(t, root)
+			graph, other := graphGruntled(rep)
+			s := rep.Summary
+			t.Logf("summary: units=%d resolved=%d config_unknown=%d errors=%d graph=%d other=%d",
+				s.Units, s.Resolved, s.ConfigUnknown, s.Errors, len(graph), len(other))
+
+			var want []graphFinding
+			switch repo.Name {
+			case "iso20022":
+				if code != 0 || len(rep.Diagnostics) != 0 || s.Units != 65 || s.ConfigUnknown != 3 || s.Errors != 0 {
+					t.Errorf("iso20022 baseline: exit %d, %d diagnostics, units %d, config_unknown %d, errors %d; want 0, 0, 65, 3, 0\n%s",
+						code, len(rep.Diagnostics), s.Units, s.ConfigUnknown, s.Errors, raw)
+				}
+			case "secret":
+				if code != 0 || len(rep.Diagnostics) != 0 || s.Units != 4 || s.ConfigUnknown != 1 || s.Errors != 0 {
+					t.Errorf("secret baseline: exit %d, %d diagnostics, units %d, config_unknown %d, errors %d; want 0, 0, 4, 1, 0\n%s",
+						code, len(rep.Diagnostics), s.Units, s.ConfigUnknown, s.Errors, raw)
+				}
+			case "denis256":
+				for _, e := range denisExpectedGraph {
+					want = append(want, e.finding())
+				}
+				graphSort(want)
+				var grt001 int
+				for _, d := range other {
+					if d.Code == "GRT001" {
+						grt001++
+					}
+				}
+				if code != 1 || grt001 != len(denisExpected) {
+					t.Errorf("denis256 baseline: exit %d, %d GRT001; want 1, %d", code, grt001, len(denisExpected))
+				}
+			}
+			missing, extra := graphDiff(want, graph)
+			for _, m := range missing {
+				t.Errorf("gruntled MISS %s", m)
+			}
+			for _, e := range extra {
+				t.Errorf("gruntled EXTRA %s", e)
+			}
+
+			oracleWant := slices.Clone(want)
+			if repo.Name == "denis256" {
+				for _, e := range denisGraphOracleOnly {
+					oracleWant = append(oracleWant, e.finding())
+				}
+			}
+			graphOracleCheck(t, root, oracleWant)
+
+			if repo.Name != "denis256" {
+				t.Run("terragrunt", func(t *testing.T) {
+					bin := tgVerifyPinned(t)
+					cp := repo.Copy(t, root)
+					graphTGClean(t, bin, cp, cp)
+				})
+			}
+
+			if d := corpusDigest(t, root); d != d0 {
+				t.Errorf("corpus checkout changed: digest %s -> %s", d0, d)
+			}
+		})
+	}
+}
+
+// TestCorpusGraphMutation: every mutation, alone on a fresh copy, adds
+// exactly its diagnostic (gruntled and textual oracle), exits 1, leaves
+// every other diagnostic unchanged, reverts to byte-identical JSON, and is
+// confirmed by the pinned terragrunt.
+func TestCorpusGraphMutation(t *testing.T) {
+	for _, repo := range graphRepos {
+		t.Run(repo.Name, func(t *testing.T) {
+			root := repo.Require(t)
+			d0 := corpusDigest(t, root)
+			_, rootRaw, rootCode := corpusRunJSON(t, root)
+			n := 0
+			for _, gm := range graphMutations {
+				if gm.Repo != repo.Name {
+					continue
+				}
+				n++
+				t.Run(gm.M.Name, func(t *testing.T) {
+					graphRunMutation(t, repo, root, rootRaw, rootCode, gm)
+				})
+			}
+			if want := map[string]int{"iso20022": 5, "secret": 4, "denis256": 4}[repo.Name]; n != want {
+				t.Errorf("%d mutations for %s, want %d", n, repo.Name, want)
+			}
+			if d := corpusDigest(t, root); d != d0 {
+				t.Errorf("corpus checkout changed: digest %s -> %s", d0, d)
+			}
+		})
+	}
+}
+
+func graphRunMutation(t *testing.T, repo graphRepo, root string, rootRaw []byte, rootCode int, gm graphMutation) {
+	cp := repo.Copy(t, root)
+	pre, preRaw, preCode := corpusRunJSON(t, cp)
+	if !bytes.Equal(preRaw, rootRaw) || preCode != rootCode {
+		t.Fatalf("copy fidelity: gruntled JSON on the copy differs from the checkout (exit %d vs %d)", preCode, rootCode)
+	}
+	preGraph, preOther := graphGruntled(pre)
+	oPre := graphOracle(t, cp)
+
+	orig := corpusApply(t, cp, gm.M)
+	rep, raw, code := corpusRunJSON(t, cp)
+	if code != 1 {
+		t.Errorf("mutated exit %d, want 1", code)
+	}
+	graph, other := graphGruntled(rep)
+	want := append(slices.Clone(preGraph), gm.Want)
+	graphSort(want)
+	missing, extra := graphDiff(want, graph)
+	for _, m := range missing {
+		t.Errorf("gruntled MISS %s", m)
+	}
+	for _, e := range extra {
+		t.Errorf("gruntled EXTRA %s", e)
+	}
+	if !slices.Equal(other, preOther) {
+		t.Errorf("GRT001/GRT100 changed: %d before, %d after\n%s", len(preOther), len(other), raw)
+	}
+	for _, g := range graph {
+		t.Logf("gruntled: %s", g)
+	}
+
+	oPost := graphOracle(t, cp)
+	added, removed := graphDiff(oPost.Findings, oPre.Findings)
+	if len(added) != 1 || added[0] != gm.Want || len(removed) != 0 {
+		t.Errorf("oracle delta: added %v, removed %v; want exactly %s", added, removed, gm.Want)
+	}
+	graphTSort(t, oPost.Pairs, gm.TSortLoop)
+
+	p := filepath.Join(cp, filepath.FromSlash(gm.M.File))
+	info, err := os.Stat(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, orig, info.Mode().Perm()); err != nil {
+		t.Fatal(err)
+	}
+	_, postRaw, postCode := corpusRunJSON(t, cp)
+	if !bytes.Equal(postRaw, preRaw) || postCode != preCode {
+		t.Errorf("revert: JSON identical=%v, exit %d; want true, %d", bytes.Equal(postRaw, preRaw), postCode, preCode)
+	}
+
+	t.Run("terragrunt", func(t *testing.T) {
+		bin := tgVerifyPinned(t)
+		dir := filepath.Join(cp, filepath.FromSlash(gm.TGDir))
+		graphTGClean(t, bin, cp, dir)
+		corpusApply(t, cp, gm.M)
+		out := graphTGRun(t, bin, cp, dir)
+		if !strings.Contains(out, gm.TGWant) {
+			t.Errorf("terragrunt does not print %q:\n%s", gm.TGWant, out)
+		}
+		for _, l := range strings.Split(out, "\n") {
+			if strings.Contains(l, gm.TGWant) || strings.Contains(l, "does not contain a terragrunt.hcl") {
+				t.Logf("terragrunt: %s", l)
+			}
+		}
+	})
 }

@@ -58,6 +58,29 @@ func corpusRequire(t testing.TB) string {
 	return abs
 }
 
+// secretPinnedCommit is the cds-snc/secret corpus commit the v0.2
+// GRT002/GRT003 validation is pinned to.
+const secretPinnedCommit = "341e8a95b0d9bd658793094a248527cc3ebae6f2"
+
+// secretRequire returns the absolute path of the pinned cds-snc/secret
+// checkout, skips when GRUNTLED_CORPUS_SECRET is unset, and fails (never
+// skips) on any other commit.
+func secretRequire(t testing.TB) string {
+	t.Helper()
+	dir := os.Getenv("GRUNTLED_CORPUS_SECRET")
+	if dir == "" {
+		t.Skip("GRUNTLED_CORPUS_SECRET not set")
+	}
+	root, err := filepath.Abs(filepath.Clean(dir))
+	if err != nil {
+		t.Fatalf("secret corpus path: %v", err)
+	}
+	if got := denisHeadCommit(t, root); got != secretPinnedCommit {
+		t.Fatalf("GRUNTLED_CORPUS_SECRET must be a checkout of the pinned commit; got %s, want %s", got, secretPinnedCommit)
+	}
+	return root
+}
+
 // corpusDigest hashes the tree under root (excluding .git): relative path,
 // type, permission bits, and the sha256 of regular files or the target of
 // symlinks. Timestamps are left out.
@@ -116,6 +139,18 @@ func corpusDigest(t testing.TB, root string) string {
 // target and never followed. It proves faithfulness with corpusDigest.
 func corpusCopy(t testing.TB, src string) string {
 	t.Helper()
+	dst := corpusCopyFiltered(t, src, nil)
+	if a, b := corpusDigest(t, src), corpusDigest(t, dst); a != b {
+		t.Fatalf("corpus copy is not faithful: digest %s != %s", b, a)
+	}
+	return dst
+}
+
+// corpusCopyFiltered copies src (excluding .git) into a fresh t.TempDir
+// like corpusCopy, leaving out every regular file for which skip returns
+// true (skip may be nil). It proves nothing about fidelity: the caller does.
+func corpusCopyFiltered(t testing.TB, src string, skip func(p string) bool) string {
+	t.Helper()
 	dst := filepath.Join(t.TempDir(), "corpus")
 	err := filepath.WalkDir(src, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -147,6 +182,9 @@ func corpusCopy(t testing.TB, src string) string {
 			}
 			return os.Symlink(target, out)
 		case mode.IsRegular():
+			if skip != nil && skip(p) {
+				return nil
+			}
 			in, err := os.Open(p)
 			if err != nil {
 				return err
@@ -170,9 +208,6 @@ func corpusCopy(t testing.TB, src string) string {
 	})
 	if err != nil {
 		t.Fatalf("copy %s: %v", src, err)
-	}
-	if a, b := corpusDigest(t, src), corpusDigest(t, dst); a != b {
-		t.Fatalf("corpus copy is not faithful: digest %s != %s", b, a)
 	}
 	return dst
 }

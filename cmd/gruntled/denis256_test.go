@@ -309,7 +309,7 @@ func TestDenis256Corpus(t *testing.T) {
 		if !bytes.Equal(raw1, raw2) {
 			t.Errorf("JSON stdout differs between two runs (%d vs %d bytes)", len(raw1), len(raw2))
 		}
-		var grt001, grt100 int
+		var grt001, grt100, graph int
 		var grt100Pos []string
 		for _, d := range rep.Diagnostics {
 			switch d.Code {
@@ -318,6 +318,14 @@ func TestDenis256Corpus(t *testing.T) {
 			case "GRT100":
 				grt100++
 				grt100Pos = append(grt100Pos, d.File+":"+strconv.Itoa(d.Line)+":"+strconv.Itoa(d.Column))
+			case "GRT002", "GRT003":
+				// Tolerated only when in the exact hand-checked set
+				// (TestCorpusGraphClean asserts the set itself).
+				f := graphFinding{d.Code, d.File, d.Line, d.Column, d.Unit, d.Message}
+				if !slices.ContainsFunc(denisExpectedGraph, func(e denisGraphEntry) bool { return e.finding() == f }) {
+					t.Errorf("unexpected %s", f)
+				}
+				graph++
 			default:
 				t.Errorf("unexpected code %s at %s:%d:%d: %s", d.Code, d.File, d.Line, d.Column, d.Message)
 			}
@@ -344,7 +352,7 @@ func TestDenis256Corpus(t *testing.T) {
 		}{
 			{"units", s.Units}, {"resolved", s.Resolved}, {"module_unknown", s.ModuleUnknown},
 			{"config_unknown", s.ConfigUnknown}, {"unknown_modules", s.UnknownModules},
-			{"errors", s.Errors}, {"warnings", s.Warnings}, {"grt100", grt100}, {"grt001", grt001},
+			{"errors", s.Errors}, {"warnings", s.Warnings}, {"grt100", grt100}, {"grt001", grt001}, {"grt002_grt003", graph},
 		} {
 			sb.WriteString("DENIS256 " + kv.k + "=" + strconv.Itoa(kv.v) + "\n")
 		}
