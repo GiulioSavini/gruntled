@@ -9,8 +9,8 @@ package main
 //     exactly.
 //   - TestGoldenFixtures runs every hand-written txtar repository under
 //     testdata/golden and asserts the exact diagnostic set, exit code and
-//     (when given) unknown-unit set written by hand in its _golden/
-//     section. Every want position is checked against the fixture bytes
+//     (when given) unknown-unit set and exact message set written by
+//     hand in its _golden/ section. Every want position is checked against the fixture bytes
 //     before gruntled runs, so a hand-count mistake fails the harness
 //     instead of becoming a silent golden. There is no update flag: want
 //     files are never generated from gruntled's output.
@@ -43,6 +43,7 @@ type goldenReport struct {
 		Line     int    `json:"line"`
 		Column   int    `json:"column"`
 		Unit     string `json:"unit"`
+		Message  string `json:"message"`
 	} `json:"diagnostics"`
 	UnknownUnits []goldenUnknown `json:"unknown_units"`
 	Summary      struct {
@@ -240,6 +241,8 @@ type goldenFixture struct {
 	want       []goldenDiag
 	unknown    []goldenUnknown
 	hasUnknown bool
+	messages   []string // `CODE file:line:col message`, sorted
+	hasMessage bool
 }
 
 // goldenParseFixture parses a txtar archive into a goldenFixture. Only the
@@ -271,6 +274,10 @@ func goldenParseFixture(t *testing.T, path string) goldenFixture {
 				}
 				fx.unknown = append(fx.unknown, goldenUnknown{Path: fields[0], Status: fields[1], Reason: fields[2]})
 			}
+		case "_golden/messages":
+			fx.hasMessage = true
+			fx.messages = goldenLines(f.Data)
+			slices.Sort(fx.messages)
 		case "_golden/symlinks":
 			for _, line := range goldenLines(f.Data) {
 				link, target, ok := strings.Cut(line, " -> ")
@@ -343,8 +350,10 @@ func goldenParseWant(t *testing.T, data []byte) []goldenDiag {
 }
 
 // goldenSelfCheck verifies every want position against the fixture text:
-// a GRT001 position must start with "dependency.", a GRT100 position must
-// be an '@' byte (the only syntax error the goldens construct).
+// a GRT001 position must start with "dependency.", a GRT002 or GRT003
+// position must be the opening quote of a config_path value or paths
+// entry, a GRT100 position must be an '@' byte (the only syntax error the
+// goldens construct).
 func goldenSelfCheck(t *testing.T, fx goldenFixture) {
 	t.Helper()
 	for _, w := range fx.want {
@@ -352,6 +361,8 @@ func goldenSelfCheck(t *testing.T, fx goldenFixture) {
 		switch w.Code {
 		case "GRT001":
 			prefix = "dependency."
+		case "GRT002", "GRT003":
+			prefix = `"`
 		case "GRT100":
 			prefix = "@"
 		default:
@@ -425,6 +436,16 @@ func TestGoldenFixtures(t *testing.T) {
 				slices.SortFunc(want, byPath)
 				if !slices.Equal(got, want) {
 					t.Errorf("unknown_units differ\n got: %v\nwant: %v", got, want)
+				}
+			}
+			if fx.hasMessage {
+				got := make([]string, 0, len(rep.Diagnostics))
+				for _, d := range rep.Diagnostics {
+					got = append(got, fmt.Sprintf("%s %s:%d:%d %s", d.Code, d.File, d.Line, d.Column, d.Message))
+				}
+				slices.Sort(got)
+				if !slices.Equal(got, fx.messages) {
+					t.Errorf("messages differ\n got: %q\nwant: %q", got, fx.messages)
 				}
 			}
 

@@ -1,0 +1,71 @@
+GRT002 rows end to end. live/app declares: a config_path to a directory
+that does not exist; one to a module-only directory (main.tf, no
+terragrunt.hcl); skip_outputs = true on a missing target (still fires:
+Terragrunt refuses the dependency regardless); a dependencies paths entry
+to a missing directory next to one to a real unit. Silent: a non-literal
+config_path (unresolved) and enabled = false. config_path = "" on a block
+resolves to the unit's own directory, like Terragrunt's filepath.Join: no
+GRT002 (the target holds a unit) but a GRT003 self-loop, as Terragrunt
+would report a dependency cycle. (A dependencies paths entry "" is
+unresolved instead, never a self-edge.) No GRT001: no outputs are read.
+-- live/target/terragrunt.hcl --
+inputs = {}
+-- live/target/main.tf --
+output "out" {
+  value = 1
+}
+-- live/modonly/main.tf --
+output "out" {
+  value = 1
+}
+-- live/app/terragrunt.hcl --
+dependency "gone" {
+  config_path = "../gone"
+}
+
+dependency "modonly" {
+  config_path = "../modonly"
+}
+
+dependency "skipped" {
+  config_path  = "../gone_skip"
+  skip_outputs = true
+}
+
+dependency "dynamic" {
+  config_path = get_env("GRUNTLED_GOLDEN_NOT_SET", "../gone_dyn")
+}
+
+dependency "off" {
+  config_path = "../gone_off"
+  enabled     = false
+}
+
+dependency "empty" {
+  config_path = ""
+}
+
+dependencies {
+  paths = ["../target", "../gone_path", ""]
+}
+
+inputs = {}
+-- _golden/exit --
+1
+-- _golden/want --
+# live/app/terragrunt.hcl line 2: "  config_path = " is 16 bytes.
+GRT002 error live/app/terragrunt.hcl:2:17 live/app
+# line 6: "  config_path = " is 16 bytes.
+GRT002 error live/app/terragrunt.hcl:6:17 live/app
+# line 10: "  config_path  = " is 17 bytes.
+GRT002 error live/app/terragrunt.hcl:10:18 live/app
+# line 24: "  config_path = " is 16 bytes.
+GRT003 error live/app/terragrunt.hcl:24:17 live/app
+# line 28: "  paths = [" is 11 bytes, "\"../target\", " is 13 more.
+GRT002 error live/app/terragrunt.hcl:28:25 live/app
+-- _golden/messages --
+GRT002 live/app/terragrunt.hcl:2:17 dependency "gone" config_path resolves to "live/gone": directory does not exist
+GRT002 live/app/terragrunt.hcl:6:17 dependency "modonly" config_path resolves to "live/modonly": directory has no terragrunt.hcl
+GRT002 live/app/terragrunt.hcl:10:18 dependency "skipped" config_path resolves to "live/gone_skip": directory does not exist
+GRT003 live/app/terragrunt.hcl:24:17 dependency cycle: "live/app" -> "live/app"
+GRT002 live/app/terragrunt.hcl:28:25 dependencies path "../gone_path" resolves to "live/gone_path": directory does not exist

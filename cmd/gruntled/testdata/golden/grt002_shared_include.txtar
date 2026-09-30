@@ -1,0 +1,30 @@
+A shared include supplies a dependency whose config_path is resolved from
+each including unit's directory (get_terragrunt_dir() is the child's) to a
+directory that does not exist. GRT002 is attributed to the including unit,
+so two including units give two diagnostics at the same file:line:col in
+the include. The include file itself is not a unit.
+-- _envcommon/db.hcl --
+dependency "vpc" {
+  config_path = "${get_terragrunt_dir()}/../vpc"
+}
+-- live/app1/terragrunt.hcl --
+include "db" {
+  path = find_in_parent_folders("_envcommon/db.hcl")
+}
+
+inputs = {}
+-- live/app2/terragrunt.hcl --
+include "db" {
+  path = find_in_parent_folders("_envcommon/db.hcl")
+}
+
+inputs = {}
+-- _golden/exit --
+1
+-- _golden/want --
+# _envcommon/db.hcl line 2: "  config_path = " is 16 bytes.
+GRT002 error _envcommon/db.hcl:2:17 live/app1
+GRT002 error _envcommon/db.hcl:2:17 live/app2
+-- _golden/messages --
+GRT002 _envcommon/db.hcl:2:17 dependency "vpc" config_path resolves to "live/vpc": directory does not exist
+GRT002 _envcommon/db.hcl:2:17 dependency "vpc" config_path resolves to "live/vpc": directory does not exist

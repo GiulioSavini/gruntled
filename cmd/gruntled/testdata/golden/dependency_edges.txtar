@@ -1,8 +1,15 @@
-Dependency targets gruntled cannot map to a module stay silent: a directory
-without terragrunt.hcl, a directory holding only terragrunt.stack.hcl
-(02-07 G2), a config_path naming a non-default file (02-07 G4), and a label
-no dependency block declares. The one missing output of a valid target is
-reported. A unit with a duplicate dependency label is config-unknown.
+Dependency targets gruntled cannot map to a module stay silent for GRT001:
+a directory without terragrunt.hcl, a directory holding only
+terragrunt.stack.hcl (02-07 G2), a config_path naming a non-default file
+(02-07 G4), and a label no dependency block declares. The one missing
+output of a valid target is reported. A unit with a duplicate dependency
+label is config-unknown.
+
+Phase 5 (GRT002, reviewed by hand): edge/nodir exists but holds only a
+README.md, so Terragrunt would refuse the "nodir" dependency and the GRT002
+at its config_path value is correct. The stack dir (unresolved,
+config-path-stack) and alt.hcl (unresolved, config-path-nondefault-file)
+stay silent for GRT002 too; edge/dup is config-unknown and carries no edges.
 -- edge/target/terragrunt.hcl --
 inputs = {}
 -- edge/target/alt.hcl --
@@ -58,7 +65,12 @@ inputs = {
 -- _golden/exit --
 1
 -- _golden/want --
+# edge/consumer/terragrunt.hcl line 2: "  config_path = " is 16 bytes.
+GRT002 error edge/consumer/terragrunt.hcl:2:17 edge/consumer
 # edge/consumer/terragrunt.hcl line 23: "  f = " is 6 bytes.
 GRT001 error edge/consumer/terragrunt.hcl:23:7 edge/consumer
+-- _golden/messages --
+GRT002 edge/consumer/terragrunt.hcl:2:17 dependency "nodir" config_path resolves to "edge/nodir": directory has no terragrunt.hcl
+GRT001 edge/consumer/terragrunt.hcl:23:7 dependency "good" output "missing" is not declared by module "edge/target" (target unit "edge/target")
 -- _golden/unknown --
 edge/dup config-unknown invalid-dependency

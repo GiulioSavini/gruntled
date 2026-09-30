@@ -1,0 +1,79 @@
+GRT003 shapes end to end, one diagnostic per cycle (SCC), attributed to its
+lexically smallest member at that member's first edge into the cycle:
+- self/dot: config_path = "." is a self-loop.
+- self/named: config_path = "../named" (its own directory) is a self-loop.
+- ring/p <-> ring/q: a two-unit ring, rendered with arrows.
+- among/m1 -> m2 -> m1 plus m2 -> m3 -> m1: m2 has two successors inside
+  the SCC, so it is not a ring and is rendered "among" (sorted).
+- pair/x -> pair/y through both a dependency block and a dependencies path,
+  pair/y -> pair/x: the block and the path are one edge, so one ring.
+- off/d1 -> off/d2 -> off/d1 with enabled = false on the back edge: no
+  cycle, no diagnostic.
+-- self/dot/terragrunt.hcl --
+dependency "me" {
+  config_path = "."
+}
+-- self/named/terragrunt.hcl --
+dependency "me" {
+  config_path = "../named"
+}
+-- ring/p/terragrunt.hcl --
+dependency "q" {
+  config_path = "../q"
+}
+-- ring/q/terragrunt.hcl --
+dependency "p" {
+  config_path = "../p"
+}
+-- among/m1/terragrunt.hcl --
+dependency "m2" {
+  config_path = "../m2"
+}
+-- among/m2/terragrunt.hcl --
+dependency "m1" {
+  config_path = "../m1"
+}
+
+dependency "m3" {
+  config_path = "../m3"
+}
+-- among/m3/terragrunt.hcl --
+dependency "m1" {
+  config_path = "../m1"
+}
+-- pair/x/terragrunt.hcl --
+dependency "y" {
+  config_path = "../y"
+}
+
+dependencies {
+  paths = ["../y"]
+}
+-- pair/y/terragrunt.hcl --
+dependency "x" {
+  config_path = "../x"
+}
+-- off/d1/terragrunt.hcl --
+dependency "d2" {
+  config_path = "../d2"
+}
+-- off/d2/terragrunt.hcl --
+dependency "d1" {
+  config_path = "../d1"
+  enabled     = false
+}
+-- _golden/exit --
+1
+-- _golden/want --
+# Every position is line 2, after "  config_path = " (16 bytes).
+GRT003 error among/m1/terragrunt.hcl:2:17 among/m1
+GRT003 error pair/x/terragrunt.hcl:2:17 pair/x
+GRT003 error ring/p/terragrunt.hcl:2:17 ring/p
+GRT003 error self/dot/terragrunt.hcl:2:17 self/dot
+GRT003 error self/named/terragrunt.hcl:2:17 self/named
+-- _golden/messages --
+GRT003 among/m1/terragrunt.hcl:2:17 dependency cycle among: "among/m1", "among/m2", "among/m3"
+GRT003 pair/x/terragrunt.hcl:2:17 dependency cycle: "pair/x" -> "pair/y" -> "pair/x"
+GRT003 ring/p/terragrunt.hcl:2:17 dependency cycle: "ring/p" -> "ring/q" -> "ring/p"
+GRT003 self/dot/terragrunt.hcl:2:17 dependency cycle: "self/dot" -> "self/dot"
+GRT003 self/named/terragrunt.hcl:2:17 dependency cycle: "self/named" -> "self/named"
