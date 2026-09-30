@@ -1,4 +1,9 @@
-# Validation of gruntled v0.1
+# Validation of gruntled v0.1 and v0.2
+
+v0.2 adds GRT002 (missing dependency target) and GRT003 (dependency cycle). Their
+validation on the real corpus is recorded in
+[v0.2: GRT002 and GRT003 on the real corpus](#v02-grt002-and-grt003-on-the-real-corpus-more-06),
+at the end of this document. Everything before it is the v0.1 record, unchanged.
 
 gruntled v0.1 is a falsifiable experiment, not a feature list. The claim has four
 parts. On the unmutated primary corpus, `gruntled check` reports nothing. When an output
@@ -500,3 +505,233 @@ every push.
   In this run that was 3 of 65 units on the primary corpus and 294 of 1146 on denis256.
 - The timing claim is relative, on one machine only, under the load described above. The
   absolute numbers are not a performance specification.
+
+## v0.2: GRT002 and GRT003 on the real corpus (MORE-06)
+
+The claim has three parts. On the unmutated corpus, gruntled reports no GRT002 or GRT003
+on iso20022 and cds-snc/secret, and on denis256 (a suite of deliberately broken
+reproductions) exactly the set an independent oracle derives. Every injected graph error
+(a missing `config_path` directory, a missing `dependencies` path, a back edge closing a
+cycle, a self-loop, and on iso20022 a module-only directory) adds exactly one expected
+diagnostic and nothing else. An independent oracle agrees on each result.
+
+### Outcome
+
+| Claim | Result |
+|---|---|
+| iso20022 unmutated: zero GRT002/GRT003, GRT001 baseline unchanged (65 units, 3 unknown, 0 diagnostics, exit 0) | PASS |
+| secret unmutated: zero GRT002/GRT003 (4 units, 1 unknown, 0 diagnostics, exit 0) | PASS |
+| denis256 unmutated: GRT002/GRT003 set equals `denisExpectedGraph` exactly (4 GRT002, 0 GRT003), GRT001 still exactly 8 | PASS |
+| 13 mutations (5 iso20022, 4 secret, 4 denis256): each adds exactly its diagnostic, exit 1, every other diagnostic unchanged, revert gives byte-identical JSON | PASS, 13/13 |
+| Textual oracle agrees on the unmutated sets and on every mutation delta | PASS, with 12 documented oracle-only findings on denis256 (below) |
+| Pinned terragrunt v1.1.6 agrees on every mutation | PASS, 13/13 (denis256 on the fixture subtree) |
+
+Recorded run: 2026-09-30, gruntled commit `d05fd1af101fc68f2035f9f1e225033bcfa2b46f`,
+go1.27.0 linux/amd64, same WSL2 machine as above. Test wall time: 57 s.
+
+### Pinned commits
+
+| Corpus | Repository | Commit | Variable |
+|---|---|---|---|
+| iso20022 (primary) | aws-solutions-library-samples/guidance-for-iso20022-messaging-workflows-on-aws | `e6c55d11fd1a01e75b78d7897be36c69fa26b8cc` | `GRUNTLED_CORPUS` |
+| secret | cds-snc/secret | `341e8a95b0d9bd658793094a248527cc3ebae6f2` | `GRUNTLED_CORPUS_SECRET` |
+| denis256 | denis256/terragrunt-tests | `726485e699a70c02dabbde629f66c0119e197357` | `GRUNTLED_CORPUS_DENIS256` |
+
+Each test fails (not skips) when a checkout is at another commit. The checkouts are never
+written: every mutation and every terragrunt run happens on a scratch copy, and a digest
+of each checkout is compared before and after.
+
+### Command
+
+```
+GRUNTLED_CORPUS=$HOME/.cache/gruntled-phase4/corpus/primary \
+GRUNTLED_CORPUS_SECRET=$HOME/.cache/gruntled-phase4/corpus/secret \
+GRUNTLED_CORPUS_DENIS256=$HOME/.cache/gruntled-phase4/corpus/denis256 \
+GRUNTLED_TERRAGRUNT_BIN=$HOME/.cache/gruntled-phase4/bin/terragrunt_linux_amd64 \
+go test -count=1 -v -run 'TestCorpus|TestDenis256|TestSecret' ./cmd/gruntled
+```
+
+`TestCorpusGraphClean` and `TestCorpusGraphMutation` are the v0.2 tests; the same command
+reruns the v0.1 corpus tests. Without the variables every one of them skips.
+
+### Oracles
+
+**Pinned terragrunt v1.1.6** (the SHA256 above, checked on every run). The PATH
+`terragrunt` on this machine is v0.99.3 and is never used. The command, run in a scratch
+copy with a minimal environment (`PATH` = the pinned bin dir, fresh `HOME` and `TMPDIR`):
+
+```
+terragrunt run --all --non-interactive --no-auto-init --no-color --tf-path <bin>/tofu -- version
+```
+
+The signal is the queue-construction error, not the exit code:
+
+- missing or config-less target: `You attempted to run terragrunt in a folder that does
+  not contain a terragrunt.hcl file ...` followed by `Path: "<copy>/<target>/terragrunt.hcl"`;
+- cycle or self-loop: `ERROR  cycle detected during queue construction`.
+
+Both stop terragrunt before any unit runs (0 units print a tofu version). On the unmutated
+copies neither message appears; the queue is built and units run `version` (36 on
+iso20022, 2 on secret, 0 on the denis256 subtree). The exit code is still 1 there, for
+reasons outside the graph: units whose inputs read `dependency.X.outputs` fail with
+`There is no variable named "dependency"` because there is no state. `--no-auto-init`
+keeps tofu from prompting for the S3 backend.
+
+- `terragrunt hcl validate` is not an oracle for these codes: it exits 0 with a missing
+  `config_path` directory. `dag graph` only prints a WARN on a cycle and exits 0.
+- secret's unnamed `include {}`: `run --all -- version` handles it on v1.1.6 (queue built,
+  2 units ran); no renaming was needed, so the terragrunt oracle runs on the unmodified
+  secret tree too.
+- denis256 as a whole cannot be queued: terragrunt fails first on stack and function
+  errors unrelated to the graph (for example `get_repo_root` in `6288/stacks` outside a git
+  repository, `values.env` in `6289`). Its mutations are all in `issue-2565`, so terragrunt
+  runs on that subtree of the mutated copy; the textual oracle covers the whole tree.
+
+**Textual oracle** (`graphOracle` in `cmd/gruntled/corpus_graph_test.go`). It shares no
+code with gruntled's parser, loader or analyzers:
+
+- a byte scanner that masks strings (with their `${...}` templates), comments and
+  heredocs, plus regexps for top-level `dependency "x" {`, `dependencies {` and
+  `include {` blocks;
+- include targets it can resolve: a literal path, a `${get_terragrunt_dir()}/...` path,
+  `find_in_parent_folders("name")` and `find_in_parent_folders()` (as `terragrunt.hcl`),
+  searched from the parent directory up; `no_merge` includes contribute nothing; a label
+  in the unit file overrides the same label in an include;
+- only literal `config_path` values and literal `paths` entries, optionally prefixed by
+  `${get_terragrunt_dir()}`, resolved with `path.Join` against the unit directory; a
+  block whose `enabled` is not literally `true` is dropped; empty, absolute, outside the
+  repository or `*.hcl`/`*.json` targets are dropped;
+- targets classified with `os.Stat` (missing dir; dir without `terragrunt.hcl` or
+  `terragrunt.hcl.json`; unit);
+- cycles by mutual reachability (one BFS per node), not Tarjan; ring vs `among` and the
+  smallest-unit attribution follow the documented message rules.
+
+Everything the oracle leaves out is counted and logged. On denis256: 63 non-literal
+`config_path`, 8 unresolvable, 6 disabled blocks, 26 non-literal and 5 unresolvable paths
+entries, 7 includes it cannot resolve, 5 `find_in_parent_folders` that find nothing, 1
+unreadable include, 1 `terragrunt.hcl.json` unit not scanned. On iso20022 and secret it
+leaves nothing out.
+
+**tsort.** The oracle's unit pairs are also fed to `tsort` (uutils coreutils 0.8.0 on
+this machine; self-pairs dropped because tsort treats `a a` as a node): no loop on the
+three unmutated corpora (117, 3 and 660 edges), `input contains a loop` after each back-edge
+mutation.
+
+### Unmutated results
+
+| Corpus | Units | GRT002 | GRT003 | Oracle | terragrunt |
+|---|---|---|---|---|---|
+| iso20022 | 65 (62 resolved, 3 config-unknown) | 0 | 0 | 0 findings, 117 edges | queue built, 36 units ran |
+| secret | 4 (3 resolved, 1 config-unknown) | 0 | 0 | 0 findings, 3 edges | queue built, 2 units ran |
+| denis256 | 1146 (852 resolved, 75 config-unknown, 219 module-unknown) | 4 | 0 | 16 findings, 660 edges | cannot queue the whole repository (see Oracles) |
+
+denis256, the exact set (`denisExpectedGraph`), every entry checked by hand:
+
+| Position | Message | Why it is right |
+|---|---|---|
+| `5728-broken-includes/test.hcl:1:37` | `dependency "borked" config_path resolves to "5728-broken-includes/not-here": directory does not exist` | Reproduction of "inclusion of broken dependencies": the included `test.hcl` points `${get_terragrunt_dir()}/not-here` at nothing on purpose; reported for the including unit at the include's position |
+| `hcl/terragrunt.hcl:19:17` | `dependency "vpc" config_path resolves to "vpc": directory does not exist` | `../vpc` from `hcl` is the repository root's `vpc`, which does not exist |
+| `module-output-broken/m1/terragrunt.hcl:3:17` | `dependency "m2" config_path resolves to "module-output-broken/m2": directory does not exist` | The fixture holds only `app` and `m1` |
+| `tf-lint-regeneration/dev/template/terragrunt.hcl:24:45` | `dependency "vpc" config_path resolves to "tf-lint-regeneration/vpc": directory does not exist` | A template that `copy-app.sh` copies to `dev/apps/app-N`, where `../../vpc` exists (all 100 copies are silent); in place it points at nothing. `skip_outputs = "true"` does not gate GRT002 |
+
+The oracle reports 12 more (`denisGraphOracleOnly`), all `directory does not exist` at
+column 45: `perf-tests/code-v2/app-template/terragrunt.hcl` and
+`perf-tests-v2/test/app-template/terragrunt.hcl` lines 6, 13, 20, 27, 34 (`../../deps/dep-1`
+to `dep-5`), and `perf-tests/code-v2/dependency-template/terragrunt.hcl:6` and
+`perf-tests-v2/test/dependency-template/terragrunt.hcl:6` (`../common`). The four units are
+config-unknown (`include-dynamic-path`: `find_in_parent_folders()` finds no parent
+`terragrunt.hcl`), and a config-unknown unit carries no dependencies in gruntled. They are
+templates that `init.sh` copies under `code/`, where the targets exist. Terragrunt would
+fail on them in place, so these are known false negatives of gruntled's conservative
+rule, never false positives. There is no other disagreement.
+
+### Mutations
+
+Each row is applied alone to a fresh copy. File and position are in the copy.
+"Synthetic" means the mutation adds a block or a list entry rather than editing an
+existing value.
+
+| Repo | Mutation | Expected (and gruntled) diagnostic | Synthetic | Textual oracle | terragrunt v1.1.6 |
+|---|---|---|---|---|---|
+| iso20022 | `iac.src/ecr_health` `config_path` `../s3_runtime` -> `../s3_runtime_gone` | GRT002 `iac.src/ecr_health/terragrunt.hcl:2:18` `dependency "s3" config_path resolves to "iac.src/s3_runtime_gone": directory does not exist` | no | same, exactly | `Path: ".../iac.src/s3_runtime_gone/terragrunt.hcl"` |
+| iso20022 | `dependencies { paths = ["../gone_unit"] }` in `ecr_health` | GRT002 `iac.src/ecr_health/terragrunt.hcl:13:12` `dependencies path "../gone_unit" resolves to "iac.src/gone_unit": directory does not exist` | yes (iso20022 has no `dependencies` block) | same | `Path: ".../iac.src/gone_unit/terragrunt.hcl"` |
+| iso20022 | `dependency "back" { config_path = "../lambda_health" }` in `ecr_health` (`lambda_health` already depends on it) | GRT003 `iac.src/ecr_health/terragrunt.hcl:13:17` `dependency cycle: "iac.src/ecr_health" -> "iac.src/lambda_health" -> "iac.src/ecr_health"` | yes | same; tsort: loop | `cycle detected during queue construction` |
+| iso20022 | `dependency "self" { config_path = "../ecr_health" }` in `ecr_health` | GRT003 `iac.src/ecr_health/terragrunt.hcl:13:17` `dependency cycle: "iac.src/ecr_health" -> "iac.src/ecr_health"` | yes | same | `cycle detected during queue construction` |
+| iso20022 | `ecr_health` `config_path` -> `../s3_crr` (module only: `.tf` files, no `terragrunt.hcl`) | GRT002 `iac.src/ecr_health/terragrunt.hcl:2:18` `dependency "s3" config_path resolves to "iac.src/s3_crr": directory has no terragrunt.hcl` | no | same | `Path: ".../iac.src/s3_crr/terragrunt.hcl"` |
+| secret | `terragrunt/ecr` `config_path = "../acm"` -> `"../acm_gone"` | GRT002 `terragrunt/ecr/terragrunt.hcl:12:17` `dependency "acm" config_path resolves to "terragrunt/acm_gone": directory does not exist` | no | same | `Path: ".../terragrunt/acm_gone/terragrunt.hcl"` |
+| secret | `ecr` `paths = ["../acm"]` -> `["../acm", "../gone"]` | GRT002 `terragrunt/ecr/terragrunt.hcl:8:22` `dependencies path "../gone" resolves to "terragrunt/gone": directory does not exist` | yes (entry added to a real block) | same | `Path: ".../terragrunt/gone/terragrunt.hcl"` |
+| secret | `dependency "back" { config_path = "../ecr" }` in `terragrunt/acm` | GRT003 `terragrunt/acm/terragrunt.hcl:8:17` `dependency cycle: "terragrunt/acm" -> "terragrunt/ecr" -> "terragrunt/acm"` | yes | same; tsort: loop | `cycle detected during queue construction` |
+| secret | `dependency "self" { config_path = "../ecr" }` in `terragrunt/ecr` | GRT003 `terragrunt/ecr/terragrunt.hcl:8:17` `dependency cycle: "terragrunt/ecr" -> "terragrunt/ecr"` | yes | same | `cycle detected during queue construction` |
+| denis256 | `issue-2565/B` `config_path = "../A"` -> `"../A_gone"` | GRT002 `issue-2565/B/terragrunt.hcl:5:17` `dependency "A" config_path resolves to "issue-2565/A_gone": directory does not exist` | no | same | `Path: ".../issue-2565/A_gone/terragrunt.hcl"` (subtree) |
+| denis256 | `dependencies { paths = ["../gone"] }` in `issue-2565/B` | GRT002 `issue-2565/B/terragrunt.hcl:5:12` `dependencies path "../gone" resolves to "issue-2565/gone": directory does not exist` | yes | same | `Path: ".../issue-2565/gone/terragrunt.hcl"` (subtree) |
+| denis256 | `dependency "C" { config_path = "../C" }` in `issue-2565/A` (C -> B -> A exists) | GRT003 `issue-2565/A/terragrunt.hcl:5:17` `dependency cycle: "issue-2565/A" -> "issue-2565/C" -> "issue-2565/B" -> "issue-2565/A"` | yes | same; tsort: loop | `cycle detected during queue construction` (subtree) |
+| denis256 | `issue-2565/B` `config_path = "../A"` -> `"../B"` | GRT003 `issue-2565/B/terragrunt.hcl:5:17` `dependency cycle: "issue-2565/B" -> "issue-2565/B"` | no | same | `cycle detected during queue construction` (subtree) |
+
+For every row: exit 1; every GRT001 and GRT100 diagnostic identical to the baseline
+(iso20022 and secret have none; denis256 keeps its 8 GRT001 and 8 GRT100); writing the
+original bytes back gives JSON byte-identical to the baseline. The mutated blocks have no
+`dependency.X.outputs` references, except the retargets of a referenced block (iso20022
+`dependency "s3"` twice, secret `dependency "acm"` in `ecr`): those references then point
+at a non-unit, which is DIAG-03 row 4 (silent), and they resolved before the mutation, so
+GRT001 stays at zero either way. The denis256 `issue-2565/B` block has no references.
+
+The denis256 copy leaves out the 29 ELF terragrunt binaries the repository checks in
+(1.85 GB, more than the tmpfs holds). gruntled never reads them; fidelity is proven by
+requiring gruntled's JSON on the copy to equal the JSON on the checkout, byte for byte.
+
+### Open issue: `config_path = ""` on a block
+
+gruntled resolves an empty block `config_path` to the unit's own directory and reports a
+GRT003 self-loop (pinned in the `grt002_missing_target` golden since 05-05). The pinned
+terragrunt v1.1.6 disagrees on a two-unit scratch tree (`a` with
+`dependency "x" { config_path = "" }`, `b` empty):
+
+```
+ERROR  skipping dependency "x" in "<tree>/a": config_path could not be resolved
+```
+
+exit 1, no cycle message; a single-unit `run` in `a` exits 0. Both tools reject the tree,
+but terragrunt treats it as an unresolvable `config_path`, not a cycle, so the GRT003
+message is wrong for this input. gruntled's semantics are unchanged in v0.2; this is
+recorded as an open issue (candidate fix: treat `""` like a non-literal and stay silent,
+or report it under a separate code). No corpus contains an empty `config_path` (the only
+two occurrences, in denis256 `deep-merge-fix/common.hcl`, are commented out).
+
+### The include-merge correction
+
+`dependencies { paths }` from includes are a union in both shallow and deep merge, not
+"highest-precedence block wins" (terragrunt v1.1.6 `pkg/config/include.go` `Merge` calls
+`ModuleDependencies.Merge`, which appends absent paths; `DeepMerge` also unions). gruntled
+implements the union with de-duplication by target, and the textual oracle unions
+independently.
+
+One corpus unit exercises it: denis256 `render-json/dependencies/app` declares
+`paths = ["../d1"]` and includes `include.hcl`, which declares `paths = ["../d2"]`. Both
+the oracle and gruntled give the unit two edges (d1 and d2); both targets exist, so
+nothing is reported. On a scratch copy of that fixture with `d2` removed, gruntled
+reports `dependencies/app/include.hcl:2:12: GRT002 dependencies path "../d2" resolves to
+"dependencies/d2": directory does not exist`, and the pinned terragrunt (run on the
+fixture) builds the queue and then fails with
+`Found paths in the 'dependencies' block that do not exist: [../d2 (<tree>/dependencies/d2)]`.
+The inherited path is kept, as the union says; with "highest-precedence block wins" it
+would have been dropped. Note the different terragrunt message: an inherited missing path
+fails at run time, a unit's own missing path fails during queue construction.
+
+### Limitations found on the corpus
+
+- **Config-unknown units hide dependencies.** 3 of 65 iso20022 units, 1 of 4 secret and
+  75 of 1146 denis256 units carry no edges. On denis256 this hides the 12 oracle-only
+  GRT002 above; a cycle through such a unit would be hidden the same way. No cycle exists
+  in the oracle's graph of the three corpora.
+- **Symlink aliases are not canonicalised.** iso20022 has 68 symlinks, all `global.tf`
+  files. denis256 has 2 directory symlinks (`pr-3562/fixture2/t1` and `t2` ->
+  `../template`) and 4 symlinked `terragrunt.hcl`. None is part of a finding or of a
+  cycle; aliasing can only cause false negatives.
+- **`exclude {}` is not modelled.** iso20022 and secret have none. denis256 has 11
+  `exclude {` blocks (7 in `terragrunt.hcl` under `feature-flags/` and
+  `stacks-test/stack-feature-flag/units/`, 3 in `feature-flags/exclude-example/*/environment.hcl`,
+  1 in a `terragrunt.stack.hcl`). None of those units is in the GRT002/GRT003 set, so the
+  limitation does not change this result.
+- **Mutation coverage.** 13 mutations of four kinds (plus module-only on iso20022), in one
+  unit per repository. Shared-include attribution and paths-list merging are covered by
+  goldens, not by the corpus.

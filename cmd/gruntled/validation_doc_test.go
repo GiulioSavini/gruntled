@@ -46,6 +46,21 @@ func TestValidationDocPins(t *testing.T) {
 		"iac.mq/ecr_mq_reader/terragrunt.hcl",
 		"iac.mq/ecr_mq_writer/terragrunt.hcl",
 	)
+	// v0.2 GRT002/GRT003 (MORE-06).
+	want = append(want,
+		"## v0.2: GRT002 and GRT003 on the real corpus (MORE-06)",
+		secretPinnedCommit,
+		"GRUNTLED_CORPUS_SECRET",
+		"GRT002",
+		"GRT003",
+		graphTGCycle,
+	)
+	for _, e := range denisExpectedGraph {
+		want = append(want, fmt.Sprintf("%s:%d:%d", e.File, e.Line, e.Col), e.Msg)
+	}
+	for _, m := range graphMutations {
+		want = append(want, m.Want.pos(), m.Want.Msg)
+	}
 	for _, s := range want {
 		if !strings.Contains(doc, s) {
 			t.Errorf("docs/validation.md does not contain %q", s)
