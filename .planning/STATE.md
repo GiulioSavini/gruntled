@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.2
 milestone_name: CI-Ready
 status: executing
-stopped_at: Completed 05-04-PLAN.md
-last_updated: "2026-09-30T09:38:44.179Z"
-last_activity: 2026-09-30 — completed 05-04 (dependencies paths)
+stopped_at: Completed 05-05-PLAN.md
+last_updated: "2026-09-30T10:15:00.000Z"
+last_activity: 2026-09-30 — completed 05-05 (goldens + docs)
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 6
-  completed_plans: 4
+  completed_plans: 5
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-09-29)
 ## Current Position
 
 Phase: 5 of 7 (Graph Diagnostics) — v0.2 covers phases 5-7
-Plan: 4 of 6 complete (05-01, 05-02, 05-03, 05-04)
-Status: In progress — next 05-05
-Last activity: 2026-09-30 — completed 05-04 (dependencies paths parse, union merge, indexing)
+Plan: 5 of 6 complete (05-01..05-05)
+Status: In progress — next 05-06
+Last activity: 2026-09-30 — completed 05-05 (GRT002/GRT003 goldens, cli.md, README)
 
 ## Performance Metrics
 
@@ -63,6 +63,7 @@ Last activity: 2026-09-30 — completed 05-04 (dependencies paths parse, union m
 | Phase 05 P03 | 2 | 2 tasks | 4 files |
 | Phase 05 P02 | 5 | 3 tasks | 7 files |
 | Phase 05 P04 | 6min | 3 tasks | 10 files |
+| Phase 05 P05 | 15min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -115,6 +116,8 @@ Recent decisions affecting current work:
 - [Phase 05 P02]: dependency_edges golden is red (new GRT002) until 05-05 hand review
 - [Phase 05 P04]: dependencies paths shape from raw AST; non-list literal drops path edges, dynamic paths = one unresolved entry; union merge dedup by target child-first
 - [Phase 05 P04]: E2E paths test lives in infrastructure/terragrunt (arch rule forbids application tests importing infrastructure)
+- [Phase 05 P05]: dependency_edges GRT002 (../nodir, no terragrunt.hcl) reviewed correct, golden updated by hand; goldens gain optional _golden/messages
+- [Phase 05 P05]: block config_path = "" is a GRT003 self-loop (matches Terragrunt filepath.Join); check -h exit line names GRT001-GRT003
 
 ### Pending Todos
 
@@ -126,6 +129,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-09-30T09:38:44.177Z
-Stopped at: Completed 05-04-PLAN.md
+Last session: 2026-09-30T10:15:00.000Z
+Stopped at: Completed 05-05-PLAN.md
 Resume file: None
