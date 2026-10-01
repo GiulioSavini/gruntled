@@ -75,6 +75,66 @@ jobs:
       - name: test-check-architecture
         run: bash scripts/test-check-architecture.sh
 
+  # Proves the user recipes in docs/ci.md run for real: the documented
+  # install + check commands (against the clean fixture, since this repo's
+  # root holds the deliberately broken sarif-fixture) and the pre-commit hook
+  # via try-repo. sarif-upload below stays the separate code-scanning proof.
+  # TestCIDoc keeps the pins and commands here in step with docs/ci.md.
+  recipe-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: install (recipe)
+        # Stands in for the recipe's go install ...@<tag>: same command, this checkout.
+        run: |
+          go install ./cmd/gruntled
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: check (recipe)
+        run: gruntled check cmd/gruntled/testdata/clean-fixture
+      - name: sarif variant
+        run: |
+          gruntled check --format sarif cmd/gruntled/testdata/clean-fixture > "$RUNNER_TEMP/r.sarif"
+          if [ ! -s "$RUNNER_TEMP/r.sarif" ]; then
+            echo "SARIF output missing or empty"
+            exit 1
+          fi
+      - name: recipe fails on broken
+        # Exactly 1: a usage error (2) or a failed analysis (3) must not pass.
+        run: |
+          set +e
+          gruntled check cmd/gruntled/testdata/sarif-fixture
+          rc=$?
+          set -e
+          if [ "$rc" -ne 1 ]; then
+            echo "expected exit 1 on the broken fixture, got $rc"
+            exit 1
+          fi
+      - name: pre-commit hook
+        # try-repo builds the hook from this checkout's HEAD (which holds
+        # .pre-commit-hooks.yaml), as a consumer's pre-commit would.
+        run: |
+          pipx install pre-commit==4.6.2
+          try_hook() {
+            d=$(mktemp -d)
+            cp -r "$1"/. "$d"
+            git -C "$d" init -q
+            git -C "$d" add -A
+            git -C "$d" -c user.name=ci -c user.email=ci@example.invalid commit -qm fixture
+            set +e
+            (cd "$d" && pre-commit try-repo "$GITHUB_WORKSPACE" gruntled-check --all-files)
+            rc=$?
+            set -e
+            if [ "$rc" -ne "$2" ]; then
+              echo "pre-commit on $1: expected exit $2, got $rc"
+              exit 1
+            fi
+          }
+          try_hook cmd/gruntled/testdata/clean-fixture 0
+          try_hook cmd/gruntled/testdata/sarif-fixture 1
+
   # Internal proof job: GitHub code scanning must accept gruntled SARIF.
   # It uploads the deliberate-defect fixture only; it is not the user
   # recipe for scanning a real repository (that is Phase 7).

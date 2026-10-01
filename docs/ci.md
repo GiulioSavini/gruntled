@@ -110,7 +110,9 @@ The hook runs `gruntled check` on the repository root, once per commit.
   `scripts/archscan` into the hook's private environment. It is harmless and
   never on your own `PATH`. If Go is on your `PATH`, pre-commit uses it. It
   must be at least the version in gruntled's `go.mod` (`go 1.27`), or have
-  network access to download that toolchain. If Go is not installed,
+  network access to download that toolchain. With an older Go and
+  `GOTOOLCHAIN=local` set, the install fails with
+  `go.mod requires go >= 1.27`. If Go is not installed,
   pre-commit downloads a current Go by itself.
 
 ## 4. GitHub Actions

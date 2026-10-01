@@ -420,7 +420,7 @@ the host binary's `--version` prints the injected version.
 ## CI
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every push to
-`master` and every pull request, as two independent jobs:
+`master` and every pull request, as independent jobs:
 
 - **`check`**: `gofmt` (fails on any unformatted file), `go mod tidy -diff`,
   `go vet`, `staticcheck`, `govulncheck`, `go test -race -count=1 ./...`,
@@ -431,6 +431,10 @@ the host binary's `--version` prints the injected version.
   every run.
 - **`architecture`**: `scripts/check-architecture.sh` followed by
   `scripts/test-check-architecture.sh`.
+- **`recipe-check`**: runs the user recipes from [`docs/ci.md`](docs/ci.md)
+  for real: install, `gruntled check` and the SARIF variant on a clean
+  fixture (exit 0), exactly exit 1 on the broken fixture, and the pre-commit
+  hook through `pre-commit try-repo` on both.
 
 ## Further reading
 
