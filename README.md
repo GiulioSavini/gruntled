@@ -408,7 +408,14 @@ go run honnef.co/go/tools/cmd/staticcheck@v0.8.1 ./...
 go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
 bash scripts/check-architecture.sh
 bash scripts/test-check-architecture.sh
+bash scripts/build-release.sh v0.0.0-dev "$(git rev-parse --short=12 HEAD)" dist
 ```
+
+`scripts/build-release.sh` cross-builds static binaries (`CGO_ENABLED=0`) for
+the six release targets `linux/amd64`, `linux/arm64`, `darwin/amd64`,
+`darwin/arm64`, `windows/amd64` and `windows/arm64`, packs them as `.tar.gz`
+(linux, darwin) or `.zip` (windows), writes `checksums.txt` and checks that
+the host binary's `--version` prints the injected version.
 
 ## CI
 
@@ -417,8 +424,11 @@ bash scripts/test-check-architecture.sh
 
 - **`check`**: `gofmt` (fails on any unformatted file), `go mod tidy -diff`,
   `go vet`, `staticcheck`, `govulncheck`, `go test -race -count=1 ./...`,
-  then a cross-build of `./cmd/gruntled` for `linux/amd64`, `linux/arm64`,
-  `darwin/amd64`, `darwin/arm64` and `windows/amd64`.
+  the SARIF schema check, then a `release-build` step that runs
+  `scripts/build-release.sh` for all six release targets (`linux/amd64`,
+  `linux/arm64`, `darwin/amd64`, `darwin/arm64`, `windows/amd64`,
+  `windows/arm64`), so archiving, ldflags and checksums are exercised on
+  every run.
 - **`architecture`**: `scripts/check-architecture.sh` followed by
   `scripts/test-check-architecture.sh`.
 

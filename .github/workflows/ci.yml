@@ -57,12 +57,11 @@ jobs:
             exit 1
           fi
           go run github.com/santhosh-tekuri/jsonschema/cmd/jv@v0.7.0 cmd/gruntled/testdata/sarif-schema-2.1.0.json "$RUNNER_TEMP/out.sarif"
-      - name: cross-build
-        run: |
-          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64; do
-            echo "build $target"
-            GOOS=${target%/*} GOARCH=${target#*/} go build -o /dev/null ./cmd/gruntled
-          done
+      - name: release-build
+        # Full release packaging on every run (all 6 targets, ldflags,
+        # archives, checksums, host --version smoke), so the release path
+        # never fails for the first time at tag time.
+        run: bash scripts/build-release.sh v0.0.0-ci "$(git rev-parse --short=12 HEAD)" "$RUNNER_TEMP/dist"
 
   architecture:
     runs-on: ubuntu-latest
