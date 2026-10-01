@@ -52,16 +52,11 @@ already shipped (Phases 5-6) or explicitly deferred (REQUIREMENTS.md "Future"/"O
   changes nothing in the presenter."*
 
 ### Release artifacts & build matrix / REL-01
-- **Target matrix is the 5 targets already established everywhere in this codebase**:
-  `linux/amd64`, `linux/arm64`, `darwin/amd64`, `darwin/arm64`, `windows/amd64` — matching
-  `ci.yml`'s cross-build job, README's "Building, testing and checking locally" section, and
-  every `check-architecture.sh` / plan reference to "every release target." **Not** 6 targets.
-  ROADMAP's and REQUIREMENTS.md's prose ("windows on amd64 and arm64") reads as if it means both
-  Windows architectures, but it is almost certainly loose wording carried from a template, not a
-  deliberate decision to add `windows/arm64` — no PROJECT.md/REQUIREMENTS.md/CONTEXT text anywhere
-  motivates a 6th target, and 03-02-PLAN.md explicitly enumerates the 5-target list as "EVERY
-  release target." **Flagged for human confirmation** — if a human actually wants
-  `windows/arm64`, it is one extra matrix entry, not a redesign.
+- **Target matrix is 6 targets**: `linux/amd64`, `linux/arm64`, `darwin/amd64`, `darwin/arm64`,
+  `windows/amd64`, `windows/arm64`.
+  USER DECISION 2026-10-01: windows/arm64 ADDED as 6th target (matches ROADMAP/REQUIREMENTS
+  literal wording). Target list = linux/amd64, linux/arm64, darwin/amd64, darwin/arm64,
+  windows/amd64, windows/arm64.
 - `CGO_ENABLED=0` explicit in the release build env — all deps (`hcl/v2`, `go-cty`) are pure Go,
   so this changes nothing functionally but makes "static binaries" (REL-01's own word) an explicit,
   documented build property instead of an accident.
@@ -81,7 +76,7 @@ already shipped (Phases 5-6) or explicitly deferred (REQUIREMENTS.md "Future"/"O
   (the cross-build step already in `ci.yml`) — a hand-rolled matrix continues that style instead
   of introducing a new tool and a new config file format; (3) "CI simple but correct, few jobs
   each able to really fail" favors fewer moving parts.
-- The no-net/no-exec binary proof for the 5 release targets already exists and already runs per
+- The no-net/no-exec binary proof for the 6 release targets already exists and already runs per
   `GOOS`/`GOARCH` (`scripts/check-architecture.sh` Step 9, `binary-no-net-no-exec`, documented in
   `docs/cli.md`). `release.yml` does not reimplement this; it gates the release job on the
   existing `check`/`architecture` CI jobs having passed for that commit (`needs:` / requiring the
@@ -191,8 +186,8 @@ already shipped (Phases 5-6) or explicitly deferred (REQUIREMENTS.md "Future"/"O
   (or wherever it's cross-linked from).
 - Whether `version`/`commit` live in `main.go` directly or a tiny sibling `version.go` in the same
   `cmd/gruntled` package — purely a file-split call, not an architectural one.
-- Exact `release.yml` job/step names, and whether the 5-target matrix build is one job with a
-  `strategy.matrix` or a shell loop mirroring `ci.yml`'s existing cross-build loop (either keeps
+- Exact `release.yml` job/step names, and whether the 6-target matrix build (6 legs / matrix
+  entries) is one job with a `strategy.matrix` or a shell loop mirroring `ci.yml`'s existing cross-build loop (either keeps
   the target list and action pins identical; matrix is likely cleaner since each leg can publish
   its own artifact in parallel).
 - Exact wording of the `--generate-notes` release body vs adding one static sentence of
@@ -212,10 +207,10 @@ already shipped (Phases 5-6) or explicitly deferred (REQUIREMENTS.md "Future"/"O
   `main.go:191`) is the one line Phase 7 must change to wire the real version through — Phase 6's
   own CONTEXT already names this as the Phase 7 handoff.
 - `scripts/check-architecture.sh` Step 9 (`binary-no-net-no-exec`) already runs `go list -deps`
-  per `GOOS`/`GOARCH` for exactly the 5-target list (`linux/amd64`, `linux/arm64`, `darwin/amd64`,
-  `darwin/arm64`, `windows/amd64`) — this is the existing proof `release.yml` should depend on
+  per `GOOS`/`GOARCH` for exactly the 6-target list (`linux/amd64`, `linux/arm64`, `darwin/amd64`,
+  `darwin/arm64`, `windows/amd64`, `windows/arm64`) — this is the existing proof `release.yml` should depend on
   rather than duplicate.
-- `ci.yml`'s existing `cross-build` step (loop over the same 5 targets, `go build -o /dev/null`)
+- `ci.yml`'s existing `cross-build` step (loop over the same targets, 6 once windows/arm64 is added, `go build -o /dev/null`)
   is the direct template for `release.yml`'s real matrix build, minus the `/dev/null` and plus
   ldflags + archiving + checksums.
 - `ci.yml`'s `sarif-schema` and `sarif-upload` jobs are the existing pattern for "pin a
@@ -265,9 +260,6 @@ things to "specific ideas" are carried-forward constraints already locked elsewh
 <deferred>
 ## Deferred Ideas
 
-- `windows/arm64` as a 6th release target, if a human actually wants the literal ROADMAP/
-  REQUIREMENTS wording honored rather than the established 5-target precedent (flagged above —
-  easy to add later, one matrix entry).
 - Signing / SBOM / provenance: cosign signatures, SLSA build provenance, GitHub artifact
   attestations for release binaries.
 - Package-manager channels (Homebrew, apt, Scoop, winget) — REQUIREMENTS.md "Out of Scope" already

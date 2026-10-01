@@ -555,8 +555,8 @@ EOF
 run_case "binary-start-process" "$copy" binary-no-net-no-exec
 
 # --- binary-exec-windows-file: os/exec only in a _windows.go file ---------
-# A linux go list never sees this file; only the windows/amd64 iteration of
-# the release-target loop does, so this proves the loop covers non-host
+# A linux go list never sees this file; only the windows iterations of
+# the release-target loop do, so this proves the loop covers non-host
 # targets.
 copy=$(mkcopy)
 cat >"$copy/cmd/gruntled/zz_probe_windows.go" <<'EOF'
@@ -565,6 +565,17 @@ package main
 import _ "os/exec"
 EOF
 run_case "binary-exec-windows-file" "$copy" binary-no-net-no-exec
+
+# --- binary-exec-windows-arm64-file: os/exec only in a _windows_arm64.go ---
+# Only the windows/arm64 iteration compiles this file (neither linux nor
+# windows/amd64 sees it), so this proves the 6th release target is iterated.
+copy=$(mkcopy)
+cat >"$copy/cmd/gruntled/zz_probe_windows_arm64.go" <<'EOF'
+package main
+
+import _ "os/exec"
+EOF
+run_case "binary-exec-windows-arm64-file" "$copy" binary-no-net-no-exec
 
 # --- binary-exec-in-test-allowed: test-only os/exec is not in the binary --
 copy=$(mkcopy)

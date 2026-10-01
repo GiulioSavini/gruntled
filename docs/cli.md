@@ -535,7 +535,7 @@ including unit instead.
   calls `os.StartProcess` or `syscall.ForkExec`/`Exec`. The
   `binary-no-net-no-exec` rule in `scripts/check-architecture.sh` enforces
   this. The proof covers every release target (linux/amd64, linux/arm64,
-  darwin/amd64, darwin/arm64, windows/amd64), because the rule runs
+  darwin/amd64, darwin/arm64, windows/amd64, windows/arm64), because the rule runs
   `go list -deps` once per GOOS/GOARCH, not only on the build host. The import
   half is exact; the process-spawn half is a source scan for qualified calls,
   so it is a strong guard, not a formal proof.

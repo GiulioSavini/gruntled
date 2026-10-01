@@ -463,8 +463,10 @@ fi
 # halves, both evaluated for EVERY release target, not only the build
 # host: go list only sees the files the current GOOS/GOARCH compiles, so a
 # zz_windows.go importing os/exec is invisible to a linux go list and
-# visible only to the windows/amd64 iteration below. Keep release_targets
-# identical to the release cross-build target list (03-03/03-05).
+# visible only to the windows iterations below, and a zz_windows_arm64.go
+# only to the windows/arm64 one. Keep release_targets identical to the
+# copy in scripts/build-release.sh, the only other list of release
+# targets (cmd/gruntled/release_test.go checks they match).
 #
 # 1. Import deny-list over go list -deps: no net, net/*, os/exec, plugin or
 #    crypto/tls. No -test: test-only deps (testscript) legitimately use
@@ -481,9 +483,10 @@ fi
 #    identifiers (a conservative false positive, fixed by rewording the
 #    comment). The import deny-list half has no such gap. The self-test
 #    cases binary-os-exec, binary-net, binary-start-process,
-#    binary-exec-windows-file and binary-exec-in-test-allowed pin exactly
+#    binary-exec-windows-file, binary-exec-windows-arm64-file and
+#    binary-exec-in-test-allowed pin exactly
 #    what is covered.
-release_targets="linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64"
+release_targets="linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64"
 bin_violations=""
 for target in $release_targets; do
   t_goos=${target%/*}
