@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.2
 milestone_name: CI-Ready
-status: executing
-stopped_at: Completed 07-04-PLAN.md
-last_updated: "2026-10-01T12:48:22.363Z"
-last_activity: 2026-10-01 — completed 07-04 (pre-commit hook, docs/ci.md recipes, recipe-check CI job + TestCIDoc)
+status: complete
+stopped_at: Completed 07-05-PLAN.md
+last_updated: "2026-10-01T12:58:10.834Z"
+last_activity: 2026-10-01 — completed 07-05 (master pushed, CI green, v0.2.0 released and verified)
 progress:
   total_phases: 3
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 17
-  completed_plans: 16
+  completed_plans: 17
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-29)
 
 **Core value:** Tell the user, before they run anything slow, that `dependency.X.outputs.Y` does not exist in the module it points to.
-**Current focus:** v0.2 CI-Ready — Phase 7 (Distribution & CI Integration) executing, 07-04 complete
+**Current focus:** v0.2 CI-Ready — Phase 7 complete; v0.2.0 released
 
 ## Current Position
 
 Phase: 7 of 7 (Distribution & CI Integration) — v0.2 covers phases 5-7
-Plan: 4 of 5 complete (07-01, 07-02, 07-03, 07-04 done)
-Status: Executing Phase 7
-Last activity: 2026-10-01 — completed 07-04 (pre-commit hook, docs/ci.md recipes, recipe-check CI job + TestCIDoc)
+Plan: 5 of 5 complete (07-01..07-05 done)
+Status: Phase 7 complete — milestone v0.2 ready to close
+Last activity: 2026-10-01 — completed 07-05 (master pushed, CI green, v0.2.0 released and verified)
 
 ## Performance Metrics
 
@@ -74,6 +74,7 @@ Last activity: 2026-10-01 — completed 07-04 (pre-commit hook, docs/ci.md recip
 | Phase 07 P02 | 19min | 3 tasks | 9 files |
 | Phase 07 P03 | 5min | 1 tasks | 1 files |
 | Phase 07 P04 | 8min | 3 tasks | 5 files |
+| Phase 07 P05 | 15min | 3 tasks | 0 files |
 
 ## Accumulated Context
 
@@ -145,6 +146,7 @@ Recent decisions affecting current work:
 - [Phase 07]: 07-03: release.yml re-runs check-architecture.sh + go test on the tagged commit (needs: cannot span workflows); guard = vX.Y.Z[-suffix] regex + tag on master; single gh release create at end, --prerelease for suffixed tags
 - [Phase 07]: docs/ci.md: go install @tag prints gruntled dev (none); only release binaries carry the tag version
 - [Phase 07]: recipe-check job proves docs/ci.md recipes (clean 0, broken exactly 1, pre-commit try-repo); TestCIDoc guards drift
+- [Phase 07]: First release tag v0.2.0 placed on CI-green SHA 27cc603 after user approval
 
 ### Pending Todos
 
@@ -156,6 +158,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-10-01T12:48:22.360Z
-Stopped at: Completed 07-04-PLAN.md
+Last session: 2026-10-01T12:58:10.831Z
+Stopped at: Completed 07-05-PLAN.md
 Resume file: None

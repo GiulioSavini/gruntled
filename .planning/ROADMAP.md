@@ -24,7 +24,7 @@ layer must not import HCL and analyzers stay pure.
 
 - [x] **Phase 5: Graph Diagnostics** - `GRT002` (`config_path` to no unit) and `GRT003` (dependency cycle) as pure analyzers over the existing graph, validated on the three-repo corpus (completed 2026-09-30)
 - [x] **Phase 6: Machine-Readable Output** - `gruntled graph --json` and `gruntled check --format sarif`, both accepted by their consumers, over the final rule set (completed 2026-10-01)
-- [ ] **Phase 7: Distribution & CI Integration** - Version injection, tagged static-binary releases, the pre-commit hook and GitHub Actions / GitLab CI recipes
+- [x] **Phase 7: Distribution & CI Integration** - Version injection, tagged static-binary releases, the pre-commit hook and GitHub Actions / GitLab CI recipes
 
 <details>
 <summary>✅ v0.1 Validated Engine (Phases 1-4) - SHIPPED 2026-09-29</summary>
@@ -83,7 +83,7 @@ See `milestones/v0.1-ROADMAP.md`.
 - [x] 07-02-PLAN.md — windows/arm64 6th target (user decision), build-release.sh, CI packaging dry run
 - [x] 07-03-PLAN.md — release.yml tag-triggered pipeline (SHA-pinned)
 - [x] 07-04-PLAN.md — pre-commit hook, docs/ci.md recipes, recipe-check CI job
-- [ ] 07-05-PLAN.md — checkpoint: user-approved push of master and release tag, verify release
+- [x] 07-05-PLAN.md — checkpoint: user-approved push of master and release tag, verify release
 
 ## Progress
 
@@ -91,4 +91,4 @@ See `milestones/v0.1-ROADMAP.md`.
 |-------|----------------|--------|-----------|
 | 5. Graph Diagnostics | 7/7 | Complete    | 2026-09-30 |
 | 6. Machine-Readable Output | 5/5 | Complete    | 2026-10-01 |
-| 7. Distribution & CI Integration | 4/5 | In Progress | - |
+| 7. Distribution & CI Integration | 5/5 | Complete    | 2026-10-01 |
