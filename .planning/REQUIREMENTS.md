@@ -17,7 +17,7 @@ read-only constraints in PROJECT.md apply to every requirement below.
 
 ### Integration
 
-- [x] **INT-01**: User runs `gruntled graph --json` and gets one deterministic document with a schema version, units, modules, dependency edges and unknown reasons, all paths repository-relative
+- [ ] **INT-01**: User runs `gruntled graph --json` and gets one deterministic document with a schema version, units, modules, dependency edges and unknown reasons, all paths repository-relative
 - [ ] **INT-02**: User runs `gruntled check --format sarif` and gets a SARIF 2.1.0 document that `github/codeql-action/upload-sarif` accepts, with one rule per `GRT` code and repository-relative locations
 - [ ] **INT-03**: User adds gruntled to `.pre-commit-config.yaml` with a single hook entry, served by a `.pre-commit-hooks.yaml` in this repository
 - [ ] **INT-04**: User follows a documented GitHub Actions recipe (check plus SARIF upload) and a GitLab CI recipe; the GitHub recipe runs in this repository's own CI
@@ -77,7 +77,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MORE-01 | Phase 5 | Complete |
 | MORE-02 | Phase 5 | Complete |
 | MORE-06 | Phase 5 | Complete |
-| INT-01 | Phase 6 | Complete |
+| INT-01 | Phase 6 | In Progress |
 | INT-02 | Phase 6 | Pending |
 | INT-03 | Phase 7 | Pending |
 | INT-04 | Phase 7 | Pending |
