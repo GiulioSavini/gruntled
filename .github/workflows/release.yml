@@ -1,0 +1,87 @@
+name: release
+
+# Publishes the 6 release archives + checksums.txt for a pushed tag vX.Y.Z[-pre].
+#
+# "Requires green CI" cannot be expressed with needs: (it does not span
+# workflows), so the proofs the binaries depend on are re-run here on the
+# tagged commit before anything is built. Nothing is published unless every
+# earlier step passed, and publication is a single gh release create at the
+# end, so a failure leaves no partial release.
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # Build with exactly the Go version from go.mod; never switch silently.
+  GOTOOLCHAIN: local
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # only this job; gh release create needs it
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: guard
+        # Tag must be vX.Y.Z or vX.Y.Z-suffix and point at a commit on master.
+        run: |
+          if ! [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "tag '$GITHUB_REF_NAME' does not match vX.Y.Z[-suffix]"
+            exit 1
+          fi
+          git fetch origin master
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/master; then
+            echo "tag '$GITHUB_REF_NAME' ($GITHUB_SHA) is not on master"
+            exit 1
+          fi
+      - name: proofs
+        # Re-run because needs: cannot span workflows. check-architecture.sh
+        # Step 9 covers all 6 release targets, so the no-net/no-exec proof
+        # holds for exactly the commit being shipped.
+        run: |
+          bash scripts/check-architecture.sh
+          go test -count=1 ./...
+      - name: build
+        run: bash scripts/build-release.sh "$GITHUB_REF_NAME" "$(git rev-parse --short=12 HEAD)" "$RUNNER_TEMP/dist"
+      - name: smoke
+        run: |
+          count=$(find "$RUNNER_TEMP/dist" -maxdepth 1 -type f | wc -l)
+          if [ "$count" -ne 7 ]; then
+            echo "expected 7 files in dist (6 archives + checksums.txt), got $count"
+            ls -l "$RUNNER_TEMP/dist"
+            exit 1
+          fi
+          x="$RUNNER_TEMP/smoke"
+          mkdir -p "$x"
+          tar -xzf "$RUNNER_TEMP/dist/gruntled_${GITHUB_REF_NAME}_linux_amd64.tar.gz" -C "$x"
+          out=$("$x/gruntled" --version)
+          echo "$out"
+          case "$out" in
+            "gruntled $GITHUB_REF_NAME ("*) ;;
+            *)
+              echo "unexpected --version output"
+              exit 1
+              ;;
+          esac
+      - name: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pre=()
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
+            pre=(--prerelease)
+          fi
+          gh release create "$GITHUB_REF_NAME" --generate-notes --verify-tag "${pre[@]}" "$RUNNER_TEMP"/dist/*
