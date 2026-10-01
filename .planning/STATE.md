@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.2
 milestone_name: CI-Ready
-status: Executing Phase 7
-stopped_at: Completed 07-03-PLAN.md
-last_updated: "2026-10-01T12:42:41.000Z"
-last_activity: 2026-10-01 — completed 07-03 (release.yml tag-triggered pipeline, SHA-pinned, statically validated)
+status: executing
+stopped_at: Completed 07-04-PLAN.md
+last_updated: "2026-10-01T12:48:22.363Z"
+last_activity: 2026-10-01 — completed 07-04 (pre-commit hook, docs/ci.md recipes, recipe-check CI job + TestCIDoc)
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 17
-  completed_plans: 15
+  completed_plans: 16
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-29)
 
 **Core value:** Tell the user, before they run anything slow, that `dependency.X.outputs.Y` does not exist in the module it points to.
-**Current focus:** v0.2 CI-Ready — Phase 7 (Distribution & CI Integration) executing, 07-03 complete
+**Current focus:** v0.2 CI-Ready — Phase 7 (Distribution & CI Integration) executing, 07-04 complete
 
 ## Current Position
 
 Phase: 7 of 7 (Distribution & CI Integration) — v0.2 covers phases 5-7
-Plan: 3 of 5 complete (07-01, 07-02, 07-03 done)
+Plan: 4 of 5 complete (07-01, 07-02, 07-03, 07-04 done)
 Status: Executing Phase 7
-Last activity: 2026-10-01 — completed 07-03 (release.yml tag-triggered pipeline, SHA-pinned, statically validated)
+Last activity: 2026-10-01 — completed 07-04 (pre-commit hook, docs/ci.md recipes, recipe-check CI job + TestCIDoc)
 
 ## Performance Metrics
 
@@ -73,6 +73,7 @@ Last activity: 2026-10-01 — completed 07-03 (release.yml tag-triggered pipelin
 | Phase 07 P01 | 12min | 2 tasks | 8 files |
 | Phase 07 P02 | 19min | 3 tasks | 9 files |
 | Phase 07 P03 | 5min | 1 tasks | 1 files |
+| Phase 07 P04 | 8min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -142,6 +143,8 @@ Recent decisions affecting current work:
 - [Phase 07]: 07-02: USER DECISION 2026-10-01 windows/arm64 is the 6th release target; release list lives only in check-architecture.sh Step 9 and build-release.sh, kept equal by TestReleaseTargetsInSync
 - [Phase 07]: 07-02: scripts/build-release.sh is the single packaging path (gruntled_<version>_<os>_<arch>.tar.gz|zip + checksums.txt, host --version smoke); ci.yml release-build runs it on every push/PR with v0.0.0-ci
 - [Phase 07]: 07-03: release.yml re-runs check-architecture.sh + go test on the tagged commit (needs: cannot span workflows); guard = vX.Y.Z[-suffix] regex + tag on master; single gh release create at end, --prerelease for suffixed tags
+- [Phase 07]: docs/ci.md: go install @tag prints gruntled dev (none); only release binaries carry the tag version
+- [Phase 07]: recipe-check job proves docs/ci.md recipes (clean 0, broken exactly 1, pre-commit try-repo); TestCIDoc guards drift
 
 ### Pending Todos
 
@@ -153,6 +156,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-10-01T12:42:40.998Z
-Stopped at: Completed 07-03-PLAN.md
+Last session: 2026-10-01T12:48:22.360Z
+Stopped at: Completed 07-04-PLAN.md
 Resume file: None
