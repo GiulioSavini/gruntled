@@ -66,7 +66,7 @@ See `milestones/v0.1-ROADMAP.md`.
 - [x] 06-01-PLAN.md — domain Edge extension + graph JSON presenter
 - [x] 06-02-PLAN.md — SARIF presenter
 - [x] 06-03-PLAN.md — CLI wiring (graph --json, --format sarif), help, docs usage, loops
-- [ ] 06-04-PLAN.md — goldens, SARIF structure test, Graph JSON / SARIF docs
+- [x] 06-04-PLAN.md — goldens, SARIF structure test, Graph JSON / SARIF docs
 - [ ] 06-05-PLAN.md — vendored schema, fixture, CI schema check and upload-sarif job
 
 ### Phase 7: Distribution & CI Integration
@@ -85,5 +85,5 @@ See `milestones/v0.1-ROADMAP.md`.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 5. Graph Diagnostics | 7/7 | Complete    | 2026-09-30 |
-| 6. Machine-Readable Output | 3/5 | In Progress | - |
+| 6. Machine-Readable Output | 4/5 | In Progress | - |
 | 7. Distribution & CI Integration | 0/TBD | Not started | - |

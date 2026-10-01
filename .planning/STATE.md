@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.2
 milestone_name: CI-Ready
 status: executing
-stopped_at: Completed 06-03-PLAN.md
-last_updated: "2026-10-01T09:47:48.479Z"
-last_activity: "2026-10-01 — completed 06-03 (CLI graph --json, check --format sarif)"
+stopped_at: Completed 06-04-PLAN.md
+last_updated: "2026-10-01T09:51:51.455Z"
+last_activity: "2026-10-01 — completed 06-04 (graph/SARIF goldens, SARIF structure test, output docs)"
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 12
-  completed_plans: 10
+  completed_plans: 11
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-09-29)
 ## Current Position
 
 Phase: 6 of 7 (Machine-Readable Output) — v0.2 covers phases 5-7
-Plan: 3 of 5 complete (06-01, 06-02, 06-03)
-Status: In progress — 06-03 done (graph --json, check --format sarif wired in CLI); next 06-04
-Last activity: 2026-10-01 — completed 06-03 (CLI graph --json, check --format sarif)
+Plan: 4 of 5 complete (06-01, 06-02, 06-03, 06-04)
+Status: In progress — 06-04 done (goldens, SARIF structure/doc-sync tests, Graph JSON and SARIF docs); next 06-05
+Last activity: 2026-10-01 — completed 06-04 (graph/SARIF goldens, SARIF structure test, output docs)
 
 ## Performance Metrics
 
@@ -68,6 +68,7 @@ Last activity: 2026-10-01 — completed 06-03 (CLI graph --json, check --format 
 | Phase 06 P01 | 6min | 2 tasks | 4 files |
 | Phase 06 P02 | 10min | 2 tasks | 3 files |
 | Phase 06 P03 | 9min | 2 tasks | 8 files |
+| Phase 06 P04 | 10min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -129,6 +130,7 @@ Recent decisions affecting current work:
 - [Phase 06]: SARIF: unit notifications point at <unit>/terragrunt.hcl, module notifications have no location; unknown rule code -> error, nothing written
 - [Phase 06]: graph builds via indexing.Build without analyzers; exit codes 0/2/3 only, help shows 3 exit-code lines
 - [Phase 06]: check and graph share parseArgs/openRepo/writeOut in cmd/gruntled
+- [Phase 06]: SARIF doc-sync test in cmd/gruntled/sarif_test.go: docs/cli.md GRT headings must equal emitted rule shortDescriptions
 
 ### Pending Todos
 
@@ -140,6 +142,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-10-01T09:47:48.478Z
-Stopped at: Completed 06-03-PLAN.md
+Last session: 2026-10-01T09:51:51.453Z
+Stopped at: Completed 06-04-PLAN.md
 Resume file: None
