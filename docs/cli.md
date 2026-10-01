@@ -208,6 +208,121 @@ Example: the repository above plus a `dns` unit with a remote
 }
 ```
 
+### Graph JSON
+
+`gruntled graph --json` writes the repository graph as a single JSON
+document to stdout and nothing to stderr. It runs no analyzer, so it carries
+no diagnostics. The schema is versioned; this is version 1.
+
+| Key | Content |
+|-----|---------|
+| `version` | Schema version, `1`. |
+| `kind` | Always `"graph"`. |
+| `units[]` | Every unit, sorted by path. |
+| `modules[]` | Every module a unit points at, sorted by path. |
+| `edges[]` | Every resolved dependency, block and paths alike. Sorted by `from`, then position, then kind, then `to`. |
+| `unresolved_dependencies[]` | Dependencies whose target gruntled could not resolve. Sorted by `from`, then position. |
+| `summary` | `units`, `resolved`, `module_unknown`, `config_unknown`, `unknown_modules`. |
+
+A `position` is always the full object `{ "file", "line", "column" }`, with
+the same repo-relative `/` paths and 1-based byte columns as `check`.
+
+`units[]`:
+
+| Field | Content |
+|-------|---------|
+| `path` | Unit directory. |
+| `status` | `resolved`, `module-unknown` or `config-unknown`. |
+| `module` | Module path. Omitted for `module-unknown` and `config-unknown` units. |
+| `reason` | Why the unit is unknown. Omitted for `resolved`. |
+| `references[]` | `dependency.X.outputs.Y` reads: `dependency`, `output`, `position`. |
+
+`modules[]`:
+
+| Field | Content |
+|-------|---------|
+| `path` | Module directory. |
+| `known` | `true` when gruntled read the module's surface. |
+| `variables[]`, `outputs[]` | Declared names, sorted. `[]` when unknown. |
+| `reason` | Why the surface is unknown. Omitted when `known` is `true`. |
+
+`edges[]`:
+
+| Field | Content |
+|-------|---------|
+| `kind` | `block` (a `dependency` block) or `paths` (a `dependencies { paths }` entry). |
+| `from`, `to` | Unit paths. `to` is the resolved directory, which may hold no unit. |
+| `position` | The `config_path` value, or the paths entry. |
+| `name` | The `dependency` block label. Omitted for `paths` edges. |
+| `target_state` | `has-config`, `no-config`, `dir-missing` or `unknown`. |
+| `enabled` | Tristate: `true`, `false` or `unknown` (not a literal). `paths` edges are always `"true"`. |
+| `skip_outputs` | Tristate, as `enabled`. `paths` edges are always `"false"`. |
+
+`unresolved_dependencies[]`: `from`, `kind`, `name` (omitted for `paths`),
+`position`, `reason`. A `dependency` block whose `config_path` is not a
+literal lands here, and so does a dynamic `paths` attribute. A `paths`
+literal that is not a list yields no edges and nothing here.
+
+Stability:
+
+- Adding a field or a key is not a breaking change and does not bump
+  `version`. Consumers must ignore fields they do not know.
+- Removing or renaming a field, or changing its type or meaning, bumps
+  `version`.
+- `reason` values are human-readable text, not a stable enum. Do not match
+  on them.
+- Deferred, and additive later: `mock_outputs`, `mock_merge_strategy_with_state`
+  and `mock_outputs_allowed_terraform_commands` on edges.
+
+Empty lists print as `[]`, never `null`. HTML characters are not escaped.
+
+### SARIF
+
+`--format sarif` writes one SARIF 2.1.0 log with exactly one run to stdout,
+for GitHub code scanning and other SARIF consumers. There is no stderr
+summary. Exit codes are the same as for `text` and `json`. On exit 3 nothing
+is printed to stdout, only the stderr message.
+
+Rules, in `tool.driver.rules` in code order (`ruleIndex` indexes this list):
+
+| Id | Name | `shortDescription` | Level |
+|----|------|--------------------|-------|
+| `GRT001` | `DependencyOutputNotDeclared` | dependency output not declared | `error` |
+| `GRT002` | `DependencyTargetHasNoUnit` | dependency target has no unit | `error` |
+| `GRT003` | `DependencyCycle` | dependency cycle | `error` |
+| `GRT100` | `HclSyntaxError` | HCL syntax error | `error` |
+
+`shortDescription` is the title of the rule's heading under
+[Diagnostics](#diagnostics), and `helpUri` links to it. A result's `level`
+is its severity: `error` → `error`, `warning` → `warning`, anything else
+`note`. Its `message.text` is the diagnostic message, with ` (unit U)`
+appended as in text mode, so the per-unit copies of a finding in a shared
+include stay apart.
+
+Locations:
+
+- `uri` is relative to the analysed path, percent-encoded (RFC 3986, UTF-8,
+  `/` kept), with `uriBaseId: "%SRCROOT%"`. No `originalUriBaseIds` is
+  emitted, because an absolute path would break determinism. GitHub resolves
+  `%SRCROOT%` to the checkout root, so either run gruntled on the repository
+  root, or set the upload action's `checkout_path` to the analysed directory.
+- `region` has `startLine` and `startColumn`, both 1-based. The run declares
+  `columnKind: "unicodeCodePoints"`, but gruntled reports byte columns: exact
+  on ASCII lines, off on lines with non-ASCII characters before the anchor.
+- No `partialFingerprints`. `upload-sarif` computes `primaryLocationLineHash`
+  from the checked-out source; a second fingerprint from gruntled would be an
+  identity that differs from the diagnostic's own.
+- No `relatedLocations` (cycle members, GRT001's target module): the
+  diagnostic does not carry them yet.
+
+Unknown units and modules are not results. They are `note`-level entries in
+`invocations[0].toolExecutionNotifications`, sorted by path: a unit points at
+`<dir>/terragrunt.hcl` (no region), a module has no location.
+`executionSuccessful` is always `true` and `exitCode` is omitted. `results`
+and `toolExecutionNotifications` are `[]` when empty, never `null`. The log
+has no timestamps, GUIDs or `automationDetails` (use the upload action's
+`category`), so the same repository gives identical bytes.
+
 ## Diagnostics
 
 ### GRT001: dependency output not declared (error)
@@ -427,3 +542,10 @@ including unit instead.
   GRT002 and GRT003.
 - `dependencies { paths }` from includes are merged as a union (both shallow
   and deep merge), as Terragrunt does; `no_merge` includes contribute nothing.
+- SARIF columns are byte columns although the run declares
+  `unicodeCodePoints`: a line with non-ASCII characters before the anchor
+  gets a column that is too large.
+- SARIF has no `partialFingerprints`; GitHub's line hash identifies alerts,
+  so editing the flagged line can reopen an alert as new.
+- SARIF has no `relatedLocations`: cycle members and GRT001's target module
+  appear only in the message.
