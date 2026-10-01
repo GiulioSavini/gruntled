@@ -62,7 +62,12 @@ See `milestones/v0.1-ROADMAP.md`.
   2. `gruntled check --format sarif` prints a SARIF 2.1.0 document with one rule per `GRT` code and repository-relative locations
   3. `github/codeql-action/upload-sarif` accepts that document without schema errors
   4. Exit codes of `check` are unchanged by `--format sarif`, and `graph` writes nothing inside the analysed repository
-**Plans**: TBD
+**Plans**: 5 plans
+- [ ] 06-01-PLAN.md — domain Edge extension + graph JSON presenter
+- [ ] 06-02-PLAN.md — SARIF presenter
+- [ ] 06-03-PLAN.md — CLI wiring (graph --json, --format sarif), help, docs usage, loops
+- [ ] 06-04-PLAN.md — goldens, SARIF structure test, Graph JSON / SARIF docs
+- [ ] 06-05-PLAN.md — vendored schema, fixture, CI schema check and upload-sarif job
 
 ### Phase 7: Distribution & CI Integration
 **Goal**: A team can install gruntled from a tagged release and wire it into pre-commit and CI by copying a documented snippet.
