@@ -43,6 +43,20 @@ jobs:
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
       - name: test
         run: go test -race -count=1 ./...
+      - name: sarif-schema
+        # Real SARIF output must validate against the vendored OASIS 2.1.0
+        # schema. The fixture has errors on purpose, so exit 1 is required.
+        run: |
+          go build -o "$RUNNER_TEMP/gruntled" ./cmd/gruntled
+          set +e
+          "$RUNNER_TEMP/gruntled" check --format sarif cmd/gruntled/testdata/sarif-fixture > "$RUNNER_TEMP/out.sarif"
+          rc=$?
+          set -e
+          if [ "$rc" -ne 1 ]; then
+            echo "expected exit 1 on the fixture, got $rc"
+            exit 1
+          fi
+          go run github.com/santhosh-tekuri/jsonschema/cmd/jv@v0.7.0 cmd/gruntled/testdata/sarif-schema-2.1.0.json "$RUNNER_TEMP/out.sarif"
       - name: cross-build
         run: |
           for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64; do
