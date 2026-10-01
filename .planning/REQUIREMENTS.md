@@ -25,7 +25,7 @@ read-only constraints in PROJECT.md apply to every requirement below.
 ### Release
 
 - [ ] **REL-01**: User downloads a static binary for linux, darwin and windows on amd64 and arm64 from a tagged GitHub release, with a checksums file
-- [ ] **REL-02**: User runs `gruntled --version` and gets the release version and commit, injected at build time
+- [x] **REL-02**: User runs `gruntled --version` and gets the release version and commit, injected at build time
 
 ## Future Requirements
 
@@ -82,7 +82,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INT-03 | Phase 7 | Pending |
 | INT-04 | Phase 7 | Pending |
 | REL-01 | Phase 7 | Pending |
-| REL-02 | Phase 7 | Pending |
+| REL-02 | Phase 7 | Complete |
 
 **Coverage:**
 - v0.2 requirements: 9 total

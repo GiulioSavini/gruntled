@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.2
 milestone_name: CI-Ready
-status: Ready to discuss/plan Phase 7
-stopped_at: Phase 7 context gathered
-last_updated: "2026-10-01T10:13:20.113Z"
-last_activity: 2026-10-01 — completed 06-05 (SARIF schema validation in CI, upload-sarif proof on master)
+status: Executing Phase 7
+stopped_at: Completed 07-01-PLAN.md
+last_updated: "2026-10-01T12:15:15.735Z"
+last_activity: 2026-10-01 — completed 07-01 (--version with ldflags injection, clean check fixture)
 progress:
   total_phases: 3
   completed_phases: 2
-  total_plans: 12
-  completed_plans: 12
+  total_plans: 17
+  completed_plans: 13
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-29)
 
 **Core value:** Tell the user, before they run anything slow, that `dependency.X.outputs.Y` does not exist in the module it points to.
-**Current focus:** v0.2 CI-Ready — Phase 6 (Machine-Readable Output) all plans complete, awaiting phase verification
+**Current focus:** v0.2 CI-Ready — Phase 7 (Distribution & CI Integration) executing, 07-01 complete
 
 ## Current Position
 
 Phase: 7 of 7 (Distribution & CI Integration) — v0.2 covers phases 5-7
-Plan: Not started (Phase 6 complete and verified 2026-10-01)
-Status: Ready to discuss/plan Phase 7
-Last activity: 2026-10-01 — completed 06-05 (SARIF schema validation in CI, upload-sarif proof on master)
+Plan: 1 of 5 complete (07-01 done)
+Status: Executing Phase 7
+Last activity: 2026-10-01 — completed 07-01 (--version with ldflags injection, clean check fixture)
 
 ## Performance Metrics
 
@@ -70,6 +70,7 @@ Last activity: 2026-10-01 — completed 06-05 (SARIF schema validation in CI, up
 | Phase 06 P03 | 9min | 2 tasks | 8 files |
 | Phase 06 P04 | 10min | 2 tasks | 4 files |
 | Phase 06 P05 | 15min | 3 tasks | 7 files |
+| Phase 07 P01 | 12min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -134,6 +135,8 @@ Recent decisions affecting current work:
 - [Phase 06]: SARIF doc-sync test in cmd/gruntled/sarif_test.go: docs/cli.md GRT headings must equal emitted rule shortDescriptions
 - [Phase 06]: 06-05: repo made public for code scanning; checkout_path does NOT rewrite SARIF URIs, CI jq-prefixes artifactLocation.uri with fixture path
 - [Phase 06]: 06-05: SARIF URIs relative to analysed dir; subdirectory analysis needs URI prefix or run from repo root; Phase 7 CI recipes must handle this
+- [Phase 07]: 07-01: --version prints 'gruntled <version> (<commit>)' from -X main.version/main.commit (defaults dev/none); ReadBuildInfo fallback dropped (local go build stamps pseudo-version), so go install @tag prints dev (none)
+- [Phase 07]: 07-01: cmd/gruntled/testdata/clean-fixture is the exit-0 fixture; TestFixtureExitCodes pins clean=0, sarif-fixture=1
 
 ### Pending Todos
 
@@ -145,6 +148,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-10-01T10:13:20.111Z
-Stopped at: Phase 7 context gathered
-Resume file: .planning/phases/07-distribution-ci-integration/07-CONTEXT.md
+Last session: 2026-10-01T12:15:15.729Z
+Stopped at: Completed 07-01-PLAN.md
+Resume file: None
