@@ -23,6 +23,22 @@ func edgeRows(es []repograph.Edge) []edgeRow {
 	return rows
 }
 
+// edgeMeta is the per-edge metadata the graph presenter reads straight from
+// the edge: block label, observed target state and skip_outputs.
+type edgeMeta struct {
+	name        string
+	state       repograph.TargetState
+	skipOutputs repograph.Tristate
+}
+
+func edgeMetas(es []repograph.Edge) []edgeMeta {
+	rows := make([]edgeMeta, 0, len(es))
+	for _, e := range es {
+		rows = append(rows, edgeMeta{e.Name(), e.TargetState(), e.SkipOutputs()})
+	}
+	return rows
+}
+
 func TestEdges(t *testing.T) {
 	aFile := repograph.MustRepoPath("units/a/terragrunt.hcl")
 	bFile := repograph.MustRepoPath("units/b/terragrunt.hcl")
@@ -30,6 +46,7 @@ func TestEdges(t *testing.T) {
 	opts := repograph.DefaultDependencyOptions()
 	disabled := opts
 	disabled.Enabled = repograph.TristateFalse
+	disabled.SkipOutputs = repograph.TristateUnknown
 
 	// units/a: block dep "c" (enabled) at pathPos 3:17, block dep "x"
 	// (disabled, target outside the graph) at pathPos 8:17, unresolved
@@ -51,7 +68,10 @@ func TestEdges(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pdB := mustPathDependency(t, "units/b", mustPosition(t, aFile, 12, 14))
+	pdB, err := repograph.NewPathDependency(repograph.MustRepoPath("units/b"), "../b", mustPosition(t, aFile, 12, 14), repograph.TargetNoConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
 	pdDyn, err := repograph.NewUnresolvedPathDependency("config-path-dynamic", mustPosition(t, aFile, 12, 30))
 	if err != nil {
 		t.Fatal(err)
@@ -87,6 +107,14 @@ func TestEdges(t *testing.T) {
 		{repograph.EdgePaths, "units/b", "units/c", mustPosition(t, bFile, 5, 14), repograph.TristateTrue},
 	}
 
+	wantMeta := []edgeMeta{
+		{"c", repograph.TargetHasConfig, repograph.TristateFalse},
+		{"x", repograph.TargetDirMissing, repograph.TristateUnknown},
+		{"", repograph.TargetNoConfig, repograph.TristateFalse},
+		{"a", repograph.TargetHasConfig, repograph.TristateFalse},
+		{"", repograph.TargetHasConfig, repograph.TristateFalse},
+	}
+
 	orders := [][]repograph.Unit{
 		{unitA, unitB, unitC},
 		{unitC, unitB, unitA},
@@ -99,6 +127,9 @@ func TestEdges(t *testing.T) {
 		}
 		if got := edgeRows(g.Edges()); !reflect.DeepEqual(got, want) {
 			t.Errorf("order %d: Edges() =\n%v\nwant\n%v", i, got, want)
+		}
+		if got := edgeMetas(g.Edges()); !reflect.DeepEqual(got, wantMeta) {
+			t.Errorf("order %d: Edges() metadata =\n%v\nwant\n%v", i, got, wantMeta)
 		}
 	}
 }
