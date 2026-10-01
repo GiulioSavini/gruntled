@@ -85,5 +85,5 @@ See `milestones/v0.1-ROADMAP.md`.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 5. Graph Diagnostics | 7/7 | Complete    | 2026-09-30 |
-| 6. Machine-Readable Output | 5/5 | Complete   | 2026-10-01 |
+| 6. Machine-Readable Output | 5/5 | Complete    | 2026-10-01 |
 | 7. Distribution & CI Integration | 0/TBD | Not started | - |
