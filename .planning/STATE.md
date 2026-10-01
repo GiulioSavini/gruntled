@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.2
 milestone_name: CI-Ready
 status: executing
-stopped_at: Completed 06-02-PLAN.md
-last_updated: "2026-10-01T09:43:50.933Z"
-last_activity: "2026-10-01 — completed 06-02 (SARIF presenter)"
+stopped_at: Completed 06-03-PLAN.md
+last_updated: "2026-10-01T09:47:48.479Z"
+last_activity: "2026-10-01 — completed 06-03 (CLI graph --json, check --format sarif)"
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 12
-  completed_plans: 9
+  completed_plans: 10
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-09-29)
 ## Current Position
 
 Phase: 6 of 7 (Machine-Readable Output) — v0.2 covers phases 5-7
-Plan: 2 of 5 complete (06-01, 06-02)
-Status: In progress — 06-02 done (presenter.SARIF); next 06-03
-Last activity: 2026-10-01 — completed 06-02 (SARIF presenter)
+Plan: 3 of 5 complete (06-01, 06-02, 06-03)
+Status: In progress — 06-03 done (graph --json, check --format sarif wired in CLI); next 06-04
+Last activity: 2026-10-01 — completed 06-03 (CLI graph --json, check --format sarif)
 
 ## Performance Metrics
 
@@ -67,6 +67,7 @@ Last activity: 2026-10-01 — completed 06-02 (SARIF presenter)
 | Phase 05 P06 | 35min | 3 tasks | 5 files |
 | Phase 06 P01 | 6min | 2 tasks | 4 files |
 | Phase 06 P02 | 10min | 2 tasks | 3 files |
+| Phase 06 P03 | 9min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -126,6 +127,8 @@ Recent decisions affecting current work:
 - [Phase 05 P07]: empty config_path matches terragrunt v1.1.6 per case: dependency block "" unresolved config-path-empty, silent; dependencies paths entry "" resolves to the unit itself, GRT003 self-loop (terragrunt: "cycle detected during queue construction"); reverses the 05-04 rule that a paths "" is never a self-edge
 - [Phase 06]: 06-01: Edge carries name/target state/skip_outputs (paths edge: no name, skip false); presenter.Graph builds edges from Edges() only, unresolved block (PathPos) + paths entries merged per unit by position
 - [Phase 06]: SARIF: unit notifications point at <unit>/terragrunt.hcl, module notifications have no location; unknown rule code -> error, nothing written
+- [Phase 06]: graph builds via indexing.Build without analyzers; exit codes 0/2/3 only, help shows 3 exit-code lines
+- [Phase 06]: check and graph share parseArgs/openRepo/writeOut in cmd/gruntled
 
 ### Pending Todos
 
@@ -137,6 +140,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-10-01T09:43:50.931Z
-Stopped at: Completed 06-02-PLAN.md
+Last session: 2026-10-01T09:47:48.478Z
+Stopped at: Completed 06-03-PLAN.md
 Resume file: None
