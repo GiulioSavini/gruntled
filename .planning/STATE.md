@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.2
 milestone_name: CI-Ready
 status: executing
-stopped_at: Completed 06-04-PLAN.md
-last_updated: "2026-10-01T09:51:51.455Z"
-last_activity: "2026-10-01 — completed 06-04 (graph/SARIF goldens, SARIF structure test, output docs)"
+stopped_at: Completed 06-05-PLAN.md
+last_updated: "2026-10-01T10:02:22.001Z"
+last_activity: "2026-10-01 — completed 06-05 (SARIF schema validation in CI, upload-sarif proof on master)"
 progress:
   total_phases: 3
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 12
-  completed_plans: 11
+  completed_plans: 12
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-29)
 
 **Core value:** Tell the user, before they run anything slow, that `dependency.X.outputs.Y` does not exist in the module it points to.
-**Current focus:** v0.2 CI-Ready — Phase 5 (Graph Diagnostics) all plans complete, awaiting phase verification
+**Current focus:** v0.2 CI-Ready — Phase 6 (Machine-Readable Output) all plans complete, awaiting phase verification
 
 ## Current Position
 
 Phase: 6 of 7 (Machine-Readable Output) — v0.2 covers phases 5-7
-Plan: 4 of 5 complete (06-01, 06-02, 06-03, 06-04)
-Status: In progress — 06-04 done (goldens, SARIF structure/doc-sync tests, Graph JSON and SARIF docs); next 06-05
-Last activity: 2026-10-01 — completed 06-04 (graph/SARIF goldens, SARIF structure test, output docs)
+Plan: 5 of 5 complete (06-01 .. 06-05)
+Status: Phase complete — 06-05 done (schema check + upload-sarif green, run 36846222629); awaiting phase verification
+Last activity: 2026-10-01 — completed 06-05 (SARIF schema validation in CI, upload-sarif proof on master)
 
 ## Performance Metrics
 
@@ -69,6 +69,7 @@ Last activity: 2026-10-01 — completed 06-04 (graph/SARIF goldens, SARIF struct
 | Phase 06 P02 | 10min | 2 tasks | 3 files |
 | Phase 06 P03 | 9min | 2 tasks | 8 files |
 | Phase 06 P04 | 10min | 2 tasks | 4 files |
+| Phase 06 P05 | 15min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -131,6 +132,8 @@ Recent decisions affecting current work:
 - [Phase 06]: graph builds via indexing.Build without analyzers; exit codes 0/2/3 only, help shows 3 exit-code lines
 - [Phase 06]: check and graph share parseArgs/openRepo/writeOut in cmd/gruntled
 - [Phase 06]: SARIF doc-sync test in cmd/gruntled/sarif_test.go: docs/cli.md GRT headings must equal emitted rule shortDescriptions
+- [Phase 06]: 06-05: repo made public for code scanning; checkout_path does NOT rewrite SARIF URIs, CI jq-prefixes artifactLocation.uri with fixture path
+- [Phase 06]: 06-05: SARIF URIs relative to analysed dir; subdirectory analysis needs URI prefix or run from repo root; Phase 7 CI recipes must handle this
 
 ### Pending Todos
 
@@ -142,6 +145,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-10-01T09:51:51.453Z
-Stopped at: Completed 06-04-PLAN.md
+Last session: 2026-10-01T10:02:22.000Z
+Stopped at: Completed 06-05-PLAN.md
 Resume file: None

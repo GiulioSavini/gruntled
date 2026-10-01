@@ -23,7 +23,7 @@ layer must not import HCL and analyzers stay pure.
 ## Phases
 
 - [x] **Phase 5: Graph Diagnostics** - `GRT002` (`config_path` to no unit) and `GRT003` (dependency cycle) as pure analyzers over the existing graph, validated on the three-repo corpus (completed 2026-09-30)
-- [ ] **Phase 6: Machine-Readable Output** - `gruntled graph --json` and `gruntled check --format sarif`, both accepted by their consumers, over the final rule set
+- [x] **Phase 6: Machine-Readable Output** - `gruntled graph --json` and `gruntled check --format sarif`, both accepted by their consumers, over the final rule set (completed 2026-10-01)
 - [ ] **Phase 7: Distribution & CI Integration** - Version injection, tagged static-binary releases, the pre-commit hook and GitHub Actions / GitLab CI recipes
 
 <details>
@@ -67,7 +67,7 @@ See `milestones/v0.1-ROADMAP.md`.
 - [x] 06-02-PLAN.md — SARIF presenter
 - [x] 06-03-PLAN.md — CLI wiring (graph --json, --format sarif), help, docs usage, loops
 - [x] 06-04-PLAN.md — goldens, SARIF structure test, Graph JSON / SARIF docs
-- [ ] 06-05-PLAN.md — vendored schema, fixture, CI schema check and upload-sarif job
+- [x] 06-05-PLAN.md — vendored schema, fixture, CI schema check and upload-sarif job
 
 ### Phase 7: Distribution & CI Integration
 **Goal**: A team can install gruntled from a tagged release and wire it into pre-commit and CI by copying a documented snippet.
@@ -85,5 +85,5 @@ See `milestones/v0.1-ROADMAP.md`.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 5. Graph Diagnostics | 7/7 | Complete    | 2026-09-30 |
-| 6. Machine-Readable Output | 4/5 | In Progress | - |
+| 6. Machine-Readable Output | 5/5 | Complete   | 2026-10-01 |
 | 7. Distribution & CI Integration | 0/TBD | Not started | - |
