@@ -7,7 +7,8 @@ runs Terraform, Terragrunt or any other program.
 ## Usage
 
 ```
-gruntled check [--format text|json] [path]
+gruntled check [--format text|json|sarif] [path]
+gruntled graph --json [path]
 ```
 
 `path` defaults to `.`. Examples:
@@ -16,7 +17,9 @@ gruntled check [--format text|json] [path]
 gruntled check
 gruntled check live/
 gruntled check live/ --format json
+gruntled check live/ --format sarif > gruntled.sarif
 gruntled check --format=json -- -oddly-named-dir
+gruntled graph --json live/
 ```
 
 - Flags may appear before or after the path. The Go standard library `flag`
@@ -24,24 +27,56 @@ gruntled check --format=json -- -oddly-named-dir
   after each positional.
 - `--` ends flag parsing. Everything after it is a path, even if it starts with `-`.
 - More than one path is a usage error (exit 2).
-- `gruntled -h` lists the commands. `gruntled check -h` prints the usage text
-  below and exits 0.
+- `gruntled -h` lists the commands. `gruntled check -h` and `gruntled graph -h`
+  print the usage texts below and exit 0.
 
 ```
-usage: gruntled check [--format text|json] [path]
+usage: gruntled <command> [arguments]
+
+Commands:
+  check   check a Terragrunt repository for broken dependency output references
+  graph   print the repository graph as JSON (--json)
+
+Run "gruntled check -h" or "gruntled graph -h" for details.
+```
+
+```
+usage: gruntled check [--format text|json|sarif] [path]
 
 Check the Terragrunt repository at path (default ".") for dependency
 output references that name an output the target module does not declare.
 Flags may appear before or after path; "--" ends flag parsing.
 
 Flags:
-  --format text|json   output format (default "text")
+  --format text|json|sarif   output format (default "text")
 
 Exit codes:
   0  analysis completed, no error diagnostics
   1  analysis completed, at least one error diagnostic (GRT001-GRT003, GRT100)
   2  usage error: unknown command or flag, invalid --format, more than one path
   3  analysis could not run: path missing, not a directory or unreadable, or an internal failure
+```
+
+`gruntled graph` builds the repository graph without running any analyzer
+and prints it as one JSON document. `--json` is required: without it the
+command exits 2, because plain-text graph output is reserved for a later
+release.
+
+```
+usage: gruntled graph --json [path]
+
+Print the dependency graph of the Terragrunt repository at path (default ".")
+as a JSON document. No analyzers run; unknown units and modules are reported
+in the document, not as failures.
+Flags may appear before or after path; "--" ends flag parsing.
+
+Flags:
+  --json   print the graph as JSON (--json is required; text output is reserved)
+
+Exit codes:
+  0  graph printed, even with unknown units
+  2  usage error: unknown flag, missing --json, more than one path
+  3  analysis could not run: path missing, not a directory or unreadable, an internal failure, or stdout write failed
 ```
 
 ## Exit codes
@@ -53,13 +88,25 @@ Exit codes:
 | 2 | Usage error: no or unknown command, unknown flag, invalid `--format`, more than one path. |
 | 3 | Analysis could not run: path missing, not a directory or unreadable, an internal failure, or a failed write to stdout. |
 
-The same table as printed by `gruntled check -h`:
+The exit codes of `gruntled check` are the same for every `--format`
+(`text`, `json`, `sarif`). The same table as printed by `gruntled check -h`:
 
 ```
   0  analysis completed, no error diagnostics
   1  analysis completed, at least one error diagnostic (GRT001-GRT003, GRT100)
   2  usage error: unknown command or flag, invalid --format, more than one path
   3  analysis could not run: path missing, not a directory or unreadable, or an internal failure
+```
+
+`gruntled graph` exits 0, 2 or 3 only: it runs no analyzers, so it never
+reports findings, and a graph with unknown units or modules is still exit 0.
+Exit 2 also covers a missing `--json`; exit 3 also covers a failed write to
+stdout. As printed by `gruntled graph -h`:
+
+```
+  0  graph printed, even with unknown units
+  2  usage error: unknown flag, missing --json, more than one path
+  3  analysis could not run: path missing, not a directory or unreadable, an internal failure, or stdout write failed
 ```
 
 CI can tell findings in the repository (1) apart from gruntled failing to run (3).

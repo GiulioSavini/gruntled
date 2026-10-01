@@ -143,23 +143,35 @@ func TestDeterministicAcrossCheckouts(t *testing.T) {
 		generate(t, e2eSpec, d)
 	}
 
-	for _, format := range []string{"text", "json"} {
+	cases := []struct {
+		format string
+		args   []string
+		want   int
+	}{
+		{"text", []string{"check", "--format", "text"}, exitFindings},
+		{"json", []string{"check", "--format", "json"}, exitFindings},
+		{"sarif", []string{"check", "--format", "sarif"}, exitFindings},
+		{"graph", []string{"graph", "--json"}, exitOK},
+	}
+	for _, c := range cases {
+		format := c.format
 		var outs []string
 		var codes []int
-		record := func(args ...string) {
+		record := func(extra ...string) {
+			args := append(slices.Clone(c.args), extra...)
 			out, stderr, code := runCLI(t, args...)
-			if code != exitFindings {
-				t.Fatalf("%s %v: exit %d, want %d\nstderr: %s", format, args, code, exitFindings, stderr)
+			if code != c.want {
+				t.Fatalf("%s %v: exit %d, want %d\nstderr: %s", format, args, code, c.want, stderr)
 			}
 			outs = append(outs, out)
 			codes = append(codes, code)
 		}
 		for _, d := range dirs {
-			record("check", "--format", format, d)
-			record("check", "--format", format, d)
+			record(d)
+			record(d)
 			t.Chdir(d)
-			record("check", "--format", format)
-			record("check", "--format", format, ".")
+			record()
+			record(".")
 		}
 
 		for i, out := range outs {
@@ -283,10 +295,13 @@ func TestNoWrites(t *testing.T) {
 		t.Setenv(k, envDirs[k])
 	}
 
-	for _, format := range []string{"text", "json"} {
+	for _, format := range []string{"text", "json", "sarif"} {
 		if _, stderr, code := runCLI(t, "check", "--format", format, dir); code != exitFindings {
 			t.Fatalf("%s: exit %d, want %d\nstderr: %s", format, code, exitFindings, stderr)
 		}
+	}
+	if _, stderr, code := runCLI(t, "graph", "--json", dir); code != exitOK {
+		t.Fatalf("graph: exit %d, want %d\nstderr: %s", code, exitOK, stderr)
 	}
 
 	if after := snapshot(t, dir); !reflect.DeepEqual(before, after) {
@@ -394,27 +409,35 @@ func TestMutationDiff(t *testing.T) {
 var exitCodeLine = regexp.MustCompile(`^  [0-3]  `)
 
 func TestHelpMatchesDocs(t *testing.T) {
-	_, stderr, code := runCLI(t, "check", "-h")
-	if code != exitOK {
-		t.Fatalf("check -h: exit %d, want %d", code, exitOK)
-	}
-	var lines []string
-	for l := range strings.SplitSeq(stderr, "\n") {
-		if exitCodeLine.MatchString(l) {
-			lines = append(lines, l)
-		}
-	}
-	if len(lines) != 4 {
-		t.Fatalf("check -h prints %d exit-code lines, want 4:\n%s", len(lines), stderr)
-	}
 	docs, err := os.ReadFile("../../docs/cli.md")
 	if err != nil {
 		t.Fatal(err)
 	}
 	docLines := strings.Split(strings.ReplaceAll(string(docs), "\r\n", "\n"), "\n")
-	for _, l := range lines {
-		if !slices.Contains(docLines, l) {
-			t.Errorf("docs/cli.md lacks the exact line %q", l)
+	for _, c := range []struct {
+		cmd  string
+		want int
+	}{
+		{"check", 4},
+		{"graph", 3},
+	} {
+		_, stderr, code := runCLI(t, c.cmd, "-h")
+		if code != exitOK {
+			t.Fatalf("%s -h: exit %d, want %d", c.cmd, code, exitOK)
+		}
+		var lines []string
+		for l := range strings.SplitSeq(stderr, "\n") {
+			if exitCodeLine.MatchString(l) {
+				lines = append(lines, l)
+			}
+		}
+		if len(lines) != c.want {
+			t.Fatalf("%s -h prints %d exit-code lines, want %d:\n%s", c.cmd, len(lines), c.want, stderr)
+		}
+		for _, l := range lines {
+			if !slices.Contains(docLines, l) {
+				t.Errorf("docs/cli.md lacks the exact line %q (from %s -h)", l, c.cmd)
+			}
 		}
 	}
 }

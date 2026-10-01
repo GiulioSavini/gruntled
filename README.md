@@ -108,7 +108,7 @@ v0.1 is being built as a falsifiable experiment, in four phases (see
 complete and verified.
 
 **Works today, tested:**
-- `gruntled check [--format text|json] [path]`, end to end: it opens the
+- `gruntled check [--format text|json|sarif] [path]`, end to end: it opens the
   repository read-only, builds the graph, and reports `GRT001` (a
   `dependency.X.outputs.Y` naming an output the target module does not
   declare) and `GRT100` (HCL that does not parse), with the exit codes below.
@@ -141,8 +141,7 @@ way. All 8 known broken references there are still reported.
 
 **Not built yet:**
 - Everything under "Later" in the roadmap: the `gruntled watch` daemon,
-  `gruntled blast` (Broken vs Impacted), diagnostics `GRT004`-`GRT006`,
-  `gruntled graph --json`, SARIF output.
+  `gruntled blast` (Broken vs Impacted), diagnostics `GRT004`-`GRT006`.
 
 ### Usage
 
@@ -156,7 +155,10 @@ $ echo $?
 
 Diagnostics go to stdout, one per line, with paths relative to the checked
 repository; the summary line goes to stderr. `--format json` prints a single
-versioned JSON document instead. Flags work before or after the path.
+versioned JSON document instead, `--format sarif` a SARIF 2.1.0 log for code
+scanning; exit codes are the same for every format. `gruntled graph --json
+[path]` prints the dependency graph as JSON and exits 0, 2 or 3 only. Flags
+work before or after the path.
 
 | Exit code | Meaning |
 |---|---|

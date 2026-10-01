@@ -3,16 +3,27 @@ exec gruntled-exit 2
 stderr 'usage: gruntled <command>'
 ! stdout .
 
-# top-level help: exit 0
+# top-level help: exit 0, lists both commands
 exec gruntled-exit 0 -h
 stderr 'usage: gruntled <command>'
+stderr '^  check   '
+stderr '^  graph   print the repository graph as JSON \(--json\)$'
 exec gruntled-exit 0 --help
 exec gruntled-exit 0 help
 
 # check help: exit 0 with the exit-code table
 exec gruntled-exit 0 check -h
-stderr '^usage: gruntled check \[--format text\|json\] \[path\]$'
+stderr '^usage: gruntled check \[--format text\|json\|sarif\] \[path\]$'
 stderr '3  analysis could not run'
+! stdout .
+
+# graph help: exit 0 with the exit-code table
+exec gruntled-exit 0 graph -h
+stderr '^usage: gruntled graph --json \[path\]$'
+stderr '^  0  graph printed, even with unknown units$'
+stderr '^  2  usage error'
+stderr '^  3  analysis could not run'
+! stderr '^  1  '
 ! stdout .
 
 # unknown command: exit 2

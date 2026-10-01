@@ -15,7 +15,7 @@ exec gruntled-exit 2 check --bogus
 stderr 'flag provided but not defined'
 ! stdout .
 exec gruntled-exit 2 check . --format yaml
-stderr 'invalid --format "yaml" \(want text or json\)'
+stderr 'invalid --format "yaml" \(want text, json or sarif\)'
 ! stdout .
 
 # 3: analysis could not run

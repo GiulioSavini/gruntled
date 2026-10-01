@@ -1,0 +1,81 @@
+# graph 0: graph printed, even with a config-unknown unit; nothing on stderr
+exec gruntled-exit 0 graph --json unknown
+stdout '"kind": "graph"'
+stdout '"status": "config-unknown"'
+stdout '"reason": "syntax-error"'
+! stderr .
+
+# flags after the path and "--" give identical output
+exec gruntled-exit 0 graph clean --json
+cp stdout $WORK/a.json
+exec gruntled-exit 0 graph --json -- clean
+cp stdout $WORK/b.json
+exec gruntled-exit 0 graph -json=true clean
+cp stdout $WORK/c.json
+cmp $WORK/a.json $WORK/b.json
+cmp $WORK/a.json $WORK/c.json
+stdout '"edges": \['
+! stderr .
+
+# graph 0 also on a repository with a GRT001 finding: no analyzers run
+exec gruntled-exit 0 graph --json broken
+! stdout 'GRT001'
+! stderr .
+
+# graph 2: --json missing
+exec gruntled-exit 2 graph clean
+stderr '--json is required'
+stderr '^usage: gruntled graph --json \[path\]$'
+! stdout .
+
+# graph 2: more than one path, unknown flag
+exec gruntled-exit 2 graph --json clean broken
+stderr 'more than one path given'
+! stdout .
+exec gruntled-exit 2 graph --json --bogus clean
+stderr 'flag provided but not defined'
+! stdout .
+
+# graph 3: analysis could not run
+exec gruntled-exit 3 graph --json missing/
+stderr 'cannot open repository'
+! stdout .
+
+# check --format sarif: exit codes identical to text and json
+exec gruntled-exit 0 check --format sarif clean
+stdout '"version": "2.1.0"'
+! stderr .
+exec gruntled-exit 1 check --format sarif broken
+stdout '"ruleId": "GRT001"'
+! stderr .
+exec gruntled-exit 2 check --format xml clean
+stderr 'invalid --format "xml" \(want text, json or sarif\)'
+! stdout .
+exec gruntled-exit 3 check --format sarif missing/
+stderr 'cannot open repository'
+! stdout .
+
+-- unknown/vpc/terragrunt.hcl --
+dependency "x" {
+-- unknown/vpc/main.tf --
+output "vpc_id" { value = "x" }
+-- clean/vpc/terragrunt.hcl --
+-- clean/vpc/main.tf --
+output "vpc_id" { value = "x" }
+-- clean/app/terragrunt.hcl --
+dependency "vpc" {
+  config_path = "../vpc"
+}
+inputs = { id = dependency.vpc.outputs.vpc_id }
+-- clean/app/main.tf --
+variable "id" {}
+-- broken/vpc/terragrunt.hcl --
+-- broken/vpc/main.tf --
+output "vpc_id" { value = "x" }
+-- broken/app/terragrunt.hcl --
+dependency "vpc" {
+  config_path = "../vpc"
+}
+inputs = { id = dependency.vpc.outputs.vpc_idd }
+-- broken/app/main.tf --
+variable "id" {}

@@ -122,6 +122,8 @@ func TestRunStdoutWriteFailure(t *testing.T) {
 	}{
 		{"text with a finding", []string{"check", repo(t, "vpc_idd")}},
 		{"json on a clean repo", []string{"check", "--format", "json", repo(t, "vpc_id")}},
+		{"sarif with a finding", []string{"check", "--format", "sarif", repo(t, "vpc_idd")}},
+		{"graph --json on a clean repo", []string{"graph", "--json", repo(t, "vpc_id")}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
