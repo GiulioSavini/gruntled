@@ -24,9 +24,9 @@ See: .planning/PROJECT.md (updated 2026-09-29)
 
 ## Current Position
 
-Phase: 6 of 7 (Machine-Readable Output) — v0.2 covers phases 5-7
-Plan: 5 of 5 complete (06-01 .. 06-05)
-Status: Phase complete — 06-05 done (schema check + upload-sarif green, run 36846222629); awaiting phase verification
+Phase: 7 of 7 (Distribution & CI Integration) — v0.2 covers phases 5-7
+Plan: Not started (Phase 6 complete and verified 2026-10-01)
+Status: Ready to discuss/plan Phase 7
 Last activity: 2026-10-01 — completed 06-05 (SARIF schema validation in CI, upload-sarif proof on master)
 
 ## Performance Metrics
