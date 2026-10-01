@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.2
 milestone_name: CI-Ready
 status: Executing Phase 7
-stopped_at: Completed 07-01-PLAN.md
-last_updated: "2026-10-01T12:15:15.735Z"
-last_activity: 2026-10-01 — completed 07-01 (--version with ldflags injection, clean check fixture)
+stopped_at: Completed 07-02-PLAN.md
+last_updated: "2026-10-01T12:40:41.011Z"
+last_activity: 2026-10-01 — completed 07-02 (windows/arm64 6th target, build-release.sh, CI packaging dry run)
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 17
-  completed_plans: 13
+  completed_plans: 14
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-29)
 
 **Core value:** Tell the user, before they run anything slow, that `dependency.X.outputs.Y` does not exist in the module it points to.
-**Current focus:** v0.2 CI-Ready — Phase 7 (Distribution & CI Integration) executing, 07-01 complete
+**Current focus:** v0.2 CI-Ready — Phase 7 (Distribution & CI Integration) executing, 07-02 complete
 
 ## Current Position
 
 Phase: 7 of 7 (Distribution & CI Integration) — v0.2 covers phases 5-7
-Plan: 1 of 5 complete (07-01 done)
+Plan: 2 of 5 complete (07-01, 07-02 done)
 Status: Executing Phase 7
-Last activity: 2026-10-01 — completed 07-01 (--version with ldflags injection, clean check fixture)
+Last activity: 2026-10-01 — completed 07-02 (windows/arm64 6th target, build-release.sh, CI packaging dry run)
 
 ## Performance Metrics
 
@@ -71,6 +71,7 @@ Last activity: 2026-10-01 — completed 07-01 (--version with ldflags injection,
 | Phase 06 P04 | 10min | 2 tasks | 4 files |
 | Phase 06 P05 | 15min | 3 tasks | 7 files |
 | Phase 07 P01 | 12min | 2 tasks | 8 files |
+| Phase 07 P02 | 19min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -137,6 +138,8 @@ Recent decisions affecting current work:
 - [Phase 06]: 06-05: SARIF URIs relative to analysed dir; subdirectory analysis needs URI prefix or run from repo root; Phase 7 CI recipes must handle this
 - [Phase 07]: 07-01: --version prints 'gruntled <version> (<commit>)' from -X main.version/main.commit (defaults dev/none); ReadBuildInfo fallback dropped (local go build stamps pseudo-version), so go install @tag prints dev (none)
 - [Phase 07]: 07-01: cmd/gruntled/testdata/clean-fixture is the exit-0 fixture; TestFixtureExitCodes pins clean=0, sarif-fixture=1
+- [Phase 07]: 07-02: USER DECISION 2026-10-01 windows/arm64 is the 6th release target; release list lives only in check-architecture.sh Step 9 and build-release.sh, kept equal by TestReleaseTargetsInSync
+- [Phase 07]: 07-02: scripts/build-release.sh is the single packaging path (gruntled_<version>_<os>_<arch>.tar.gz|zip + checksums.txt, host --version smoke); ci.yml release-build runs it on every push/PR with v0.0.0-ci
 
 ### Pending Todos
 
@@ -148,6 +151,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-10-01T12:15:15.729Z
-Stopped at: Completed 07-01-PLAN.md
+Last session: 2026-10-01T12:40:41.008Z
+Stopped at: Completed 07-02-PLAN.md
 Resume file: None
