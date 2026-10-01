@@ -9,6 +9,7 @@ runs Terraform, Terragrunt or any other program.
 ```
 gruntled check [--format text|json|sarif] [path]
 gruntled graph --json [path]
+gruntled --version
 ```
 
 `path` defaults to `.`. Examples:
@@ -37,6 +38,9 @@ Commands:
   check   check a Terragrunt repository for broken dependency output references
   graph   print the repository graph as JSON (--json)
 
+Flags:
+  --version   print the version and commit, then exit
+
 Run "gruntled check -h" or "gruntled graph -h" for details.
 ```
 
@@ -56,6 +60,20 @@ Exit codes:
   2  usage error: unknown command or flag, invalid --format, more than one path
   3  analysis could not run: path missing, not a directory or unreadable, or an internal failure
 ```
+
+`gruntled --version` (also `-version`) prints one line to stdout and exits 0;
+any arguments after it are ignored:
+
+```
+gruntled v0.2.0 (abc1234)
+```
+
+Release builds set both values at link time with
+`-ldflags "-X main.version=<tag> -X main.commit=<short sha>"`. A binary built
+without those flags, including one from `go build` or
+`go install github.com/GiulioSavini/gruntled/cmd/gruntled@vX.Y.Z`, prints
+`gruntled dev (none)`. The same version string is the SARIF
+`tool.driver.version`.
 
 `gruntled graph` builds the repository graph without running any analyzer
 and prints it as one JSON document. `--json` is required: without it the
