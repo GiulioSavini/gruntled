@@ -2,8 +2,10 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"testing"
@@ -136,5 +138,85 @@ func TestRunStdoutWriteFailure(t *testing.T) {
 				t.Fatal("stdout writer was never called; the test proves nothing")
 			}
 		})
+	}
+}
+
+// setVersion overrides the build-time version vars for one test.
+func setVersion(t *testing.T, v, c string) {
+	t.Helper()
+	oldV, oldC := version, commit
+	version, commit = v, c
+	t.Cleanup(func() { version, commit = oldV, oldC })
+}
+
+func TestVersion(t *testing.T) {
+	cases := []struct {
+		name       string
+		args       []string
+		ver, commt string
+		want       string
+	}{
+		{"long", []string{"--version"}, "dev", "none", "gruntled dev (none)\n"},
+		{"short", []string{"-version"}, "dev", "none", "gruntled dev (none)\n"},
+		{"trailing args ignored", []string{"--version", "junk", "--format"}, "dev", "none", "gruntled dev (none)\n"},
+		{"injected", []string{"--version"}, "v9.9.9", "abc1234", "gruntled v9.9.9 (abc1234)\n"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			setVersion(t, tc.ver, tc.commt)
+			var stdout, stderr bytes.Buffer
+			if code := run(tc.args, &stdout, &stderr); code != exitOK {
+				t.Fatalf("exit %d, want %d", code, exitOK)
+			}
+			if got := stdout.String(); got != tc.want {
+				t.Errorf("stdout %q, want %q", got, tc.want)
+			}
+			if stderr.Len() != 0 {
+				t.Errorf("stderr %q, want empty", stderr.String())
+			}
+		})
+	}
+}
+
+func TestVersionSARIF(t *testing.T) {
+	setVersion(t, "v9.9.9", "abc1234")
+	var stdout, stderr bytes.Buffer
+	if code := run([]string{"check", "--format", "sarif", "testdata/sarif-fixture"}, &stdout, &stderr); code != exitFindings {
+		t.Fatalf("exit %d, want %d; stderr %s", code, exitFindings, stderr.String())
+	}
+	var log struct {
+		Runs []struct {
+			Tool struct {
+				Driver struct {
+					Version string `json:"version"`
+				} `json:"driver"`
+			} `json:"tool"`
+		} `json:"runs"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &log); err != nil {
+		t.Fatal(err)
+	}
+	if len(log.Runs) != 1 || log.Runs[0].Tool.Driver.Version != "v9.9.9" {
+		t.Errorf("tool.driver.version = %+v, want v9.9.9", log.Runs)
+	}
+}
+
+// TestVersionLdflags builds the real binary with -X so a renamed or
+// const-ified var (which makes -X a silent no-op) fails here.
+func TestVersionLdflags(t *testing.T) {
+	if testing.Short() {
+		t.Skip("builds the binary")
+	}
+	bin := filepath.Join(t.TempDir(), "g")
+	build := exec.Command("go", "build", "-ldflags", "-X main.version=v9.9.9 -X main.commit=abc1234", "-o", bin, ".")
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("go build: %v\n%s", err, out)
+	}
+	out, err := exec.Command(bin, "--version").Output()
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if got, want := string(out), "gruntled v9.9.9 (abc1234)\n"; got != want {
+		t.Errorf("got %q, want %q", got, want)
 	}
 }
