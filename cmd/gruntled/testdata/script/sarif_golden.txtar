@@ -1,0 +1,256 @@
+# SARIF golden: the full INT-02 log for a fixture with one GRT001 (unit path
+# with a space, pins %20), one GRT002 and one GRT003, plus a module-unknown
+# unit under a non-ASCII path (pins UTF-8 percent-encoding in a notification)
+# and an unknown module (notification without location). Exit 1, silent stderr.
+exec gruntled-exit 1 check --format sarif .
+cmp stdout want.sarif
+! stderr .
+
+-- vpc/terragrunt.hcl --
+-- vpc/main.tf --
+output "vpc_id" { value = "x" }
+-- my app/terragrunt.hcl --
+dependency "vpc" {
+  config_path = "../vpc"
+}
+inputs = { id = dependency.vpc.outputs.vpc_idd }
+-- my app/main.tf --
+variable "id" {}
+-- orphan/terragrunt.hcl --
+dependency "gone" {
+  config_path = "../gone"
+}
+-- orphan/main.tf --
+# no outputs
+-- città/terragrunt.hcl --
+terraform {
+  source = "git::https://example.com/dns.git"
+}
+-- db/terragrunt.hcl --
+terraform {
+  source = "../modules/missing"
+}
+-- ring/a/terragrunt.hcl --
+dependency "b" {
+  config_path = "../b"
+}
+-- ring/a/main.tf --
+# no outputs
+-- ring/b/terragrunt.hcl --
+dependency "a" {
+  config_path = "../a"
+}
+-- ring/b/main.tf --
+# no outputs
+-- want.sarif --
+{
+  "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "gruntled",
+          "version": "dev",
+          "informationUri": "https://github.com/GiulioSavini/gruntled",
+          "rules": [
+            {
+              "id": "GRT001",
+              "name": "DependencyOutputNotDeclared",
+              "shortDescription": {
+                "text": "dependency output not declared"
+              },
+              "fullDescription": {
+                "text": "A dependency.X.outputs.Y reference names an output Y that the module behind dependency X does not declare. gruntled follows config_path to the target unit and its terraform source to the module, and stays silent when either hop is uncertain."
+              },
+              "helpUri": "https://github.com/GiulioSavini/gruntled/blob/master/docs/cli.md#grt001-dependency-output-not-declared-error",
+              "help": {
+                "text": "Declare output Y in the module behind dependency X, or fix the reference to name an output the module declares. If mock_outputs supplies Y, apply would silently use the mock value."
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "terragrunt",
+                  "correctness"
+                ],
+                "precision": "very-high"
+              }
+            },
+            {
+              "id": "GRT002",
+              "name": "DependencyTargetHasNoUnit",
+              "shortDescription": {
+                "text": "dependency target has no unit"
+              },
+              "fullDescription": {
+                "text": "A dependency block's config_path, or an entry of a dependencies paths list, resolves to a directory that does not exist or has no terragrunt.hcl. Terragrunt refuses to run such a dependency, whatever skip_outputs or mock_outputs say."
+              },
+              "helpUri": "https://github.com/GiulioSavini/gruntled/blob/master/docs/cli.md#grt002-dependency-target-has-no-unit-error",
+              "help": {
+                "text": "Point config_path (or the dependencies paths entry) at a directory that holds a terragrunt.hcl, or remove the dependency."
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "terragrunt",
+                  "correctness"
+                ],
+                "precision": "very-high"
+              }
+            },
+            {
+              "id": "GRT003",
+              "name": "DependencyCycle",
+              "shortDescription": {
+                "text": "dependency cycle"
+              },
+              "fullDescription": {
+                "text": "Units depend on each other in a cycle, which Terragrunt refuses to order. There is one diagnostic per cycle, attributed to its lexically smallest unit at that unit's first edge into the cycle."
+              },
+              "helpUri": "https://github.com/GiulioSavini/gruntled/blob/master/docs/cli.md#grt003-dependency-cycle-error",
+              "help": {
+                "text": "Remove or disable one dependency in the cycle so the units can be ordered."
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "terragrunt",
+                  "correctness"
+                ],
+                "precision": "very-high"
+              }
+            },
+            {
+              "id": "GRT100",
+              "name": "HclSyntaxError",
+              "shortDescription": {
+                "text": "HCL syntax error"
+              },
+              "fullDescription": {
+                "text": "A Terragrunt or Terraform file does not parse. One diagnostic per file, reporting the first error only. The unit or module that depends on the file becomes unknown, so GRT001 stays silent for it."
+              },
+              "helpUri": "https://github.com/GiulioSavini/gruntled/blob/master/docs/cli.md#grt100-hcl-syntax-error-error",
+              "help": {
+                "text": "Fix the HCL syntax at the reported position."
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "terragrunt",
+                  "correctness"
+                ],
+                "precision": "very-high"
+              }
+            }
+          ]
+        }
+      },
+      "columnKind": "unicodeCodePoints",
+      "invocations": [
+        {
+          "executionSuccessful": true,
+          "toolExecutionNotifications": [
+            {
+              "level": "note",
+              "message": {
+                "text": "unit \"città\" is module-unknown: remote-source"
+              },
+              "locations": [
+                {
+                  "physicalLocation": {
+                    "artifactLocation": {
+                      "uri": "citt%C3%A0/terragrunt.hcl",
+                      "uriBaseId": "%SRCROOT%"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "level": "note",
+              "message": {
+                "text": "module \"modules/missing\" surface is unknown: module-dir-not-found"
+              }
+            }
+          ]
+        }
+      ],
+      "results": [
+        {
+          "ruleId": "GRT001",
+          "ruleIndex": 0,
+          "level": "error",
+          "message": {
+            "text": "dependency \"vpc\" output \"vpc_idd\" is not declared by module \"vpc\" (target unit \"vpc\") (unit my app)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "my%20app/terragrunt.hcl",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 4,
+                  "startColumn": 17
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "GRT002",
+          "ruleIndex": 1,
+          "level": "error",
+          "message": {
+            "text": "dependency \"gone\" config_path resolves to \"gone\": directory does not exist (unit orphan)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "orphan/terragrunt.hcl",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 2,
+                  "startColumn": 17
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "GRT003",
+          "ruleIndex": 2,
+          "level": "error",
+          "message": {
+            "text": "dependency cycle: \"ring/a\" -> \"ring/b\" -> \"ring/a\" (unit ring/a)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "ring/a/terragrunt.hcl",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 2,
+                  "startColumn": 17
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

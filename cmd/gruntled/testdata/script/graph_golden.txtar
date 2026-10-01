@@ -1,0 +1,225 @@
+# Graph golden: the full INT-01 document for a fixture with a block edge
+# (skip_outputs = true), a dependencies paths edge, an unresolved dependency
+# (non-literal config_path), a module-unknown unit (remote source), a
+# config-unknown unit (syntax error), an unknown module (missing local source)
+# and a two-unit cycle. graph runs no analyzers: exit 0, silent stderr.
+exec gruntled-exit 0 graph --json .
+cmp stdout want.json
+! stderr .
+
+-- vpc/terragrunt.hcl --
+terraform {
+  source = "../modules/net"
+}
+-- modules/net/main.tf --
+output "vpc_id" { value = "x" }
+-- app/terragrunt.hcl --
+dependency "vpc" {
+  config_path  = "../vpc"
+  skip_outputs = true
+}
+dependency "dyn" {
+  config_path = local.dyn
+}
+dependencies {
+  paths = ["../dns"]
+}
+inputs = { id = dependency.vpc.outputs.vpc_id }
+-- app/main.tf --
+variable "id" {}
+-- dns/terragrunt.hcl --
+terraform {
+  source = "git::https://example.com/dns.git"
+}
+-- db/terragrunt.hcl --
+terraform {
+  source = "../modules/missing"
+}
+-- broken/terragrunt.hcl --
+dependency "vpc" {
+  config_path = "../vpc"
+-- ring/a/terragrunt.hcl --
+dependency "b" {
+  config_path = "../b"
+}
+-- ring/a/main.tf --
+# no outputs
+-- ring/b/terragrunt.hcl --
+dependency "a" {
+  config_path = "../a"
+}
+-- ring/b/main.tf --
+# no outputs
+-- want.json --
+{
+  "version": 1,
+  "kind": "graph",
+  "units": [
+    {
+      "path": "app",
+      "status": "resolved",
+      "module": "app",
+      "references": [
+        {
+          "dependency": "vpc",
+          "output": "vpc_id",
+          "position": {
+            "file": "app/terragrunt.hcl",
+            "line": 11,
+            "column": 17
+          }
+        }
+      ]
+    },
+    {
+      "path": "broken",
+      "status": "config-unknown",
+      "reason": "syntax-error",
+      "references": []
+    },
+    {
+      "path": "db",
+      "status": "resolved",
+      "module": "modules/missing",
+      "references": []
+    },
+    {
+      "path": "dns",
+      "status": "module-unknown",
+      "reason": "remote-source",
+      "references": []
+    },
+    {
+      "path": "ring/a",
+      "status": "resolved",
+      "module": "ring/a",
+      "references": []
+    },
+    {
+      "path": "ring/b",
+      "status": "resolved",
+      "module": "ring/b",
+      "references": []
+    },
+    {
+      "path": "vpc",
+      "status": "resolved",
+      "module": "modules/net",
+      "references": []
+    }
+  ],
+  "modules": [
+    {
+      "path": "app",
+      "known": true,
+      "variables": [
+        "id"
+      ],
+      "outputs": []
+    },
+    {
+      "path": "modules/missing",
+      "known": false,
+      "variables": [],
+      "outputs": [],
+      "reason": "module-dir-not-found"
+    },
+    {
+      "path": "modules/net",
+      "known": true,
+      "variables": [],
+      "outputs": [
+        "vpc_id"
+      ]
+    },
+    {
+      "path": "ring/a",
+      "known": true,
+      "variables": [],
+      "outputs": []
+    },
+    {
+      "path": "ring/b",
+      "known": true,
+      "variables": [],
+      "outputs": []
+    }
+  ],
+  "edges": [
+    {
+      "kind": "block",
+      "from": "app",
+      "to": "vpc",
+      "position": {
+        "file": "app/terragrunt.hcl",
+        "line": 2,
+        "column": 18
+      },
+      "name": "vpc",
+      "target_state": "has-config",
+      "enabled": "true",
+      "skip_outputs": "true"
+    },
+    {
+      "kind": "paths",
+      "from": "app",
+      "to": "dns",
+      "position": {
+        "file": "app/terragrunt.hcl",
+        "line": 9,
+        "column": 12
+      },
+      "target_state": "has-config",
+      "enabled": "true",
+      "skip_outputs": "false"
+    },
+    {
+      "kind": "block",
+      "from": "ring/a",
+      "to": "ring/b",
+      "position": {
+        "file": "ring/a/terragrunt.hcl",
+        "line": 2,
+        "column": 17
+      },
+      "name": "b",
+      "target_state": "has-config",
+      "enabled": "true",
+      "skip_outputs": "false"
+    },
+    {
+      "kind": "block",
+      "from": "ring/b",
+      "to": "ring/a",
+      "position": {
+        "file": "ring/b/terragrunt.hcl",
+        "line": 2,
+        "column": 17
+      },
+      "name": "a",
+      "target_state": "has-config",
+      "enabled": "true",
+      "skip_outputs": "false"
+    }
+  ],
+  "unresolved_dependencies": [
+    {
+      "from": "app",
+      "kind": "block",
+      "name": "dyn",
+      "position": {
+        "file": "app/terragrunt.hcl",
+        "line": 6,
+        "column": 17
+      },
+      "reason": "config-path-dynamic"
+    }
+  ],
+  "summary": {
+    "units": 7,
+    "resolved": 5,
+    "module_unknown": 1,
+    "config_unknown": 1,
+    "unknown_modules": 1
+  }
+}
