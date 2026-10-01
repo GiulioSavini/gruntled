@@ -1,10 +1,14 @@
 package presenter
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/GiulioSavini/gruntled/internal/domain/diagnostic"
+	"github.com/GiulioSavini/gruntled/internal/domain/repograph"
 )
 
 const (
@@ -235,4 +239,122 @@ func percentEncode(p string) string {
 		}
 	}
 	return b.String()
+}
+
+// SARIF writes one indented SARIF 2.1.0 document with a single run: the
+// four gruntled rules, one result per diagnostic in diags' canonical order,
+// and one note-level tool execution notification per unit that is not
+// resolved and per module whose surface is unknown (units first, then
+// modules, each in the graph's path order). Empty lists are written as [],
+// HTML characters are not escaped, and nothing time- or host-dependent
+// (timestamps, GUIDs, absolute paths, fingerprints) is emitted.
+//
+// URIs are repo-relative to the analysed path, percent-encoded, with
+// uriBaseId %SRCROOT%; an uploader must map %SRCROOT% to that path (for
+// GitHub, checkout_path). Columns are byte columns although columnKind
+// says unicodeCodePoints, so they are exact for ASCII HCL only.
+//
+// Every ruleIndex is resolved before anything is written: a diagnostic
+// whose code has no rule makes SARIF return an error and write nothing.
+func SARIF(w io.Writer, g *repograph.RepositoryGraph, diags diagnostic.Set, tool ToolInfo) error {
+	all := diags.All()
+	results := make([]sarifResult, 0, len(all))
+	for _, d := range all {
+		idx, err := ruleIndexOf(d.Code())
+		if err != nil {
+			return err
+		}
+		p := d.Pos()
+		msg := d.Message()
+		if u, ok := d.Unit(); ok {
+			msg += " (unit " + u.String() + ")"
+		}
+		results = append(results, sarifResult{
+			RuleID:    string(d.Code()),
+			RuleIndex: idx,
+			Level:     sarifLevel(d.Severity()),
+			Message:   sarifText{Text: msg},
+			Locations: []sarifLocation{{PhysicalLocation: sarifPhysicalLocation{
+				ArtifactLocation: sarifArtifact(p.File().String()),
+				Region:           &sarifRegion{StartLine: p.Line(), StartColumn: p.Column()},
+			}}},
+		})
+	}
+
+	notes := make([]sarifNotification, 0)
+	for _, u := range g.Units() {
+		if u.Status() == repograph.StatusResolved {
+			continue
+		}
+		path := u.Path().String()
+		notes = append(notes, sarifNotification{
+			Level:   "note",
+			Message: sarifText{Text: fmt.Sprintf("unit %q is %s: %s", path, u.Status().String(), u.UnknownReason())},
+			Locations: []sarifLocation{{PhysicalLocation: sarifPhysicalLocation{
+				ArtifactLocation: sarifArtifact(unitConfigFile(path)),
+			}}},
+		})
+	}
+	for _, m := range g.Modules() {
+		if _, ok := m.Surface(); ok {
+			continue
+		}
+		notes = append(notes, sarifNotification{
+			Level:   "note",
+			Message: sarifText{Text: fmt.Sprintf("module %q surface is unknown: %s", m.Path().String(), m.UnknownReason())},
+		})
+	}
+
+	doc := sarifLog{
+		Schema:  sarifSchemaURI,
+		Version: sarifVersion,
+		Runs: []sarifRun{{
+			Tool: sarifTool{Driver: sarifDriver{
+				Name:           sarifToolName,
+				Version:        tool.Version,
+				InformationURI: sarifToolURI,
+				Rules:          sarifRules(),
+			}},
+			ColumnKind:  sarifColumnKind,
+			Invocations: []sarifInvocation{{ExecutionSuccessful: true, ToolExecutionNotifications: notes}},
+			Results:     results,
+		}},
+	}
+
+	var b bytes.Buffer
+	enc := json.NewEncoder(&b)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(doc); err != nil {
+		return err
+	}
+	_, err := w.Write(b.Bytes())
+	return err
+}
+
+// sarifLevel maps a severity onto a SARIF result level.
+func sarifLevel(s diagnostic.Severity) string {
+	switch s.String() {
+	case "error":
+		return "error"
+	case "warning":
+		return "warning"
+	default:
+		return "note"
+	}
+}
+
+func sarifArtifact(path string) sarifArtifactLocation {
+	return sarifArtifactLocation{URI: percentEncode(path), URIBaseID: sarifURIBaseID}
+}
+
+// unitConfigFile is the terragrunt.hcl of the unit at dir; the repository
+// root "." gives "terragrunt.hcl", not "./terragrunt.hcl". The graph does
+// not record the config file name, so a unit configured by
+// terragrunt.hcl.json still points at terragrunt.hcl.
+func unitConfigFile(dir string) string {
+	if dir == "." {
+		return "terragrunt.hcl"
+	}
+	return dir + "/terragrunt.hcl"
 }
