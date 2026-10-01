@@ -434,6 +434,9 @@ the host binary's `--version` prints the injected version.
 
 ## Further reading
 
+- [`docs/ci.md`](docs/ci.md) — running gruntled in your own CI: install and
+  release-binary checksums, the pre-commit hook, GitHub Actions (with SARIF
+  code scanning) and GitLab CI recipes.
 - [`docs/superpowers/specs/2026-09-01-gruntled-design.md`](docs/superpowers/specs/2026-09-01-gruntled-design.md) —
   the full design rationale, including the survey of existing tools. Written
   in Italian as an internal document; user-facing artifacts (README, CLI

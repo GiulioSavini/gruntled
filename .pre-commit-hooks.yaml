@@ -1,0 +1,7 @@
+- id: gruntled-check
+  name: gruntled check
+  description: Check Terragrunt dependency output references against the modules' declared outputs
+  language: golang
+  entry: gruntled check
+  pass_filenames: false
+  always_run: true
