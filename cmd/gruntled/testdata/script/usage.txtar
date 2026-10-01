@@ -8,6 +8,7 @@ exec gruntled-exit 0 -h
 stderr 'usage: gruntled <command>'
 stderr '^  check   '
 stderr '^  graph   print the repository graph as JSON \(--json\)$'
+stderr '^  --version   print the version and commit, then exit$'
 exec gruntled-exit 0 --help
 exec gruntled-exit 0 help
 

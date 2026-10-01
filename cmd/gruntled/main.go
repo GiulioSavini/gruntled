@@ -29,11 +29,25 @@ const (
 	exitFailure  = 3
 )
 
+// Set at release build time:
+//
+//	go build -ldflags "-X main.version=v0.2.0 -X main.commit=abc1234" ./cmd/gruntled
+//
+// They must stay package-level string vars with constant initialisers, or
+// -X silently does nothing.
+var (
+	version = "dev"
+	commit  = "none"
+)
+
 const topUsage = `usage: gruntled <command> [arguments]
 
 Commands:
   check   check a Terragrunt repository for broken dependency output references
   graph   print the repository graph as JSON (--json)
+
+Flags:
+  --version   print the version and commit, then exit
 
 Run "gruntled check -h" or "gruntled graph -h" for details.
 `
@@ -80,6 +94,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 	switch args[0] {
 	case "-h", "-help", "--help", "help":
 		fmt.Fprint(stderr, topUsage)
+		return exitOK
+	case "-version", "--version":
+		fmt.Fprintf(stdout, "gruntled %s (%s)\n", version, commit)
 		return exitOK
 	case "check":
 		return runCheck(args[1:], stdout, stderr)
@@ -188,7 +205,7 @@ func runCheck(args []string, stdout, stderr io.Writer) int {
 	case "json":
 		err = presenter.JSON(&buf, rep.Graph, rep.Diagnostics)
 	case "sarif":
-		err = presenter.SARIF(&buf, rep.Graph, rep.Diagnostics, presenter.ToolInfo{Version: "dev"})
+		err = presenter.SARIF(&buf, rep.Graph, rep.Diagnostics, presenter.ToolInfo{Version: version})
 	default:
 		err = presenter.Text(&buf, rep.Diagnostics)
 	}
