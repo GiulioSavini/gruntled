@@ -63,7 +63,7 @@ See `milestones/v0.1-ROADMAP.md`.
   3. `github/codeql-action/upload-sarif` accepts that document without schema errors
   4. Exit codes of `check` are unchanged by `--format sarif`, and `graph` writes nothing inside the analysed repository
 **Plans**: 5 plans
-- [ ] 06-01-PLAN.md — domain Edge extension + graph JSON presenter
+- [x] 06-01-PLAN.md — domain Edge extension + graph JSON presenter
 - [ ] 06-02-PLAN.md — SARIF presenter
 - [ ] 06-03-PLAN.md — CLI wiring (graph --json, --format sarif), help, docs usage, loops
 - [ ] 06-04-PLAN.md — goldens, SARIF structure test, Graph JSON / SARIF docs
@@ -85,5 +85,5 @@ See `milestones/v0.1-ROADMAP.md`.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 5. Graph Diagnostics | 7/7 | Complete    | 2026-09-30 |
-| 6. Machine-Readable Output | 0/TBD | Not started | - |
+| 6. Machine-Readable Output | 1/5 | In Progress | - |
 | 7. Distribution & CI Integration | 0/TBD | Not started | - |

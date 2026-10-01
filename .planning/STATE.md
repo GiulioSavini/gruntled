@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.2
 milestone_name: CI-Ready
-status: verifying
-stopped_at: Phase 6 context gathered
-last_updated: "2026-09-30T14:09:53.327Z"
-last_activity: "2026-09-30 — completed 05-07 (gap closure: empty config_path matches terragrunt per case)"
+status: executing
+stopped_at: Completed 06-01-PLAN.md
+last_updated: "2026-10-01T09:40:03.907Z"
+last_activity: "2026-10-01 — completed 06-01 (graph presenter document)"
 progress:
   total_phases: 3
   completed_phases: 1
-  total_plans: 7
-  completed_plans: 7
+  total_plans: 12
+  completed_plans: 8
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-09-29)
 
 ## Current Position
 
-Phase: 5 of 7 (Graph Diagnostics) — v0.2 covers phases 5-7
-Plan: 7 of 7 complete (05-01..05-07)
-Status: Phase 5 plans complete incl. gap closure 05-07 — next phase re-verification, then Phase 6
-Last activity: 2026-09-30 — completed 05-07 (gap closure: empty config_path matches terragrunt per case)
+Phase: 6 of 7 (Machine-Readable Output) — v0.2 covers phases 5-7
+Plan: 1 of 5 complete (06-01)
+Status: In progress — 06-01 done (Edge metadata + presenter.Graph); next 06-02
+Last activity: 2026-10-01 — completed 06-01 (graph presenter document)
 
 ## Performance Metrics
 
@@ -65,6 +65,7 @@ Last activity: 2026-09-30 — completed 05-07 (gap closure: empty config_path ma
 | Phase 05 P04 | 6min | 3 tasks | 10 files |
 | Phase 05 P05 | 15min | 2 tasks | 9 files |
 | Phase 05 P06 | 35min | 3 tasks | 5 files |
+| Phase 06 P01 | 6min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -122,6 +123,7 @@ Recent decisions affecting current work:
 - [Phase 05]: 05-06: terragrunt oracle = queue-construction message of run --all --no-auto-init -- version on scratch copies (iso20022, secret, denis256 issue-2565 subtree); textual oracle graphOracle on all three
 - [Phase 05]: 05-06 open issue (config_path = "" GRT003 vs terragrunt 'config_path could not be resolved') RESOLVED by 05-07, see docs/validation.md "Resolved: config_path = """
 - [Phase 05 P07]: empty config_path matches terragrunt v1.1.6 per case: dependency block "" unresolved config-path-empty, silent; dependencies paths entry "" resolves to the unit itself, GRT003 self-loop (terragrunt: "cycle detected during queue construction"); reverses the 05-04 rule that a paths "" is never a self-edge
+- [Phase 06]: 06-01: Edge carries name/target state/skip_outputs (paths edge: no name, skip false); presenter.Graph builds edges from Edges() only, unresolved block (PathPos) + paths entries merged per unit by position
 
 ### Pending Todos
 
@@ -133,6 +135,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-09-30T14:09:53.324Z
-Stopped at: Phase 6 context gathered
-Resume file: .planning/phases/06-machine-readable-output/06-CONTEXT.md
+Last session: 2026-10-01T09:40:03.906Z
+Stopped at: Completed 06-01-PLAN.md
+Resume file: None
