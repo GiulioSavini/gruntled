@@ -38,12 +38,17 @@ created: 2026-10-01
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| TBD | TBD | TBD | REL-02 | unit | `go test ./cmd/gruntled -run TestVersion -count=1` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | REL-02 | script | `go build -ldflags "-X main.version=v9.9.9 -X main.commit=abc1234" ... && --version` matches `gruntled v9.9.9 (abc1234)` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | REL-01 | script | `bash scripts/build-release.sh v0.0.0-ci abc1234 $T` (6 archives + checksums.txt, `sha256sum -c`) | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | REL-01 | existing | `bash scripts/check-architecture.sh` (no-net/no-exec on all 6 targets) | ✅ | ⬜ pending |
-| TBD | TBD | TBD | INT-03 | CI integration | `pre-commit try-repo` on clean (pass) and broken (fail) fixtures | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | INT-04 | CI | `recipe-check` job: clean exit 0, broken exit exactly 1 | ❌ W0 | ⬜ pending |
+| 07-01-T1 | 01 | 1 | REL-02 | unit + ldflags | `go test ./cmd/gruntled -run 'TestVersion|Sarif' -count=1` (TestVersionLdflags builds with `-X main.version=v9.9.9 -X main.commit=abc1234`, expects `gruntled v9.9.9 (abc1234)`) | ❌ W0 | ⬜ pending |
+| 07-01-T2 | 01 | 1 | REL-02 | unit | `go test -race -count=1 ./...` (fixture_test.go: clean-fixture exit 0, sarif-fixture exit 1) | ❌ W0 | ⬜ pending |
+| 07-02-T1 | 02 | 2 | REL-01 | existing + self-test | `bash scripts/check-architecture.sh && bash scripts/test-check-architecture.sh` (no-net/no-exec on all 6 targets; case binary-exec-windows-arm64-file) | ✅ | ⬜ pending |
+| 07-02-T2 | 02 | 2 | REL-01 | script + unit | `go test ./cmd/gruntled -run 'TestReleaseTargetsInSync|TestBuildRelease' -count=1` (6 archives + checksums.txt, `sha256sum -c`) | ❌ W0 | ⬜ pending |
+| 07-02-T3 | 02 | 2 | REL-01 | CI static | `grep build-release.sh .github/workflows/ci.yml` + actionlint | ✅ | ⬜ pending |
+| 07-03-T1 | 03 | 3 | REL-01, REL-02 | static | actionlint on release.yml + all `uses:` SHA-pinned | ❌ W0 | ⬜ pending |
+| 07-04-T1 | 04 | 3 | INT-03, INT-04 | static | hook file + docs/ci.md present, README pointer | ❌ W0 | ⬜ pending |
+| 07-04-T2 | 04 | 3 | INT-03, INT-04 | unit | `go test ./cmd/gruntled -run TestCIDoc -count=1` | ❌ W0 | ⬜ pending |
+| 07-04-T3 | 04 | 3 | INT-03, INT-04 | CI integration | `recipe-check` job: clean exit 0, broken exit exactly 1, `pre-commit try-repo` pass/fail | ❌ W0 | ⬜ pending |
+| 07-05-T1 | 05 | 4 | all | full suite | `go test -race -count=1 ./... && bash scripts/check-architecture.sh && bash scripts/test-check-architecture.sh` | ✅ | ⬜ pending |
+| 07-05-T3 | 05 | 4 | REL-01, REL-02 | manual (user-approved push) | `gh release view <tag>`, `sha256sum -c checksums.txt`, downloaded `--version` | n/a | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -53,7 +58,7 @@ created: 2026-10-01
 
 - [ ] `cmd/gruntled/main_test.go` — TestVersion cases
 - [ ] `cmd/gruntled/testdata/clean-fixture/` — exit 0, not picked up by golden/corpus globs
-- [ ] `scripts/build-release.sh` — 6-target packaging + checksums
+- [ ] `scripts/build-release.sh` — 6-target packaging + checksums (07-02-T2)
 
 ---
 

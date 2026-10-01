@@ -78,7 +78,12 @@ See `milestones/v0.1-ROADMAP.md`.
   2. A tagged GitHub release offers static binaries for linux, darwin and windows on amd64 and arm64, plus a checksums file, and the no-net/no-exec binary proof still passes on them
   3. A user adds one hook entry to `.pre-commit-config.yaml`, served by this repository's `.pre-commit-hooks.yaml`, and `pre-commit run` fails on a broken unit
   4. The documented GitHub Actions recipe (check plus SARIF upload) runs green in this repository's own CI, and a GitLab CI recipe is documented
-**Plans**: TBD
+**Plans**: 5 plans
+- [ ] 07-01-PLAN.md — `--version` ldflags injection, clean check fixture
+- [ ] 07-02-PLAN.md — windows/arm64 6th target (user decision), build-release.sh, CI packaging dry run
+- [ ] 07-03-PLAN.md — release.yml tag-triggered pipeline (SHA-pinned)
+- [ ] 07-04-PLAN.md — pre-commit hook, docs/ci.md recipes, recipe-check CI job
+- [ ] 07-05-PLAN.md — checkpoint: user-approved push of master and release tag, verify release
 
 ## Progress
 
@@ -86,4 +91,4 @@ See `milestones/v0.1-ROADMAP.md`.
 |-------|----------------|--------|-----------|
 | 5. Graph Diagnostics | 7/7 | Complete    | 2026-09-30 |
 | 6. Machine-Readable Output | 5/5 | Complete    | 2026-10-01 |
-| 7. Distribution & CI Integration | 0/TBD | Not started | - |
+| 7. Distribution & CI Integration | 0/5 | Planned | - |
