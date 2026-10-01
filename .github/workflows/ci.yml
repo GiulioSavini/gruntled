@@ -106,8 +106,12 @@ jobs:
             echo "SARIF output missing or empty"
             exit 1
           fi
+          # gruntled writes URIs relative to the analysed directory; prefix the
+          # fixture path so alerts resolve against the repository root.
+          jq --arg p cmd/gruntled/testdata/sarif-fixture/ \
+            '(.. | .artifactLocation? | objects | .uri) |= $p + .' \
+            "$RUNNER_TEMP/gruntled.sarif" > "$RUNNER_TEMP/upload.sarif"
       - uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
         with:
-          sarif_file: ${{ runner.temp }}/gruntled.sarif
+          sarif_file: ${{ runner.temp }}/upload.sarif
           category: gruntled-fixture
-          checkout_path: cmd/gruntled/testdata/sarif-fixture
