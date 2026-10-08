@@ -17,7 +17,7 @@
 ### Blast radius
 
 - [ ] **BLAST-01**: User runs `gruntled blast --base <dir> <path>` and gets two disjoint, sorted sets: Broken (units with a finding present in `<path>` and absent in `<dir>`) and Impacted (units consuming a module whose surface changed), in text and json; without a baseline only Broken is reported, labelled "no baseline"
-- [ ] **BLAST-02**: A unit is Impacted only when a module it directly consumes (one hop) gained or lost a `variable` or `output` name; unchanged surfaces impact nothing, and pre-existing findings are never reported as Broken
+- [x] **BLAST-02**: A unit is Impacted only when a module it directly consumes (one hop) gained or lost a `variable` or `output` name; unchanged surfaces impact nothing, and pre-existing findings are never reported as Broken
 
 ## Future Requirements
 
@@ -60,7 +60,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DAEMON-05 | Phase 11 | Pending |
 | DAEMON-06 | Phase 11 | Pending |
 | BLAST-01 | Phase 9 | Pending |
-| BLAST-02 | Phase 9 | Pending |
+| BLAST-02 | Phase 9 | Complete |
 
 ---
 *Requirements defined: 2026-10-08*

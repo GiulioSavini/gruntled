@@ -99,6 +99,6 @@ Plans:
 | 6. Machine-Readable Output | v0.2 | 5/5 | Complete | 2026-10-01 |
 | 7. Distribution & CI Integration | v0.2 | 5/5 | Complete | 2026-10-01 |
 | 8. Incremental Index Foundation | v0.3 | 2/2 | Complete | 2026-10-08 |
-| 9. Blast Radius | v0.3 | 0/? | Not started | - |
+| 9. Blast Radius | v0.3 | 1/3 | In Progress | - |
 | 10. Watch Daemon & Status File | v0.3 | 0/? | Not started | - |
 | 11. Report, Single Instance & Release Proof | v0.3 | 0/? | Not started | - |
