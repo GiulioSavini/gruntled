@@ -101,7 +101,7 @@ Plans:
 **Plans**: 7 plans
 
 Plans:
-- [ ] 11-01-PLAN.md — statusfile EnsureDir (symlink/owner) + presenter SanitizeReason (phase-10 findings 2, 3)
+- [x] 11-01-PLAN.md — statusfile EnsureDir (symlink/owner) + presenter SanitizeReason (phase-10 findings 2, 3)
 - [ ] 11-02-PLAN.md — ipc package: crash-safe lock, raw-syscall AF_UNIX server/client, windows dump transport
 - [ ] 11-03-PLAN.md — `watch` wiring: shared renderer, lock-first single instance, serve snapshot, already-running
 - [ ] 11-04-PLAN.md — `gruntled report` (socket / windows file), docs/cli.md, parity tests
@@ -119,4 +119,4 @@ Plans:
 | 8. Incremental Index Foundation | v0.3 | 2/2 | Complete | 2026-10-08 |
 | 9. Blast Radius | v0.3 | 3/3 | Complete | 2026-10-08 |
 | 10. Watch Daemon & Status File | v0.3 | 7/7 | Complete | 2026-10-08 |
-| 11. Report, Single Instance & Release Proof | v0.3 | 0/7 | Planned | - |
+| 11. Report, Single Instance & Release Proof | v0.3 | 1/7 | In Progress | - |
