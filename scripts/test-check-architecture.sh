@@ -597,6 +597,23 @@ func zzProbe() { _, _ = os.StartProcess("x", nil, &os.ProcAttr{}) }
 EOF
 run_case "binary-start-process" "$copy" binary-no-net-no-exec
 
+# --- binary-syscall-createprocess-windows: syscall.CreateProcess (sec-10) --
+# syscall is a standard package, so neither the import list nor the
+# non-standard text scan saw a direct CreateProcess call on windows.
+copy=$(mkcopy)
+cat >"$copy/cmd/gruntled/zz_probe_windows.go" <<'EOF'
+package main
+
+import "syscall"
+
+func init() {
+	_ = syscall.CreateProcess(nil, nil, nil, nil, false, 0, nil, nil, nil, nil)
+}
+EOF
+run_case_msg "binary-syscall-createprocess-windows" "$copy" binary-no-net-no-exec \
+  '+^windows/amd64: linked symbol syscall\.CreateProcess$' \
+  '+^windows/arm64: linked symbol syscall\.CreateProcess$'
+
 # --- binary-exec-windows-file: os/exec only in a _windows.go file ---------
 # A linux go list never sees this file; only the windows iterations of
 # the release-target loop do, so this proves the loop covers non-host

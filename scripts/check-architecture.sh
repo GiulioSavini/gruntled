@@ -529,12 +529,13 @@ fi
 # binary, which the old grep never did. Every case the old proof caught is
 # still caught, plus the aliased/dot-import/x/sys cases it missed. The
 # self-test cases binary-os-exec, binary-net, binary-start-process,
-# binary-exec-windows-file, binary-exec-windows-arm64-file,
+# binary-syscall-createprocess-windows, binary-exec-windows-file,
+# binary-exec-windows-arm64-file,
 # binary-exec-in-test-allowed, binary-aliased-start-process,
 # binary-xsys-exemption-narrow and binary-windows-fsnotify pin exactly
 # what is covered.
 release_targets="linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64"
-sym_re='^(os\.StartProcess|syscall\.(forkExec|ForkExec|Exec|StartProcess)|os/exec\.)'
+sym_re='^(os\.StartProcess|syscall\.(forkExec|ForkExec|Exec|StartProcess|CreateProcess|CreateProcessAsUser)|os/exec\.)'
 sym_re="${sym_re}"'|^golang\.org/x/sys/(unix|windows)\.(Exec|Execveat|ForkExec|StartProcess|forkExec[A-Za-z0-9]*|CreateProcess|CreateProcessAsUser|ShellExecute|KexecFileLoad|kexecFileLoad)($|\.)'
 bin_violations=""
 for target in $release_targets; do
@@ -546,7 +547,7 @@ for target in $release_targets; do
     GOOS="$t_goos" GOARCH="$t_goarch" go list -e -deps \
       -f '{{if and (not .Standard) (ne .ImportPath "golang.org/x/sys/unix")}}{{$d := .Dir}}{{range .GoFiles}}{{$d}}/{{.}}{{"\n"}}{{end}}{{end}}' ./cmd/gruntled |
       grep -v '^$' |
-      xargs -r grep -l -E '\bos\.StartProcess\b|\bsyscall\.(ForkExec|Exec|StartProcess)\b' || true
+      xargs -r grep -l -E '\bos\.StartProcess\b|\bsyscall\.(ForkExec|Exec|StartProcess|CreateProcess|CreateProcessAsUser)\b' || true
   )
   if [ -n "$t_forbidden" ]; then
     bin_violations="${bin_violations}$(printf '%s\n' "$t_forbidden" | sed "s|^|${target}: package |")

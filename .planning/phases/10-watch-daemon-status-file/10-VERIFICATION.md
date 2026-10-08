@@ -68,3 +68,15 @@ None blocking found in the scanned files.
 None.
 
 _Verifier: Claude (gsd-verifier)_
+
+## Security
+
+Audit by proj-sec:auditor (2026-10-08), verdict fix-small. No critical or high findings.
+
+| # | Severity | Location | Finding | Status |
+|---|----------|----------|---------|--------|
+| 1 | Medium | scripts/check-architecture.sh `sym_re` + text scan | Direct `syscall.CreateProcess`/`CreateProcessAsUser` on windows bypassed the no-exec proof (syscall is standard; regexes lacked the names) | Fixed in fix(10-sec): names added to both halves; self-test `binary-syscall-createprocess-windows` |
+| 2 | Low | internal/infrastructure/statusfile/write.go:188-199 | Dir check uses `os.Stat` (follows symlinks) and only mode bits; on TempDir fallback (HOME unset) another user can pre-create `/tmp/gruntled/<hash12>` as a symlink or foreign-owned 0700 dir | Open: Lstat, reject symlink, require owner uid == Geteuid (unix) |
+| 3 | Low | internal/interfaces/presenter/status.go:301, cmd/gruntled/watch.go:251 | Control bytes (ESC) from `err.Error()` reach status line and stderr | Open: drop `unicode.IsControl` runes before 120-rune cut |
+| 4 | Low | scripts/test-check-architecture.sh `run_case_msg` | Fixed names `/tmp/tca-out.$$`, `/tmp/tca-err.$$` in shared /tmp | Open: one `mktemp -d` per run, cleaned via COPIES |
+| 5 | Low | internal/infrastructure/watch/native_unix.go:125 | WalkDir→Add race: dir swapped for symlink gets watched outside root (extra events only; loader reads via os.Root) | Open (optional): Lstat before addWatch |
