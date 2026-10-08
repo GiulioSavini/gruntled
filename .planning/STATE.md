@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.3
 milestone_name: Watch & Blast
 status: executing
-stopped_at: Completed 11-05-PLAN.md
-last_updated: "2026-10-08T12:52:58.732Z"
-last_activity: "2026-10-08 — completed 11-05 (release proof self-tests for ipc, CI test-os matrix)"
+stopped_at: Completed 11-06-PLAN.md
+last_updated: "2026-10-08T13:11:44.951Z"
+last_activity: "2026-10-08 — completed 11-06 (README/docs for watch, report, blast; phase gate green; 11-07 windows CI pending)"
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 19
-  completed_plans: 17
+  completed_plans: 18
 ---
 
 # Project State
@@ -25,11 +25,11 @@ See: .planning/PROJECT.md (updated 2026-10-08)
 ## Current Position
 
 Phase: 11 of 11 (Report, Single Instance & Release Proof) — executing
-Plan: 5 of 7 (11-05 complete)
-Status: Phase 11 in progress
-Last activity: 2026-10-08 — completed 11-05 (release proof self-tests for ipc, CI test-os matrix)
+Plan: 6 of 7 (11-01..11-06 complete; 11-07 CI confirmation pending)
+Status: Phase 11 in progress — windows CI (test-os windows-latest) red on pre-existing tests, fixed in 11-07
+Last activity: 2026-10-08 — completed 11-06 (README/docs for watch, report, blast; phase gate green)
 
-Progress: [███████░░░] 5/7 Phase 11 plans (v0.3: 3/4 phases verified)
+Progress: [█████████░] 6/7 Phase 11 plans (v0.3: 3/4 phases verified)
 
 ## Performance Metrics
 
@@ -94,6 +94,7 @@ Progress: [███████░░░] 5/7 Phase 11 plans (v0.3: 3/4 phases 
 | Phase 11 P03 | 6min | 2 tasks | 7 files |
 | Phase 11 P04 | 15min | 2 tasks | 9 files |
 | Phase 11 P05 | 12min | 2 tasks | 3 files |
+| Phase 11 P06 | 14min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -132,6 +133,13 @@ Per-plan decision history lives in the phase SUMMARY files and git history.
 - [Phase 11]: report exits 3 for no daemon/indexing/mismatch; windows reads the report file only while the lock is held
 - [Phase 11]: 11-05: Step 9 needs no exemption for ipc (stdlib syscall sockets/locks); self-tests pin net out of both ipc builds
 - [Phase 11]: 11-05: CI test-os matrix (macos, windows) runs go test without -race; ubuntu keeps -race + arch scripts
+- [Phase 11]: 11-06: AF_UNIX via stdlib syscall, no net package; Step 9 proof holds on six targets with ipc linked
+- [Phase 11]: 11-06: lock-first single instance; second watch prints location and exits 0 (watch -h/docs updated)
+- [Phase 11]: 11-06: daemon snapshot holds pre-rendered bytes; report copies them (byte parity with check)
+- [Phase 11]: 11-06: windows report = dump file read only while lock held (lock probe), no live query
+- [Phase 11]: 11-06: report exit codes mirror check (0/1), 3 for no daemon/indexing/mismatch
+- [Phase 11]: 11-06: sun_path overflow is a hard exit 3
+- [Phase 11]: 11-06: windows CI (test-os windows-latest) red on pre-existing tests in run 37780137349; pending 11-07
 
 ### Pending Todos
 
@@ -143,6 +151,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-10-08T12:52:58.730Z
-Stopped at: Completed 11-05-PLAN.md
+Last session: 2026-10-08T13:11:44.946Z
+Stopped at: Completed 11-06-PLAN.md
 Resume file: None

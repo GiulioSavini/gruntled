@@ -106,7 +106,7 @@ Plans:
 - [x] 11-03-PLAN.md — `watch` wiring: shared renderer, lock-first single instance, serve snapshot, already-running
 - [x] 11-04-PLAN.md — `gruntled report` (socket / windows file), docs/cli.md, parity tests
 - [x] 11-05-PLAN.md — (wave 4, after 11-03) six-target proof self-tests for socket code, mktemp fix, macOS/Windows CI job
-- [ ] 11-06-PLAN.md — README for watch/report/blast, guard test, phase gate, bookkeeping (wave 5)
+- [x] 11-06-PLAN.md — README for watch/report/blast, guard test, phase gate, bookkeeping (wave 5)
 - [ ] 11-07-PLAN.md — verify macOS/Windows CI for pushed HEAD via gh (autonomous)
 
 ## Progress
@@ -119,4 +119,4 @@ Plans:
 | 8. Incremental Index Foundation | v0.3 | 2/2 | Complete | 2026-10-08 |
 | 9. Blast Radius | v0.3 | 3/3 | Complete | 2026-10-08 |
 | 10. Watch Daemon & Status File | v0.3 | 7/7 | Complete | 2026-10-08 |
-| 11. Report, Single Instance & Release Proof | v0.3 | 5/7 | In Progress | - |
+| 11. Report, Single Instance & Release Proof | v0.3 | 6/7 | In Progress | - |
