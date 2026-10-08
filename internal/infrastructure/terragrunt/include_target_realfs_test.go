@@ -4,6 +4,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/GiulioSavini/gruntled/internal/application/indexing"
@@ -135,6 +136,12 @@ func TestIncludeTargetSymlinkedDir(t *testing.T) {
 // TestIncludeTargetSymlinkedFile: the parent is included through a
 // symlinked file (live/alias.hcl -> parent/terragrunt.hcl).
 func TestIncludeTargetSymlinkedFile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// os.Symlink stores "parent/terragrunt.hcl" as "parent\terragrunt.hcl"
+		// on windows, and canonicalPath deliberately fails closed on a
+		// backslash link target.
+		t.Skip("windows rewrites the multi-segment link target with backslashes")
+	}
 	dir := realTree(t, symlinkParentTree("../../alias.hcl"))
 	realSymlinkOrSkip(t, dir, "parent/terragrunt.hcl", "live/alias.hcl")
 	assertSymlinkParentMarked(t, build(t, openRealRoot(t, dir)))
