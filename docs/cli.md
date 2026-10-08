@@ -9,6 +9,7 @@ runs Terraform, Terragrunt or any other program.
 ```
 gruntled check [--format text|json|sarif] [path]
 gruntled graph --json [path]
+gruntled blast [--base dir] [--format text|json] [path]
 gruntled --version
 ```
 
@@ -21,6 +22,8 @@ gruntled check live/ --format json
 gruntled check live/ --format sarif > gruntled.sarif
 gruntled check --format=json -- -oddly-named-dir
 gruntled graph --json live/
+gruntled blast --base ../base .
+gruntled blast --base ../base --format json live/
 ```
 
 - Flags may appear before or after the path. The Go standard library `flag`
@@ -28,8 +31,8 @@ gruntled graph --json live/
   after each positional.
 - `--` ends flag parsing. Everything after it is a path, even if it starts with `-`.
 - More than one path is a usage error (exit 2).
-- `gruntled -h` lists the commands. `gruntled check -h` and `gruntled graph -h`
-  print the usage texts below and exit 0.
+- `gruntled -h` lists the commands. `gruntled check -h`, `gruntled graph -h`
+  and `gruntled blast -h` print the usage texts below and exit 0.
 
 ```
 usage: gruntled <command> [arguments]
@@ -37,11 +40,12 @@ usage: gruntled <command> [arguments]
 Commands:
   check   check a Terragrunt repository for broken dependency output references
   graph   print the repository graph as JSON (--json)
+  blast   report which units a change breaks (Broken) or puts at risk (Impacted) against --base
 
 Flags:
   --version   print the version and commit, then exit
 
-Run "gruntled check -h" or "gruntled graph -h" for details.
+Run "gruntled check -h", "gruntled graph -h" or "gruntled blast -h" for details.
 ```
 
 ```
@@ -97,6 +101,58 @@ Exit codes:
   3  analysis could not run: path missing, not a directory or unreadable, an internal failure, or stdout write failed
 ```
 
+`gruntled blast` answers "what does this change break, and what does it put
+at risk?" by comparing the tree at `path` (the change) with a baseline tree
+at `--base` (before the change). It runs the same analysis as `check` on
+both trees and reports two disjoint, path-sorted lists:
+
+- **Broken**: units whose findings are new in `path`. A finding is matched
+  across the trees by code, unit, file and message, without line and column,
+  so a pre-existing finding that only moved to another line is not new. A
+  finding that has no unit (GRT100 on a file no unit reads) is listed under
+  its file.
+- **Impacted**: units of `path` that use a module whose declared variable or
+  output names differ between the trees, and are not already Broken. Only
+  direct consumers are listed: a unit that merely depends on an Impacted unit
+  is not Impacted.
+
+gruntled never runs git or any other program. Check the baseline out
+yourself, for example in CI:
+
+```
+git worktree add ../base origin/main
+gruntled blast --base ../base .
+```
+
+Without `--base` there is nothing to compare against: every current finding
+is Broken, Impacted is not computed, and the output says so ("no baseline").
+A `--base` that cannot be opened is exit 3, never a silent fallback to no
+baseline. `--format` is `text` or `json`; `sarif` is not supported for
+`blast` and is a usage error.
+
+```
+usage: gruntled blast [--base dir] [--format text|json] [path]
+
+Compare the Terragrunt repository at path (default ".") with the baseline
+tree at --base. Broken lists the units with findings that are new in path
+(a finding that only moved to another line is not new). Impacted lists the
+units that use a module whose variable or output names changed and are not
+Broken; only direct consumers are listed. Without --base every finding is
+Broken and Impacted is not computed ("no baseline"). gruntled never runs
+git: check the baseline out yourself, for example with git worktree.
+Flags may appear before or after path; "--" ends flag parsing.
+
+Flags:
+  --base dir           baseline tree to compare against (default: none)
+  --format text|json   output format (default "text")
+
+Exit codes:
+  0  comparison completed, no error diagnostic in Broken
+  1  comparison completed, at least one error diagnostic in Broken
+  2  usage error: unknown flag, invalid --format, more than one path
+  3  comparison could not run: path or --base missing, not a directory or unreadable, an internal failure, or stdout write failed
+```
+
 ## Exit codes
 
 | Code | Meaning |
@@ -125,6 +181,19 @@ stdout. As printed by `gruntled graph -h`:
   0  graph printed, even with unknown units
   2  usage error: unknown flag, missing --json, more than one path
   3  analysis could not run: path missing, not a directory or unreadable, an internal failure, or stdout write failed
+```
+
+`gruntled blast` exits 1 only when Broken holds at least one error
+diagnostic, like `check`. Every current rule is an error, but a Broken list
+holding only warnings would exit 0. Pre-existing findings never fail `blast`.
+Exit 3 also covers a `--base` directory that cannot be opened. As printed by
+`gruntled blast -h`:
+
+```
+  0  comparison completed, no error diagnostic in Broken
+  1  comparison completed, at least one error diagnostic in Broken
+  2  usage error: unknown flag, invalid --format, more than one path
+  3  comparison could not run: path or --base missing, not a directory or unreadable, an internal failure, or stdout write failed
 ```
 
 CI can tell findings in the repository (1) apart from gruntled failing to run (3).
@@ -293,6 +362,48 @@ Stability:
   and `mock_outputs_allowed_terraform_commands` on edges.
 
 Empty lists print as `[]`, never `null`. HTML characters are not escaped.
+
+### Blast text
+
+`gruntled blast` (default `--format text`) writes to stdout only; there is no
+stderr summary. The first line names the baseline as given to `--base`.
+Each Broken subject is followed by its new findings in the `check` text
+layout without the `(unit U)` suffix. Each Impacted unit names the changed
+module and its name changes, in the order removed variables, added
+variables, removed outputs, added outputs:
+
+```
+baseline: ../base
+Broken (1):
+  live/app
+    live/app/terragrunt.hcl:7:20: GRT001 dependency "db" output "id" is not declared by module "modules/vpc" (target unit "live/db")
+Impacted (2):
+  live/cache (module modules/vpc: +variable name, -output id)
+  live/db (module modules/vpc: +variable name, -output id)
+```
+
+Empty sections still print their header (`Broken (0):`). Without `--base`
+the first line is `baseline: none (no baseline)` and there is no Impacted
+section.
+
+### Blast JSON
+
+`gruntled blast --format json` writes one JSON document to stdout. The
+schema is versioned; this is version 1, with the same stability rules as
+Graph JSON.
+
+| Key | Content |
+|-----|---------|
+| `version` | Schema version, `1`. |
+| `kind` | Always `"blast"`. |
+| `baseline` | `true` when `--base` was given, `false` otherwise. |
+| `note` | `"no baseline"`. Present only when `baseline` is `false`. |
+| `broken[]` | `unit` (the unit, or the file for a unit-less finding) and `findings[]`, each `code`, `severity`, `file`, `line`, `column`, `message`. Sorted by `unit`. |
+| `impacted[]` | `unit`, `module`, `added_variables`, `removed_variables`, `added_outputs`, `removed_outputs` (sorted names). Sorted by `unit`. Always `[]` without a baseline. |
+| `summary` | `broken` and `impacted` counts. |
+
+A unit never appears in both `broken` and `impacted`. Empty lists print as
+`[]`, never `null`. HTML characters are not escaped.
 
 ### SARIF
 
@@ -548,7 +659,20 @@ including unit instead.
 ## Known limitations
 
 - A diagnostic's identity includes its position, so a line shift above a
-  reference changes it.
+  reference changes it. `blast` is the exception: it matches findings without
+  line and column, so two findings that differ only by position collapse
+  into one, and only a finding with a new code, unit, file or message is
+  Broken.
+- `blast` Impacted compares variable and output NAMES only. An added
+  required variable shows up only as a `+variable` change, never as Broken;
+  a changed type, default, `sensitive` flag or output value is invisible.
+- `blast` Impacted is one hop: only units that use the changed module are
+  listed, not the units that depend on them.
+- `blast` does not diff a module that is new, deleted, or has an unknown
+  surface in either tree; consumers of a deleted local module show up only
+  through other findings.
+- `blast` attributes a unit-less finding (GRT100 in a file no unit reads) to
+  its file, not to a unit.
 - Terragrunt stacks that have not been generated are invisible.
 - Undeclared dependency labels are not reported.
 - A config-unknown unit carries no dependency edges: a cycle through it is
