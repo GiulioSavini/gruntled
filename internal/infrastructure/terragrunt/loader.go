@@ -18,13 +18,60 @@ import (
 
 // Loader implements ports.UnitLoader over an fs.FS whose paths are
 // repo-relative and slash-separated.
+//
+// A Loader keeps its parse results (parseStore) across LoadUnits calls, so
+// a reused Loader re-reads and re-parses only files whose paths were
+// passed to Invalidate since the last load. Discovery, resolution and
+// assembly are redone on every call, so an incremental load equals a
+// fresh one by construction, provided the dirty-set contract holds: every
+// create, write, remove or rename under the repository MUST be reported
+// through Invalidate (both old and new path for a rename). Missing-file
+// (readErr) entries are cached too, so a create must be invalidated just
+// like an edit.
+//
+// A Loader is not safe for concurrent use: run one LoadUnits at a time,
+// and never let Invalidate overlap a LoadUnits call (the daemon indexer is
+// a single goroutine).
 type Loader struct {
-	fsys fs.FS
+	fsys  fs.FS
+	store *parseStore
+
+	// lastHits and lastMisses are the cache counts of the last LoadUnits
+	// call that completed successfully.
+	lastHits, lastMisses int
 }
 
-// NewLoader returns a Loader reading from fsys.
+// NewLoader returns a Loader reading from fsys, with an empty parse store.
 func NewLoader(fsys fs.FS) *Loader {
-	return &Loader{fsys: fsys}
+	return &Loader{fsys: fsys, store: newParseStore()}
+}
+
+// Invalidate evicts the cached parse of every given repo-relative,
+// slash-separated path, and of every cached file under it when the path
+// is a directory (prefix p+"/", so "a" never evicts "ab/..."). "." or ""
+// clears the whole store. Paths are cleaned with path.Clean first.
+func (l *Loader) Invalidate(paths ...string) {
+	for _, raw := range paths {
+		p := path.Clean(raw)
+		if raw == "" || p == "." {
+			clear(l.store.files)
+			continue
+		}
+		delete(l.store.files, p)
+		prefix := p + "/"
+		for k := range l.store.files {
+			if strings.HasPrefix(k, prefix) {
+				delete(l.store.files, k)
+			}
+		}
+	}
+}
+
+// CacheStats returns the parse-cache hits and misses of the last
+// LoadUnits call that completed successfully: misses is the number of
+// files read and parsed, hits the number of lookups served from the store.
+func (l *Loader) CacheStats() (hits, misses int) {
+	return l.lastHits, l.lastMisses
 }
 
 var _ ports.UnitLoader = (*Loader)(nil)
@@ -35,7 +82,9 @@ var _ ports.UnitLoader = (*Loader)(nil)
 // "a-b", even though "a-b" < "a/b" as strings), and resolves each one
 // through a single fileCache shared by the whole call, so every unit file
 // and every include file is read and parsed at most once no matter how many
-// units share it (research Pattern 2 / PARSE-03).
+// units share it (research Pattern 2 / PARSE-03). The fileCache sits on the
+// Loader's persistent parseStore, so files not Invalidated since the
+// previous call are not read at all.
 //
 // Per-unit and per-file problems are never a Go error: they become
 // UnknownReason fields on the returned UnitConfig and diagnostics in
@@ -54,7 +103,10 @@ func (l *Loader) LoadUnits(ctx context.Context) (ports.LoadResult, error) {
 		return strings.Compare(entries[i].dir, entries[j].dir) < 0
 	})
 
-	cache := newFileCache(l.fsys)
+	if l.store == nil {
+		l.store = newParseStore()
+	}
+	cache := newFileCacheOn(l.fsys, l.store)
 	targets := newIncludeTargets()
 	units := make([]ports.UnitConfig, 0, len(entries))
 	for _, e := range entries {
@@ -88,7 +140,14 @@ func (l *Loader) LoadUnits(ctx context.Context) (ports.LoadResult, error) {
 		units[i] = ports.UnitConfig{Path: u.Path, ConfigUnknownReason: ReasonIncludeTarget}
 	}
 
-	return ports.LoadResult{Units: units, Diagnostics: cache.syntaxDiagnostics()}, nil
+	// Success only: drop store entries this load never reached, and
+	// publish its stats. Early error returns above leave the store as is;
+	// its entries stay valid since each is a pure function of path+bytes.
+	diags := cache.syntaxDiagnostics()
+	cache.prune()
+	l.lastHits, l.lastMisses = cache.hits, cache.misses
+
+	return ports.LoadResult{Units: units, Diagnostics: diags}, nil
 }
 
 // resolveUnit computes e's ports.UnitConfig against cache, in the fixed

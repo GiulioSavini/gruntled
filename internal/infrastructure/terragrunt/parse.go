@@ -116,6 +116,12 @@ type generateDecl struct {
 // (02-REVIEW G7); like readErr, it leaves every fact and syntax unset.
 // Exactly one of readErr, limitReason and syntax is set when the file is
 // unusable.
+//
+// A parsedFile is immutable after parse and shared across LoadUnits calls
+// through the Loader's parseStore: no consumer (merge, refs, eval,
+// include targets, dependency facts, loader) writes to its fields or
+// sorts/appends into its slices in place (mergeReferences copies refs
+// into a fresh slice before sorting). Keep it that way.
 type parsedFile struct {
 	path    repograph.RepoPath
 	src     []byte
@@ -139,42 +145,75 @@ type parsedFile struct {
 	refs       []repograph.Reference
 }
 
-// fileCache reads and parses each file at most once (research Pattern 2).
-// It is single-threaded on purpose: parallelising it would need a per-key
-// sync.Once, and syntaxDiagnostics' output would still need to be sorted
-// afterward.
-type fileCache struct {
-	fsys  fs.FS
+// parseStore holds parsed files keyed by repo-relative path. A parsedFile
+// is a pure function of its path and bytes, so a store can outlive a
+// single LoadUnits call: the Loader owns one and evicts entries through
+// Loader.Invalidate when the caller reports a path as dirty. Negative
+// entries (readErr set, e.g. a file read before it existed) are stored
+// too, so a create MUST be invalidated like any other change.
+type parseStore struct {
 	files map[string]*parsedFile
 }
 
-// newFileCache returns a fileCache reading from fsys.
-func newFileCache(fsys fs.FS) *fileCache {
-	return &fileCache{fsys: fsys, files: map[string]*parsedFile{}}
+// newParseStore returns an empty parseStore.
+func newParseStore() *parseStore {
+	return &parseStore{files: map[string]*parsedFile{}}
 }
 
-// get returns p's parsedFile. The first call for a given p reads and
-// parses the file; every later call, from however many distinct callers,
+// fileCache is one LoadUnits call's view of a parseStore: it reads and
+// parses each file at most once (research Pattern 2), reuses entries the
+// store already holds, and records which paths this call touched so
+// syntax diagnostics and pruning follow the current load only. It is
+// single-threaded on purpose: parallelising it would need a per-key
+// sync.Once, and syntaxDiagnostics' output would still need to be sorted
+// afterward.
+type fileCache struct {
+	fsys    fs.FS
+	store   *parseStore
+	touched map[string]struct{}
+	hits    int
+	misses  int
+}
+
+// newFileCache returns a fileCache reading from fsys over a private,
+// empty store.
+func newFileCache(fsys fs.FS) *fileCache {
+	return newFileCacheOn(fsys, newParseStore())
+}
+
+// newFileCacheOn returns a fileCache reading from fsys that reuses and
+// fills store.
+func newFileCacheOn(fsys fs.FS, store *parseStore) *fileCache {
+	return &fileCache{fsys: fsys, store: store, touched: map[string]struct{}{}}
+}
+
+// get returns p's parsedFile. The first call for a given p (absent from
+// the store) reads and parses the file; every later call, from however
+// many distinct callers or later LoadUnits calls sharing the store,
 // returns the exact same *parsedFile without reading or parsing again. It
 // never returns nil.
 func (c *fileCache) get(p repograph.RepoPath) *parsedFile {
 	key := p.String()
-	if pf, ok := c.files[key]; ok {
+	c.touched[key] = struct{}{}
+	if pf, ok := c.store.files[key]; ok {
+		c.hits++
 		return pf
 	}
+	c.misses++
 	pf := c.parse(p)
-	c.files[key] = pf
+	c.store.files[key] = pf
 	return pf
 }
 
 // syntaxDiagnostics returns one GRT100 diagnostic per file get() has been
-// called on and that had a syntax error, sorted by path. A file get() was
-// never called on contributes nothing, and neither does a file that read
-// and parsed without an HCL error.
+// called on during this cache's lifetime and that had a syntax error,
+// sorted by path. Only touched files count: a broken file still in the
+// store but no longer reached by this load contributes nothing, so no
+// stale diagnostic survives an edit that unreferences it.
 func (c *fileCache) syntaxDiagnostics() []diagnostic.Diagnostic {
 	var paths []string
-	for k, pf := range c.files {
-		if pf.syntax != nil {
+	for k := range c.touched {
+		if c.store.files[k].syntax != nil {
 			paths = append(paths, k)
 		}
 	}
@@ -182,9 +221,19 @@ func (c *fileCache) syntaxDiagnostics() []diagnostic.Diagnostic {
 
 	diags := make([]diagnostic.Diagnostic, 0, len(paths))
 	for _, k := range paths {
-		diags = append(diags, *c.files[k].syntax)
+		diags = append(diags, *c.store.files[k].syntax)
 	}
 	return diags
+}
+
+// prune drops every store entry this cache did not touch, so the store
+// never grows past the files the latest complete load reached.
+func (c *fileCache) prune() {
+	for k := range c.store.files {
+		if _, ok := c.touched[k]; !ok {
+			delete(c.store.files, k)
+		}
+	}
 }
 
 // parse reads and parses p exactly once. See parsedFile's doc comment for
