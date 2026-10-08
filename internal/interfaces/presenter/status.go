@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/GiulioSavini/gruntled/internal/domain/diagnostic"
 )
@@ -60,11 +61,24 @@ func StatusStopped(w io.Writer, stamp string) error {
 	return writeStatus(w, "stopped", stamp)
 }
 
+// SanitizeReason turns every control rune (ESC, NUL, CR, LF, tab, DEL...)
+// into a space, then collapses whitespace runs to single spaces and trims
+// the ends. It does not cap the length.
+func SanitizeReason(s string) string {
+	s = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return ' '
+		}
+		return r
+	}, s)
+	return strings.Join(strings.Fields(s), " ")
+}
+
 // StatusFailed writes the status line for a run that could not produce a
-// diagnostic set. Whitespace runs in reason collapse to single spaces, the
-// result is cut to 120 runes, and an empty reason reads "unknown error".
+// diagnostic set. reason goes through SanitizeReason, the result is cut to
+// 120 runes, and an empty reason reads "unknown error".
 func StatusFailed(w io.Writer, reason, stamp string) error {
-	r := strings.Join(strings.Fields(reason), " ")
+	r := SanitizeReason(reason)
 	if r == "" {
 		r = "unknown error"
 	}
