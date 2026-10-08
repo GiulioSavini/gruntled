@@ -12,7 +12,7 @@
 - [x] **DAEMON-03**: The daemon writes one status line (e.g. `gruntled: 2 errors (GRT001×1 GRT003×1) @ 14:02:11`, or `gruntled: ok @ …`) atomically to a documented per-repository path outside the repository, readable from a shell prompt, tmux or an editor status bar on every target OS
 - [x] **DAEMON-04**: User runs `gruntled report` and gets the running daemon's current diagnostics in the same formats as `check` (text/json/sarif) over a unix socket on linux and darwin; on windows `report` reads the status file; with no daemon running it exits non-zero with a clear message and never starts one
 - [x] **DAEMON-05**: Starting `gruntled watch` while a daemon already serves that repository detects it (lock + socket, stale socket recovered), prints where it runs and exits 0 without starting a second; a crashed daemon leaves no lock that blocks a restart
-- [ ] **DAEMON-06**: The no-net/no-exec binary proof still passes on all six release targets with the watcher and socket code linked in (fsnotify only on `!windows`, stat polling on windows and via `--poll`)
+- [x] **DAEMON-06**: The no-net/no-exec binary proof still passes on all six release targets with the watcher and socket code linked in (fsnotify only on `!windows`, stat polling on windows and via `--poll`)
 
 ### Blast radius
 
@@ -58,7 +58,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DAEMON-03 | Phase 10 | Complete |
 | DAEMON-04 | Phase 11 | Complete |
 | DAEMON-05 | Phase 11 | Complete |
-| DAEMON-06 | Phase 11 | Pending |
+| DAEMON-06 | Phase 11 | Complete |
 | BLAST-01 | Phase 9 | Complete |
 | BLAST-02 | Phase 9 | Complete |
 

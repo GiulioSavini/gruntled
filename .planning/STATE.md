@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.3
 milestone_name: Watch & Blast
 status: executing
-stopped_at: Completed 11-04-PLAN.md
-last_updated: "2026-10-08T12:47:09.652Z"
-last_activity: "2026-10-08 — completed 11-04 (gruntled report over socket / windows report file)"
+stopped_at: Completed 11-05-PLAN.md
+last_updated: "2026-10-08T12:52:58.732Z"
+last_activity: "2026-10-08 — completed 11-05 (release proof self-tests for ipc, CI test-os matrix)"
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 19
-  completed_plans: 16
+  completed_plans: 17
 ---
 
 # Project State
@@ -25,11 +25,11 @@ See: .planning/PROJECT.md (updated 2026-10-08)
 ## Current Position
 
 Phase: 11 of 11 (Report, Single Instance & Release Proof) — executing
-Plan: 4 of 7 (11-04 complete)
+Plan: 5 of 7 (11-05 complete)
 Status: Phase 11 in progress
-Last activity: 2026-10-08 — completed 11-04 (gruntled report over socket / windows report file)
+Last activity: 2026-10-08 — completed 11-05 (release proof self-tests for ipc, CI test-os matrix)
 
-Progress: [██████░░░░] 4/7 Phase 11 plans (v0.3: 3/4 phases verified)
+Progress: [███████░░░] 5/7 Phase 11 plans (v0.3: 3/4 phases verified)
 
 ## Performance Metrics
 
@@ -93,6 +93,7 @@ Progress: [██████░░░░] 4/7 Phase 11 plans (v0.3: 3/4 phases 
 | Phase 11 P02 | 12min | 2 tasks | 11 files |
 | Phase 11 P03 | 6min | 2 tasks | 7 files |
 | Phase 11 P04 | 15min | 2 tasks | 9 files |
+| Phase 11 P05 | 12min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -129,6 +130,8 @@ Per-plan decision history lives in the phase SUMMARY files and git history.
 - [Phase 11]: 11-02: AF_UNIX on raw syscall, os.NewFile non-blocking + SyscallConn accept; Close via quit chan wakes accept, waits handlers, removes socket; server always answers v=1, client mismatch -> *VersionError
 - [Phase 11]: Watch takes the per-repo lock before watcher/index; second watch prints location and exits 0; snapshots pre-rendered via shared renderReport
 - [Phase 11]: report exits 3 for no daemon/indexing/mismatch; windows reads the report file only while the lock is held
+- [Phase 11]: 11-05: Step 9 needs no exemption for ipc (stdlib syscall sockets/locks); self-tests pin net out of both ipc builds
+- [Phase 11]: 11-05: CI test-os matrix (macos, windows) runs go test without -race; ubuntu keeps -race + arch scripts
 
 ### Pending Todos
 
@@ -140,6 +143,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-10-08T12:47:09.650Z
-Stopped at: Completed 11-04-PLAN.md
+Last session: 2026-10-08T12:52:58.730Z
+Stopped at: Completed 11-05-PLAN.md
 Resume file: None
