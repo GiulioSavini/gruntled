@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"testing"
 
@@ -208,6 +209,9 @@ func TestVersionLdflags(t *testing.T) {
 		t.Skip("builds the binary")
 	}
 	bin := filepath.Join(t.TempDir(), "g")
+	if runtime.GOOS == "windows" {
+		bin += ".exe"
+	}
 	build := exec.Command("go", "build", "-ldflags", "-X main.version=v9.9.9 -X main.commit=abc1234", "-o", bin, ".")
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("go build: %v\n%s", err, out)
