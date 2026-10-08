@@ -85,13 +85,42 @@ type daemon struct {
 	code    int
 }
 
-// testDeps returns production-like deps with a fixed clock and real
-// adapters.
-func testDeps() watchDeps {
+// testDeps returns production-like deps with a fixed clock, real adapters
+// and a private runtime base, so lock, socket and report dump never touch
+// the real runtime directory.
+func testDeps(t *testing.T) watchDeps {
+	t.Helper()
 	d := defaultWatchDeps()
 	d.now = func() time.Time { return watchStamp }
 	d.maxWait = 50 * time.Millisecond
+	d.env = envAt(shortBase(t))
 	return d
+}
+
+// shortBase is a fresh temp dir with a short name: sun_path is ~104 bytes.
+func shortBase(t *testing.T) string {
+	t.Helper()
+	d, err := os.MkdirTemp("", "g")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(d) })
+	return d
+}
+
+// envAt resolves every runtime base candidate to base.
+func envAt(base string) statusfile.Env {
+	return statusfile.Env{
+		GOOS: runtime.GOOS,
+		Getenv: func(k string) string {
+			if k == "XDG_RUNTIME_DIR" {
+				return base
+			}
+			return ""
+		},
+		UserCacheDir: func() (string, error) { return base, nil },
+		TempDir:      func() string { return base },
+	}
 }
 
 // startWatch runs `watch` on repoDir with a status file in a separate temp
@@ -187,7 +216,7 @@ const (
 
 func TestWatchStatusFile(t *testing.T) {
 	dir := repo(t, "vpc_idd")
-	d := startWatch(t, dir, testDeps(), "--poll")
+	d := startWatch(t, dir, testDeps(t), "--poll")
 	d.waitStatus(watchOneErr)
 
 	writeFiles(t, dir, map[string]string{"app/terragrunt.hcl": goodApp})
@@ -203,7 +232,7 @@ func TestWatchStatusFile(t *testing.T) {
 
 func TestWatchReindexesOnlyChanged(t *testing.T) {
 	dir := repo(t, "vpc_idd")
-	deps := testDeps()
+	deps := testDeps(t)
 	var loader atomic.Pointer[terragrunt.Loader]
 	deps.loaderHook = func(l *terragrunt.Loader) { loader.Store(l) }
 	d := startWatch(t, dir, deps, "--poll")
@@ -289,7 +318,7 @@ func TestWatchParity(t *testing.T) {
 				t.Skip("no native watcher on windows")
 			}
 			dir := repo(t, "vpc_idd")
-			d := startWatch(t, dir, testDeps(), be.args...)
+			d := startWatch(t, dir, testDeps(t), be.args...)
 			want := freshStatus(t, dir)
 			d.waitStatus(want)
 			got := []step{{"initial", want}}
@@ -334,7 +363,7 @@ func countingPoll(calls *atomic.Int32) func(string, time.Duration) (watch.Watche
 func TestWatchBackendSelection(t *testing.T) {
 	t.Run("watch limit falls back to polling", func(t *testing.T) {
 		var nativeCalls, pollCalls atomic.Int32
-		deps := testDeps()
+		deps := testDeps(t)
 		deps.newNative = func(string) (watch.Watcher, error) {
 			nativeCalls.Add(1)
 			return nil, watch.ErrWatchLimit
@@ -354,7 +383,7 @@ func TestWatchBackendSelection(t *testing.T) {
 	})
 
 	t.Run("other native error is exit 3", func(t *testing.T) {
-		deps := testDeps()
+		deps := testDeps(t)
 		deps.newNative = func(string) (watch.Watcher, error) { return nil, errors.New("boom") }
 		var stdout, stderr bytes.Buffer
 		status := filepath.Join(t.TempDir(), "status")
@@ -375,7 +404,7 @@ func TestWatchBackendSelection(t *testing.T) {
 	for _, tc := range forced {
 		t.Run(tc.name, func(t *testing.T) {
 			var nativeCalls, pollCalls atomic.Int32
-			deps := testDeps()
+			deps := testDeps(t)
 			deps.goos = tc.goos
 			deps.newNative = func(string) (watch.Watcher, error) {
 				nativeCalls.Add(1)
@@ -396,7 +425,7 @@ func TestWatchBackendSelection(t *testing.T) {
 
 func TestWatchStdoutOnChange(t *testing.T) {
 	dir := repo(t, "vpc_idd")
-	deps := testDeps()
+	deps := testDeps(t)
 	var loader atomic.Pointer[terragrunt.Loader]
 	deps.loaderHook = func(l *terragrunt.Loader) { loader.Store(l) }
 	d := startWatch(t, dir, deps, "--poll")
@@ -441,7 +470,7 @@ func TestWatchStdoutOnChange(t *testing.T) {
 }
 
 func TestWatchQuietRepoPrintsNothing(t *testing.T) {
-	d := startWatch(t, repo(t, "vpc_id"), testDeps(), "--poll")
+	d := startWatch(t, repo(t, "vpc_id"), testDeps(t), "--poll")
 	d.waitStatus(watchOK)
 	if code := d.stop(); code != exitOK {
 		t.Fatalf("exit %d; stderr:\n%s", code, d.stderr.String())
@@ -480,7 +509,7 @@ func TestWatchStatusInsideRepo(t *testing.T) {
 	check := func(t *testing.T, statusArg, statusAbs string) {
 		t.Helper()
 		var stdout, stderr bytes.Buffer
-		code := runWatchWith(context.Background(), []string{"--status-file", statusArg, dir}, &stdout, &stderr, testDeps())
+		code := runWatchWith(context.Background(), []string{"--status-file", statusArg, dir}, &stdout, &stderr, testDeps(t))
 		if code != exitUsage {
 			t.Fatalf("exit %d, want %d; stderr:\n%s", code, exitUsage, stderr.String())
 		}
