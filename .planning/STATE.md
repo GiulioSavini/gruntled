@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.3
 milestone_name: Watch & Blast
 status: executing
-stopped_at: Completed 10-03-PLAN.md
-last_updated: "2026-10-08T09:26:53.191Z"
-last_activity: 2026-10-08 — completed 10-03 (status line presenter, statusfile path + atomic writer)
+stopped_at: Completed 10-04-PLAN.md
+last_updated: "2026-10-08T09:32:25.588Z"
+last_activity: 2026-10-08 — completed 10-04 (watch core: ignore, debounce, pending, poll adapter)
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 12
-  completed_plans: 8
-  percent: 67
+  completed_plans: 9
+  percent: 75
 ---
 
 # Project State
@@ -26,16 +26,16 @@ See: .planning/PROJECT.md (updated 2026-10-08)
 ## Current Position
 
 Phase: 10 of 11 (Watch Daemon & Status File) — executing
-Plan: 4 of 7 (10-01, 10-02, 10-03 complete)
-Status: Ready to execute 10-04
-Last activity: 2026-10-08 — completed 10-03 (status line presenter, statusfile path + atomic writer)
+Plan: 5 of 7 (10-01, 10-02, 10-03, 10-04 complete)
+Status: Ready to execute 10-05
+Last activity: 2026-10-08 — completed 10-04 (watch core: ignore, debounce, pending, poll adapter)
 
-Progress: [████░░░░░░] 3/7 Phase 10 plans (v0.3: 2/4 phases)
+Progress: [██████░░░░] 4/7 Phase 10 plans (v0.3: 2/4 phases)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 9
+- Total plans completed: 10
 - Average duration: ~29 min
 - Total execution time: 3.99 hours
 
@@ -86,6 +86,7 @@ Progress: [████░░░░░░] 3/7 Phase 10 plans (v0.3: 2/4 phases)
 | Phase 10 P01 | 9min | 2 tasks | 2 files |
 | Phase 10 P02 | 6min | 2 tasks | 5 files |
 | Phase 10 P03 | 4min | 2 tasks | 6 files |
+| Phase 10 P04 | 5min | 2 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -108,6 +109,9 @@ Per-plan decision history lives in the phase SUMMARY files and git history.
 - [Phase 10]: Status line: errors only, codes sorted, single write; StatusFailed collapses whitespace, 120-rune cap
 - [Phase 10]: Status path <base>/gruntled/<sha256(EvalSymlinks root)[:12]>/status, base linux abs XDG_RUNTIME_DIR -> UserCacheDir -> TempDir; no case folding
 - [Phase 10]: statusfile.Writer: 0700 dir (refuse perm&077 on non-windows), 0600 tmp+rename, 5 attempts 10/20/40/80ms
+- [Phase 10]: pending.add: '.', volume paths, empty/abs/backslash/'..' -> resync; ignored paths dropped without signalling; take drains Ready under the same mutex
+- [Phase 10]: Debouncer pure (Add/Due/Flush, caller time), DefaultQuiet 150ms / DefaultMaxWait 1s, empty Changes do not arm
+- [Phase 10]: Poll: baseline in constructor, dirs reported only on add/remove/type change, unreadable subdir keeps previous entries, root failure -> resync; scanner reusable as native safety net
 
 ### Pending Todos
 
@@ -119,6 +123,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-10-08T09:26:53.190Z
-Stopped at: Completed 10-03-PLAN.md
+Last session: 2026-10-08T09:32:25.587Z
+Stopped at: Completed 10-04-PLAN.md
 Resume file: None
