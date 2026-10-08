@@ -8,6 +8,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/hashicorp/hcl/v2"
 
@@ -16,7 +17,7 @@ import (
 	"github.com/GiulioSavini/gruntled/internal/infrastructure/sourceresolve"
 )
 
-// Loader implements ports.UnitLoader over an fs.FS whose paths are
+// Loader implements ports.InvalidatingLoader over an fs.FS whose paths are
 // repo-relative and slash-separated.
 //
 // A Loader keeps its parse results (parseStore) across LoadUnits calls, so
@@ -29,11 +30,16 @@ import (
 // (readErr) entries are cached too, so a create must be invalidated just
 // like an edit.
 //
-// A Loader is not safe for concurrent use: run one LoadUnits at a time,
-// and never let Invalidate overlap a LoadUnits call (the daemon indexer is
-// a single goroutine).
+// A Loader is safe for concurrent use: LoadUnits, Invalidate and
+// CacheStats share one mutex. LoadUnits holds it for its whole duration,
+// so callers should still drive a Loader from a single indexer goroutine;
+// the mutex only guarantees that a misbehaving caller cannot corrupt the
+// store.
 type Loader struct {
-	fsys  fs.FS
+	fsys fs.FS
+
+	// mu guards store, lastHits and lastMisses.
+	mu    sync.Mutex
 	store *parseStore
 
 	// lastHits and lastMisses are the cache counts of the last LoadUnits
@@ -46,22 +52,44 @@ func NewLoader(fsys fs.FS) *Loader {
 	return &Loader{fsys: fsys, store: newParseStore()}
 }
 
-// Invalidate evicts the cached parse of every given repo-relative,
-// slash-separated path, and of every cached file under it when the path
-// is a directory (prefix p+"/", so "a" never evicts "ab/..."). "." or ""
-// clears the whole store. Paths are cleaned with path.Clean first.
+// Invalidate evicts the cached parse of every given path, and of every
+// cached file under it when the path is a directory (a key is evicted when
+// it or one of its ancestors is in the batch, so "a" never evicts "ab/x").
+//
+// Contract: paths are repo-relative and slash-separated, cleaned with
+// path.Clean first ("a//b/" and "./a/b" mean "a/b"); a rename reports
+// both the old and the new path. A path outside that contract is never
+// ignored: an empty path, ".", an absolute path, a path escaping the
+// repository ("..", "../x", "a/../../x") or one containing a backslash
+// means "everything changed" and clears the whole store, whatever else
+// is in the batch (fail safe).
+//
+// The batch is cleaned once into a set and the store is scanned once, so
+// the cost is O(cache x depth) per call, not per path.
 func (l *Loader) Invalidate(paths ...string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.store == nil {
+		return
+	}
+	set := make(map[string]struct{}, len(paths))
 	for _, raw := range paths {
 		p := path.Clean(raw)
-		if raw == "" || p == "." {
+		if raw == "" || strings.Contains(raw, `\`) || p == "." || path.IsAbs(p) ||
+			p == ".." || strings.HasPrefix(p, "../") {
 			clear(l.store.files)
-			continue
+			return
 		}
-		delete(l.store.files, p)
-		prefix := p + "/"
-		for k := range l.store.files {
-			if strings.HasPrefix(k, prefix) {
-				delete(l.store.files, k)
+		set[p] = struct{}{}
+	}
+	if len(set) == 0 {
+		return
+	}
+	for key := range l.store.files {
+		for p := key; p != "." && p != "/"; p = path.Dir(p) {
+			if _, ok := set[p]; ok {
+				delete(l.store.files, key)
+				break
 			}
 		}
 	}
@@ -71,10 +99,12 @@ func (l *Loader) Invalidate(paths ...string) {
 // LoadUnits call that completed successfully: misses is the number of
 // files read and parsed, hits the number of lookups served from the store.
 func (l *Loader) CacheStats() (hits, misses int) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	return l.lastHits, l.lastMisses
 }
 
-var _ ports.UnitLoader = (*Loader)(nil)
+var _ ports.InvalidatingLoader = (*Loader)(nil)
 
 // LoadUnits implements ports.UnitLoader. It discovers every unit with
 // discoverUnits, sorts them by RepoPath order (fs.WalkDir's lexical order is
@@ -91,6 +121,8 @@ var _ ports.UnitLoader = (*Loader)(nil)
 // LoadResult.Diagnostics. error is reserved for context cancellation and a
 // root-walk failure that makes the whole load meaningless.
 func (l *Loader) LoadUnits(ctx context.Context) (ports.LoadResult, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	if err := ctx.Err(); err != nil {
 		return ports.LoadResult{}, err
 	}

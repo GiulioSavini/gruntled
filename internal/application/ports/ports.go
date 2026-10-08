@@ -22,6 +22,14 @@ type UnitLoader interface {
 	LoadUnits(ctx context.Context) (LoadResult, error)
 }
 
+// InvalidatingLoader is a UnitLoader that keeps a parse cache which the caller
+// must keep honest. Paths are repo-relative, slash-separated; a rename reports
+// old and new path; "." (or an empty/absolute/escaping path) means everything.
+type InvalidatingLoader interface {
+	UnitLoader
+	Invalidate(paths ...string)
+}
+
 // LoadResult is the outcome of loading every unit in the repository.
 type LoadResult struct {
 	// Units is every discovered unit, sorted by Path.
