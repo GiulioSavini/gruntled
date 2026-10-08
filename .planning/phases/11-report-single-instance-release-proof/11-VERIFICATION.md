@@ -24,3 +24,16 @@ Tests: `go test -count=1 ./...` all ok. `check-architecture.sh` OK. CI run 37784
 
 Human verification: none required (Windows report path covered by CI test-os windows only, not hand-run).
 Gaps: none.
+
+## Security
+
+Audit by proj-sec:auditor (2026-10-08), verdict clean. No critical, high or medium findings. Open lows, for a later milestone:
+
+| # | Severity | Location | Finding | Fix |
+|---|----------|----------|---------|-----|
+| 1 | Low | internal/interfaces/presenter/status.go:65-74 | `SanitizeReason` keeps Cf runes (bidi overrides, zero-width) | Also map `unicode.Is(unicode.Cf, r)` to space |
+| 2 | Low | cmd/gruntled/report.go:292-307, presenter Text/Summary | Text/Summary print repo paths/messages unsanitised (pre-existing in `check`, now also via `report`) | Sanitise once in presenter Text/Summary |
+| 3 | Low | internal/infrastructure/ipc/ipc.go:331, 492-494 | All three formats share one 64 MiB response cap; huge repos may fail `report` | Request only the wanted format, or document the cap |
+| 4 | Info | internal/infrastructure/statusfile/ensure_other.go:9 | No owner/ACL check on Windows; relies on per-user base dir | Mention in README Windows limitation |
+
+govulncheck not run (local binary built with go1.26, module needs go1.27).
