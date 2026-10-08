@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/GiulioSavini/gruntled/internal/domain/diagnostic"
@@ -152,5 +153,74 @@ func TestStatusLineWriterError(t *testing.T) {
 	}
 	if err := presenter.StatusFailed(werr, "x", stamp); err == nil {
 		t.Fatal("StatusFailed: want writer error")
+	}
+}
+
+func TestSanitizeReason(t *testing.T) {
+	tests := []struct {
+		name, in, want string
+	}{
+		{"esc injection", "a\x1b[31mb", "a [31mb"},
+		{"mixed controls", "x\r\ny\tz\x00w\x7f", "x y z w"},
+		{"collapse and trim", "  a   b \t c  ", "a b c"},
+		{"empty", "", ""},
+		{"all control", "\x00\x1b\r\n\t\x7f", ""},
+		{"plain", "open a: no such file", "open a: no such file"},
+		{"unicode kept", "é ✓", "é ✓"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := presenter.SanitizeReason(tc.in); got != tc.want {
+				t.Fatalf("SanitizeReason(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+func assertNoControl(t *testing.T, line string) {
+	t.Helper()
+	if !strings.HasSuffix(line, "\n") || strings.Count(line, "\n") != 1 {
+		t.Fatalf("not a single line: %q", line)
+	}
+	for _, r := range strings.TrimSuffix(line, "\n") {
+		if unicode.IsControl(r) {
+			t.Fatalf("control rune %U in %q", r, line)
+		}
+	}
+}
+
+func TestStatusFailedStripsControls(t *testing.T) {
+	tests := []struct {
+		name, reason, want string
+	}{
+		{"esc", "bad\x1b]0;pwned\x07 title", "gruntled: failed (bad ]0;pwned title) @ 14:02:11\n"},
+		{"nul cr lf", "a\x00b\r\nc", "gruntled: failed (a b c) @ 14:02:11\n"},
+		{"all control", "\x1b\x00\r\n", "gruntled: failed (unknown error) @ 14:02:11\n"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var b bytes.Buffer
+			if err := presenter.StatusFailed(&b, tc.reason, stamp); err != nil {
+				t.Fatalf("StatusFailed: %v", err)
+			}
+			assertNoControl(t, b.String())
+			if got := b.String(); got != tc.want {
+				t.Fatalf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestStatusFailedCapAfterSanitise(t *testing.T) {
+	// 200 runes with ESC at index 119: sanitised first, then cut to 120.
+	reason := strings.Repeat("a", 119) + "\x1b" + strings.Repeat("b", 80)
+	var b bytes.Buffer
+	if err := presenter.StatusFailed(&b, reason, stamp); err != nil {
+		t.Fatalf("StatusFailed: %v", err)
+	}
+	assertNoControl(t, b.String())
+	want := "gruntled: failed (" + strings.Repeat("a", 119) + " ) @ 14:02:11\n"
+	if got := b.String(); got != want {
+		t.Fatalf("got %q, want %q", got, want)
 	}
 }
