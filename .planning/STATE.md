@@ -2,8 +2,8 @@
 gsd_state_version: 1.0
 milestone: v0.3
 milestone_name: Watch & Blast
-status: completed
-stopped_at: Completed v0.2 milestone
+status: planning
+stopped_at: Started v0.3 milestone
 last_updated: "2026-10-08T07:55:48.908Z"
 last_activity: 2026-10-08 — completed v0.2 milestone
 progress:
