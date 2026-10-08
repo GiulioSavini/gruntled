@@ -30,7 +30,7 @@ See `milestones/v0.2-ROADMAP.md`.
 
 **Milestone Goal:** A long-running `gruntled watch` daemon that keeps diagnostics fresh with incremental reindexing, plus a `blast` command that reports which units a change breaks or impacts.
 
-- [ ] **Phase 8: Incremental Index Foundation** - Persistent parse cache; incremental reindex provably equals full rescan
+- [x] **Phase 8: Incremental Index Foundation** - Persistent parse cache; incremental reindex provably equals full rescan (completed 2026-10-08)
 - [ ] **Phase 9: Blast Radius** - `gruntled blast --base` reports disjoint Broken and Impacted unit sets
 - [ ] **Phase 10: Watch Daemon & Status File** - `gruntled watch` reindexes on save and writes an atomic status line
 - [ ] **Phase 11: Report, Single Instance & Release Proof** - Socket/lock/attach, `report`, six-target no-net/no-exec proof, docs
@@ -93,7 +93,7 @@ Plans:
 | 5. Graph Diagnostics | v0.2 | 7/7 | Complete | 2026-09-30 |
 | 6. Machine-Readable Output | v0.2 | 5/5 | Complete | 2026-10-01 |
 | 7. Distribution & CI Integration | v0.2 | 5/5 | Complete | 2026-10-01 |
-| 8. Incremental Index Foundation | v0.3 | 2/2 | Complete | 2026-10-08 |
+| 8. Incremental Index Foundation | v0.3 | Complete    | 2026-10-08 | 2026-10-08 |
 | 9. Blast Radius | v0.3 | 0/? | Not started | - |
 | 10. Watch Daemon & Status File | v0.3 | 0/? | Not started | - |
 | 11. Report, Single Instance & Release Proof | v0.3 | 0/? | Not started | - |
