@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.3
 milestone_name: Watch & Blast
 status: executing
-stopped_at: Completed 09-02-PLAN.md
-last_updated: "2026-10-08T08:36:42.128Z"
-last_activity: 2026-10-08 — completed 09-02 blast use case and presenters
+stopped_at: Completed 09-03-PLAN.md
+last_updated: "2026-10-08T08:40:48.538Z"
+last_activity: 2026-10-08 — completed 09-03 blast CLI, scripts and docs
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 5
-  completed_plans: 4
-  percent: 80
+  completed_plans: 5
+  percent: 100
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-10-08)
 ## Current Position
 
 Phase: 9 of 11 (Blast Radius)
-Plan: 3 of 3 (09-01, 09-02 complete)
-Status: In progress
-Last activity: 2026-10-08 — completed 09-02 blast use case and presenters
+Plan: 3 of 3 (09-01, 09-02, 09-03 complete)
+Status: Phase 9 plans complete, awaiting verification
+Last activity: 2026-10-08 — completed 09-03 blast CLI, scripts and docs
 
-Progress: [███████░░░] 67% of Phase 9 plans (v0.3: 1/4 phases)
+Progress: [██████████] 100% of Phase 9 plans (v0.3: 1/4 phases)
 
 ## Performance Metrics
 
@@ -82,6 +82,7 @@ Progress: [███████░░░] 67% of Phase 9 plans (v0.3: 1/4 phase
 | Phase 08 P02 | 8min | 2 tasks | 5 files |
 | Phase 09 P01 | 2min | 2 tasks | 5 files |
 | Phase 09 P02 | 4min | 2 tasks | 4 files |
+| Phase 09 P03 | 12min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -97,6 +98,7 @@ Per-plan decision history lives in the phase SUMMARY files and git history.
 - [Phase 09]: Domain tests stay on pure allowlist (no rapid/fmt): property tests use fixed-seed LCG
 - [Phase 09]: Blast checks current tree first; staged *blasting.Error current|baseline
 - [Phase 09]: Blast change tokens ordered -variable,+variable,-output,+output; no-baseline output drops Impacted
+- [Phase 09]: blast: unopenable --base exits 3, never silent no-baseline fallback; exit 1 only on error findings in Broken (HasErrors)
 
 ### Pending Todos
 
@@ -109,6 +111,6 @@ None open.
 
 ## Session Continuity
 
-Last session: 2026-10-08T08:36:42.125Z
-Stopped at: Completed 09-02-PLAN.md
+Last session: 2026-10-08T08:40:48.534Z
+Stopped at: Completed 09-03-PLAN.md
 Resume file: None
