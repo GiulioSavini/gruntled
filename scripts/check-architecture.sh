@@ -459,8 +459,8 @@ if [ -n "$ts_violations" ]; then
 fi
 
 # --- Step 9: binary-no-net-no-exec (CLI-04) -----------------------------------
-# The shipped binary must not be able to do network or process I/O. Two
-# halves, both evaluated for EVERY release target, not only the build
+# The shipped binary must not be able to do network or process I/O. Four
+# halves, all evaluated for EVERY release target, not only the build
 # host: go list only sees the files the current GOOS/GOARCH compiles, so a
 # zz_windows.go importing os/exec is invisible to a linux go list and
 # visible only to the windows iterations below, and a zz_windows_arm64.go
@@ -475,18 +475,67 @@ fi
 # 2. Source scan for spawners. os.StartProcess lives in os itself, which an
 #    import deny-list cannot forbid (every binary links os), so the non-std
 #    GoFiles of each target are grepped for the qualified identifiers
-#    os.StartProcess and syscall.ForkExec|Exec|StartProcess. Its limits,
-#    stated plainly: it is a textual grep, so it does NOT catch an aliased
-#    import (import o "os"; o.StartProcess), a dot import, golang.org/x/sys
-#    spawners (unix.Exec, windows.CreateProcess), cgo, assembly or
-#    reflection; and it can over-match a comment that names those
-#    identifiers (a conservative false positive, fixed by rewording the
-#    comment). The import deny-list half has no such gap. The self-test
-#    cases binary-os-exec, binary-net, binary-start-process,
-#    binary-exec-windows-file, binary-exec-windows-arm64-file and
-#    binary-exec-in-test-allowed pin exactly
-#    what is covered.
+#    os.StartProcess and syscall.ForkExec|Exec|StartProcess. It is a
+#    textual grep: on its own it does not catch an aliased import
+#    (import o "os"; o.StartProcess), a dot import or golang.org/x/sys
+#    spawners (unix.Exec, windows.CreateProcess); half 3 closes those
+#    gaps. It can over-match a comment that names those identifiers (a
+#    conservative false positive, fixed by rewording the comment).
+#    Exemption: the package with import path EXACTLY golang.org/x/sys/unix
+#    is not scanned. It declares unix.Exec, whose body is a call to
+#    syscall.Exec, so it would match on every unix target as soon as
+#    anything links x/sys/unix (fsnotify does), although the linker drops
+#    that code as unreachable. Declaring a spawner is harmless; only
+#    reachability matters, and half 3 decides reachability on the real
+#    binary. The exemption is by exact import path: not the whole
+#    golang.org/x/sys module, not a substring, so golang.org/x/sys/windows,
+#    golang.org/x/sys/execabs and any other third-party package containing
+#    the same text still fail here.
+# 3. Linker proof. Build the real cmd/gruntled for the target
+#    (CGO_ENABLED=0) and list its symbols with go tool nm, which reads
+#    ELF, Mach-O and PE from any host. No linked symbol may match sym_re:
+#    os.StartProcess, syscall.forkExec|ForkExec|Exec|StartProcess, anything
+#    in os/exec, or any process-spawning wrapper in golang.org/x/sys/unix
+#    or golang.org/x/sys/windows. nm sees what is actually linked,
+#    including std and every third-party package, however it is spelled
+#    in source, so aliased imports, dot imports and x/sys spawners are
+#    caught here even though half 2 cannot see them. A failed build is a
+#    violation, never a silent skip.
+#    The x/sys alternative was ENUMERATED from the pinned module, not
+#    guessed (x/sys v0.46.0). Re-run on every x/sys bump and add any new
+#    spawner name to sym_re:
+#      d=$(go list -m -f '{{.Dir}}' golang.org/x/sys)
+#      grep -rhoE '^func (\([^)]*\) )?[A-Za-z0-9_]*([Ee]xec|[Ss]pawn|CreateProcess|[Ff]ork|Clone|ShellExecute|WinExec)[A-Za-z0-9_]*\(' "$d/unix" "$d/windows" | sort -u
+#      grep -rlE 'SYS_EXECVE|\bexecve\b' "$d/unix" "$d/windows"
+#    v0.46.0 result, spawners: unix.Exec (the only execve user, in
+#    syscall_unix.go and syscall_zos_s390x.go), windows.CreateProcess,
+#    windows.CreateProcessAsUser, windows.ShellExecute; plus
+#    unix.KexecFileLoad (loads a new kernel) for good measure. Not
+#    spawners: CloseOnExec, Setprivexec, PledgeExecpromises, Clonefile*,
+#    IoctlFileClone*, IoctlKCMClone, svc Execute. Execveat, ForkExec,
+#    StartProcess and forkExec* do not exist in v0.46.0 and are listed
+#    so a future bump that adds them is caught by name.
+#    Residual gaps, stated plainly: a raw Syscall(SYS_EXECVE, ...) through
+#    the generic syscall entry points, a DLL procedure looked up by name
+#    at run time, cgo (disabled by CGO_ENABLED=0 in releases) and
+#    assembly. None is reachable through an ordinary library call.
+# 4. windows targets watch by stat polling: github.com/fsnotify/fsnotify
+#    and golang.org/x/sys/windows must not appear in their go list -deps.
+#
+# Why the exemption in half 2 does not weaken the proof: half 1 is
+# unchanged; half 2 still catches a plainly spelled spawner in every
+# non-std file except the single package golang.org/x/sys/unix; and for
+# that package (and every other, std included) half 3 checks the built
+# binary, which the old grep never did. Every case the old proof caught is
+# still caught, plus the aliased/dot-import/x/sys cases it missed. The
+# self-test cases binary-os-exec, binary-net, binary-start-process,
+# binary-exec-windows-file, binary-exec-windows-arm64-file,
+# binary-exec-in-test-allowed, binary-aliased-start-process,
+# binary-xsys-exemption-narrow and binary-windows-fsnotify pin exactly
+# what is covered.
 release_targets="linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64"
+sym_re='^(os\.StartProcess|syscall\.(forkExec|ForkExec|Exec|StartProcess)|os/exec\.)'
+sym_re="${sym_re}"'|^golang\.org/x/sys/(unix|windows)\.(Exec|Execveat|ForkExec|StartProcess|forkExec[A-Za-z0-9]*|CreateProcess|CreateProcessAsUser|ShellExecute|KexecFileLoad|kexecFileLoad)($|\.)'
 bin_violations=""
 for target in $release_targets; do
   t_goos=${target%/*}
@@ -495,7 +544,7 @@ for target in $release_targets; do
   t_forbidden=$(printf '%s\n' "$t_deps" | grep -E '^(net|net/.+|os/exec|plugin|crypto/tls)$' || true)
   t_spawners=$(
     GOOS="$t_goos" GOARCH="$t_goarch" go list -e -deps \
-      -f '{{if not .Standard}}{{$d := .Dir}}{{range .GoFiles}}{{$d}}/{{.}}{{"\n"}}{{end}}{{end}}' ./cmd/gruntled |
+      -f '{{if and (not .Standard) (ne .ImportPath "golang.org/x/sys/unix")}}{{$d := .Dir}}{{range .GoFiles}}{{$d}}/{{.}}{{"\n"}}{{end}}{{end}}' ./cmd/gruntled |
       grep -v '^$' |
       xargs -r grep -l -E '\bos\.StartProcess\b|\bsyscall\.(ForkExec|Exec|StartProcess)\b' || true
   )
@@ -507,13 +556,34 @@ for target in $release_targets; do
     bin_violations="${bin_violations}$(printf '%s\n' "$t_spawners" | sed "s|^|${target}: file |")
 "
   fi
+  # Half 3: linker proof on the real binary.
+  t_bin=$(mktemp)
+  if CGO_ENABLED=0 GOOS="$t_goos" GOARCH="$t_goarch" go build -o "$t_bin" ./cmd/gruntled; then
+    t_syms=$(go tool nm "$t_bin" | awk '{print $NF}' | grep -E "$sym_re" | sort -u || true)
+    if [ -n "$t_syms" ]; then
+      bin_violations="${bin_violations}$(printf '%s\n' "$t_syms" | sed "s|^|${target}: linked symbol |")
+"
+    fi
+  else
+    bin_violations="${bin_violations}${target}: build failed
+"
+  fi
+  rm -f "$t_bin"
+  # Half 4: windows uses stat polling, never fsnotify.
+  if [ "$t_goos" = windows ]; then
+    t_winwatch=$(printf '%s\n' "$t_deps" | grep -E '^(github\.com/fsnotify/fsnotify|golang\.org/x/sys/windows)$' || true)
+    if [ -n "$t_winwatch" ]; then
+      bin_violations="${bin_violations}$(printf '%s\n' "$t_winwatch" | sed -e "s|^|${target}: package |" -e 's|$| (windows must use stat polling, no fsnotify)|')
+"
+    fi
+  fi
 done
 bin_violations=$(printf '%s\n' "$bin_violations" | grep -v '^$' | sort -u || true)
 if [ -n "$bin_violations" ]; then
   echo "=== RULE FAILED: binary-no-net-no-exec ===" >&2
-  echo "cmd/gruntled links a network or process-spawning package, or linked non-std code calls os.StartProcess/syscall.ForkExec/Exec, on at least one release target:" >&2
+  echo "cmd/gruntled links a network or process-spawning package, links a process-spawning symbol (go tool nm), fails to build, links fsnotify or golang.org/x/sys/windows on windows, or linked non-std code calls os.StartProcess/syscall.ForkExec/Exec, on at least one release target:" >&2
   printf '%s\n' "$bin_violations" >&2
-  echo "gruntled must make no network calls and spawn no external processes (CLI-04); keep that statically provable." >&2
+  echo "gruntled must make no network calls and spawn no external processes (CLI-04); keep that statically provable. windows watches by stat polling only." >&2
   fail=1
 fi
 
