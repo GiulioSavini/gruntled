@@ -93,7 +93,7 @@ Plans:
 | 5. Graph Diagnostics | v0.2 | 7/7 | Complete | 2026-09-30 |
 | 6. Machine-Readable Output | v0.2 | 5/5 | Complete | 2026-10-01 |
 | 7. Distribution & CI Integration | v0.2 | 5/5 | Complete | 2026-10-01 |
-| 8. Incremental Index Foundation | v0.3 | Complete    | 2026-10-08 | 2026-10-08 |
+| 8. Incremental Index Foundation | v0.3 | 2/2 | Complete | 2026-10-08 |
 | 9. Blast Radius | v0.3 | 0/? | Not started | - |
 | 10. Watch Daemon & Status File | v0.3 | 0/? | Not started | - |
 | 11. Report, Single Instance & Release Proof | v0.3 | 0/? | Not started | - |
