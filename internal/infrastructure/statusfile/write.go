@@ -4,12 +4,11 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
 	"time"
 )
 
-// ErrInsecureDir is returned when the status directory already exists and
-// group or other users can access it.
+// ErrInsecureDir is returned when a runtime directory is a symlink, not a
+// directory, accessible by group or others, or owned by another user.
 var ErrInsecureDir = errors.New("statusfile: directory is accessible by other users")
 
 // renameAttempts and renameBackoff bound the rename retry. On windows a
@@ -39,22 +38,13 @@ func NewWriter(path string) *Writer {
 }
 
 // Write writes line verbatim (the caller includes the trailing newline).
-// It creates the directory with mode 0700, refuses a pre-existing
-// directory accessible by group or others (not checked on windows),
-// writes a 0600 temp file in the same directory and renames it over Path.
+// It applies EnsureDir to the directory (0700, no symlink, not group or
+// other accessible, owned by the caller on unix; the parent is not
+// checked, so a custom path under /tmp works), writes a 0600 temp file in the same directory and renames it over Path.
 func (w *Writer) Write(line string) error {
 	dir := filepath.Dir(w.Path)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	if err := EnsureDir(dir); err != nil {
 		return err
-	}
-	if runtime.GOOS != "windows" {
-		fi, err := os.Stat(dir)
-		if err != nil {
-			return err
-		}
-		if fi.Mode().Perm()&0o077 != 0 {
-			return ErrInsecureDir
-		}
 	}
 
 	tmp, err := os.CreateTemp(dir, ".status-*")
