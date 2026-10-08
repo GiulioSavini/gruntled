@@ -10,8 +10,9 @@ everything is wired together, and tells you when a `dependency.X.outputs.Y`
 reference points at an output that does not exist — before you run anything
 slow.
 
-**v0.1 is an early release.** `gruntled check` works end to end, reports
-`GRT001` and `GRT100`, and has been validated on a real public corpus (see
+**v0.2 is an early release.** `gruntled check` works end to end, reports
+`GRT001`, `GRT002`, `GRT003` and `GRT100`, and has been validated on a real
+public corpus (see
 [`docs/validation.md`](docs/validation.md)). See [Status](#status) below for
 its known limitations before you rely on it.
 
@@ -111,7 +112,9 @@ complete and verified.
 - `gruntled check [--format text|json|sarif] [path]`, end to end: it opens the
   repository read-only, builds the graph, and reports `GRT001` (a
   `dependency.X.outputs.Y` naming an output the target module does not
-  declare) and `GRT100` (HCL that does not parse), with the exit codes below.
+  declare), `GRT002` (a literal `config_path` pointing at a directory with no
+  unit), `GRT003` (a dependency cycle) and `GRT100` (HCL that does not parse),
+  with the exit codes below.
 - The `mock_outputs` rule for `GRT001`: mocks never suppress or downgrade
   the diagnostic; when a mock would silently stand in for the missing output
   at `apply`, the message says so.
