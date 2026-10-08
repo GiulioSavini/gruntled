@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -53,6 +54,11 @@ func TestReleaseTargetsInSync(t *testing.T) {
 func TestBuildRelease(t *testing.T) {
 	if testing.Short() {
 		t.Skip("cross-builds 6 targets")
+	}
+	if runtime.GOOS == "windows" {
+		// Releases are built on linux CI; the script needs bash and zip,
+		// which windows runners do not provide.
+		t.Skip("build-release.sh runs on linux only")
 	}
 	const version, commit = "v0.0.0-test", "abc1234"
 	out := t.TempDir()
