@@ -85,7 +85,7 @@ Plans:
 - [x] 10-03-PLAN.md — presenter status lines, statusfile path + atomic writer
 - [x] 10-04-PLAN.md — watch core: ignore, pending, debouncer, poll adapter, contract suite
 - [x] 10-05-PLAN.md — fsnotify native adapter behind !windows, safety net, dependency
-- [ ] 10-06-PLAN.md — `gruntled watch` CLI wiring, docs, parity/status tests, bookkeeping
+- [x] 10-06-PLAN.md — `gruntled watch` CLI wiring, docs, parity/status tests, bookkeeping
 - [x] 10-07-PLAN.md — watch run loop (single indexer goroutine, skip-stale publish)
 
 ### Phase 11: Report, Single Instance & Release Proof
@@ -109,5 +109,5 @@ Plans:
 | 7. Distribution & CI Integration | v0.2 | 5/5 | Complete | 2026-10-01 |
 | 8. Incremental Index Foundation | v0.3 | 2/2 | Complete | 2026-10-08 |
 | 9. Blast Radius | v0.3 | 3/3 | Complete | 2026-10-08 |
-| 10. Watch Daemon & Status File | v0.3 | 6/7 | In Progress | - |
+| 10. Watch Daemon & Status File | v0.3 | 7/7 | In Progress | - |
 | 11. Report, Single Instance & Release Proof | v0.3 | 0/? | Not started | - |

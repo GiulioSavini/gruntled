@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.3
 milestone_name: Watch & Blast
 status: executing
-stopped_at: Completed 10-07-PLAN.md
-last_updated: "2026-10-08T09:41:03.075Z"
-last_activity: "2026-10-08 — completed 10-07 (watch run loop)"
+stopped_at: Completed 10-06-PLAN.md
+last_updated: "2026-10-08T09:48:39.874Z"
+last_activity: "2026-10-08 — completed 10-06 (gruntled watch CLI)"
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 12
-  completed_plans: 11
-  percent: 92
+  completed_plans: 12
+  percent: 100
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-10-08)
 ## Current Position
 
 Phase: 10 of 11 (Watch Daemon & Status File) — executing
-Plan: 6 of 7 (10-01 .. 10-05, 10-07 complete)
-Status: Ready to execute 10-06
-Last activity: 2026-10-08 — completed 10-07 (watch run loop)
+Plan: 7 of 7 (10-01 .. 10-07 complete)
+Status: All Phase 10 plans complete; phase verification pending
+Last activity: 2026-10-08 — completed 10-06 (gruntled watch CLI)
 
-Progress: [█████████░] 6/7 Phase 10 plans (v0.3: 2/4 phases)
+Progress: [██████████] 7/7 Phase 10 plans (v0.3: 2/4 phases verified)
 
 ## Performance Metrics
 
@@ -89,6 +89,7 @@ Progress: [█████████░] 6/7 Phase 10 plans (v0.3: 2/4 phases)
 | Phase 10 P04 | 5min | 2 tasks | 11 files |
 | Phase 10 P05 | 8min | 1 tasks | 5 files |
 | Phase 10 P07 | 10min | 1 tasks | 2 files |
+| Phase 10 P06 | 25min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -116,6 +117,9 @@ Per-plan decision history lives in the phase SUMMARY files and git history.
 - [Phase 10]: Poll: baseline in constructor, dirs reported only on add/remove/type change, unreadable subdir keeps previous entries, root failure -> resync; scanner reusable as native safety net
 - [Phase 10]: 10-05: native watcher baseline taken after watches; ENFILE counts as watch limit; safety net 30s feeds same dirty set
 - [Phase 10]: 10-07: Run single indexer goroutine; timer fire flushes at max(Now,Due); skip publish only if post-Index Take non-empty; Stopped only on cancel, initial failure leaves Failed
+- [Phase 10]: 10-06: status path inside repo (also via symlink) is exit 2, checked before --print-status-path
+- [Phase 10]: 10-06: initial index failure leaves 'failed' status, one stderr line, exit 3; reindex failures keep running
+- [Phase 10]: 10-06: Run debounce uses real clock; injected clock only stamps status lines; status write failure logged once, never fatal
 
 ### Pending Todos
 
@@ -127,6 +131,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-10-08T09:41:03.073Z
-Stopped at: Completed 10-07-PLAN.md
+Last session: 2026-10-08T09:48:39.872Z
+Stopped at: Completed 10-06-PLAN.md
 Resume file: None
