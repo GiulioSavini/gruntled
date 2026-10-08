@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.3
 milestone_name: Watch & Blast
 status: executing
-stopped_at: Completed 10-02-PLAN.md
-last_updated: "2026-10-08T09:21:45.265Z"
-last_activity: 2026-10-08 — completed 10-02 (Loader mutex + batch Invalidate, watching.Indexer)
+stopped_at: Completed 10-03-PLAN.md
+last_updated: "2026-10-08T09:26:53.191Z"
+last_activity: 2026-10-08 — completed 10-03 (status line presenter, statusfile path + atomic writer)
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 12
-  completed_plans: 7
-  percent: 58
+  completed_plans: 8
+  percent: 67
 ---
 
 # Project State
@@ -26,16 +26,16 @@ See: .planning/PROJECT.md (updated 2026-10-08)
 ## Current Position
 
 Phase: 10 of 11 (Watch Daemon & Status File) — executing
-Plan: 3 of 7 (10-01, 10-02 complete)
-Status: Ready to execute 10-03
-Last activity: 2026-10-08 — completed 10-02 (Loader mutex + batch Invalidate fail-safe contract, ports.InvalidatingLoader, watching.Indexer)
+Plan: 4 of 7 (10-01, 10-02, 10-03 complete)
+Status: Ready to execute 10-04
+Last activity: 2026-10-08 — completed 10-03 (status line presenter, statusfile path + atomic writer)
 
-Progress: [███░░░░░░░] 2/7 Phase 10 plans (v0.3: 2/4 phases)
+Progress: [████░░░░░░] 3/7 Phase 10 plans (v0.3: 2/4 phases)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 8
+- Total plans completed: 9
 - Average duration: ~29 min
 - Total execution time: 3.99 hours
 
@@ -85,6 +85,7 @@ Progress: [███░░░░░░░] 2/7 Phase 10 plans (v0.3: 2/4 phases)
 | Phase 09 P03 | 12min | 2 tasks | 8 files |
 | Phase 10 P01 | 9min | 2 tasks | 2 files |
 | Phase 10 P02 | 6min | 2 tasks | 5 files |
+| Phase 10 P03 | 4min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -104,6 +105,9 @@ Per-plan decision history lives in the phase SUMMARY files and git history.
 - [Phase 10]: Step 9 proof: per-target go tool nm linker check; textual scan exempts exactly golang.org/x/sys/unix; windows rejects fsnotify and x/sys/windows
 - [Phase 10]: Loader mutex-guarded (LoadUnits/Invalidate/CacheStats) but single indexer goroutine still the model; out-of-contract Invalidate path (empty/./abs/../backslash) clears whole store
 - [Phase 10]: watching.Indexer is the single seam daemon->Loader; resync = Invalidate("."), Report/error = checking.Check unchanged
+- [Phase 10]: Status line: errors only, codes sorted, single write; StatusFailed collapses whitespace, 120-rune cap
+- [Phase 10]: Status path <base>/gruntled/<sha256(EvalSymlinks root)[:12]>/status, base linux abs XDG_RUNTIME_DIR -> UserCacheDir -> TempDir; no case folding
+- [Phase 10]: statusfile.Writer: 0700 dir (refuse perm&077 on non-windows), 0600 tmp+rename, 5 attempts 10/20/40/80ms
 
 ### Pending Todos
 
@@ -115,6 +119,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-10-08T09:21:45.263Z
-Stopped at: Completed 10-02-PLAN.md
+Last session: 2026-10-08T09:26:53.190Z
+Stopped at: Completed 10-03-PLAN.md
 Resume file: None
