@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.3
 milestone_name: Watch & Blast
 status: executing
-stopped_at: Completed 11-01-PLAN.md
-last_updated: "2026-10-08T12:26:28.860Z"
-last_activity: 2026-10-08 — completed 11-01 (runtime dir hardening + SanitizeReason)
+stopped_at: Completed 11-02-PLAN.md
+last_updated: "2026-10-08T12:33:45.128Z"
+last_activity: 2026-10-08 — completed 11-02 (ipc package: lock, AF_UNIX server, dump)
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 19
-  completed_plans: 13
+  completed_plans: 14
 ---
 
 # Project State
@@ -25,11 +25,11 @@ See: .planning/PROJECT.md (updated 2026-10-08)
 ## Current Position
 
 Phase: 11 of 11 (Report, Single Instance & Release Proof) — executing
-Plan: 1 of 7 (11-01 complete)
+Plan: 2 of 7 (11-02 complete)
 Status: Phase 11 in progress
-Last activity: 2026-10-08 — completed 11-01 (runtime dir hardening + SanitizeReason)
+Last activity: 2026-10-08 — completed 11-02 (ipc package: lock, AF_UNIX server, dump)
 
-Progress: [█░░░░░░░░░] 1/7 Phase 11 plans (v0.3: 3/4 phases verified)
+Progress: [███░░░░░░░] 2/7 Phase 11 plans (v0.3: 3/4 phases verified)
 
 ## Performance Metrics
 
@@ -90,6 +90,7 @@ Progress: [█░░░░░░░░░] 1/7 Phase 11 plans (v0.3: 3/4 phases 
 | Phase 10 P07 | 10min | 1 tasks | 2 files |
 | Phase 10 P06 | 25min | 2 tasks | 9 files |
 | Phase 11 P01 | 4min | 2 tasks | 8 files |
+| Phase 11 P02 | 12min | 2 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -122,6 +123,8 @@ Per-plan decision history lives in the phase SUMMARY files and git history.
 - [Phase 10]: 10-06: Run debounce uses real clock; injected clock only stamps status lines; status write failure logged once, never fatal
 - [Phase 11]: 11-01: statusfile.CheckDir (Lstat; symlink/non-dir/perm&077/foreign uid -> ErrInsecureDir); EnsureRepoDir checks <base>/gruntled and <hash12>; Writer checks only its own dir
 - [Phase 11]: 11-01: presenter.SanitizeReason maps control runes to spaces + collapses whitespace; StatusFailed caps 120 runes after sanitising
+- [Phase 11]: 11-02: ipc lock = flock O_NOFOLLOW (unix) / CreateFile share 0 (windows); Probe never creates; LockRetry 20ms injected sleep
+- [Phase 11]: 11-02: AF_UNIX on raw syscall, os.NewFile non-blocking + SyscallConn accept; Close via quit chan wakes accept, waits handlers, removes socket; server always answers v=1, client mismatch -> *VersionError
 
 ### Pending Todos
 
@@ -133,6 +136,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-10-08T12:26:28.858Z
-Stopped at: Completed 11-01-PLAN.md
+Last session: 2026-10-08T12:33:45.126Z
+Stopped at: Completed 11-02-PLAN.md
 Resume file: None
