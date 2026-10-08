@@ -86,6 +86,49 @@ run_case() {
   rm -f /tmp/tca-out.$$ /tmp/tca-err.$$
 }
 
+# run_case_msg is run_case for one expected rule plus message assertions:
+# the rule must fail AND the combined output must match every "+<ERE>"
+# argument and match no "-<ERE>" argument. A rule name alone does not say
+# WHICH half of a multi-half rule fired; the message does.
+run_case_msg() {
+  local name="$1" copy="$2" rule="$3" rc=0 arg re
+  shift 3
+  bash "$copy/scripts/check-architecture.sh" >/tmp/tca-out.$$ 2>/tmp/tca-err.$$ || rc=$?
+  if [ "$rc" -eq 0 ] || ! grep -q -x -F "=== RULE FAILED: ${rule} ===" /tmp/tca-err.$$; then
+    echo "FAIL $name (expected rule ${rule} to fail, got exit $rc)"
+    cat /tmp/tca-out.$$ /tmp/tca-err.$$ >&2
+    rm -f /tmp/tca-out.$$ /tmp/tca-err.$$
+    exit 1
+  fi
+  for arg in "$@"; do
+    re=${arg#?}
+    case "$arg" in
+    +*)
+      if ! cat /tmp/tca-out.$$ /tmp/tca-err.$$ | grep -q -E -e "$re"; then
+        echo "FAIL $name (expected output matching '${re}')"
+        cat /tmp/tca-out.$$ /tmp/tca-err.$$ >&2
+        rm -f /tmp/tca-out.$$ /tmp/tca-err.$$
+        exit 1
+      fi
+      ;;
+    -*)
+      if cat /tmp/tca-out.$$ /tmp/tca-err.$$ | grep -q -E -e "$re"; then
+        echo "FAIL $name (expected no output matching '${re}')"
+        cat /tmp/tca-out.$$ /tmp/tca-err.$$ >&2
+        rm -f /tmp/tca-out.$$ /tmp/tca-err.$$
+        exit 1
+      fi
+      ;;
+    *)
+      echo "run_case_msg: bad assertion '${arg}' (want +ERE or -ERE)" >&2
+      exit 2
+      ;;
+    esac
+  done
+  echo "PASS $name"
+  rm -f /tmp/tca-out.$$ /tmp/tca-err.$$
+}
+
 # --- clean: unmodified copy exits 0 ----------------------------------------
 copy=$(mkcopy)
 run_case "clean" "$copy" zero
@@ -590,6 +633,110 @@ import (
 func TestZZProbe(t *testing.T) {}
 EOF
 run_case "binary-exec-in-test-allowed" "$copy" zero
+
+# None of the next three cases may depend on the repo NOT importing
+# fsnotify or on the contents of golang.org/x/sys: they only add files and
+# stub modules alongside the tree, so they hold before and after fsnotify
+# is linked. No case stubs golang.org/x/sys itself (that would break the
+# build once fsnotify needs the real one).
+
+# --- binary-aliased-start-process: nm catches what the grep cannot -------
+# import o "os"; o.StartProcess is invisible to the textual spawner scan,
+# and init keeps it reachable so the linker keeps it. Only the go tool nm
+# half can fail here, which proves the nm check can fail: the output must
+# name the linked symbol and must carry no "file" line for the probe.
+copy=$(mkcopy)
+cat >"$copy/cmd/gruntled/zz_probe.go" <<'EOF'
+package main
+
+import (
+	"os"
+	o "os"
+)
+
+func init() {
+	if len(os.Args) > 1000 {
+		_, _ = o.StartProcess("x", nil, &o.ProcAttr{})
+	}
+}
+EOF
+run_case_msg "binary-aliased-start-process" "$copy" binary-no-net-no-exec \
+  '+: linked symbol os\.StartProcess$' \
+  '-: file .*zz_probe\.go$'
+
+# --- binary-xsys-exemption-narrow: the scan exemption is one import path --
+# A third-party package other than golang.org/x/sys/unix that spells
+# syscall.Exec must still trip the textual scan. The stub directory name
+# contains "zzprobe" so the "file" line identifies it; the call is reachable
+# from init, so the nm half reports syscall.Exec as well.
+copy=$(mkcopy)
+stubdir=$(mktemp -d -t zzprobe.XXXXXX)
+COPIES+=("$stubdir")
+cat >"$stubdir/go.mod" <<'EOF'
+module github.com/zzorg/zzprobe
+
+go 1.27
+EOF
+cat >"$stubdir/p.go" <<'EOF'
+package zzprobe
+
+import "syscall"
+
+func Run() error { return syscall.Exec("x", nil, nil) }
+EOF
+(cd "$copy" && go mod edit \
+  -require="github.com/zzorg/zzprobe@v0.0.0" \
+  -replace="github.com/zzorg/zzprobe=${stubdir}")
+cat >"$copy/cmd/gruntled/zz_probe.go" <<'EOF'
+package main
+
+import (
+	"os"
+
+	"github.com/zzorg/zzprobe"
+)
+
+func init() {
+	if len(os.Args) > 1000 {
+		_ = zzprobe.Run()
+	}
+}
+EOF
+run_case_msg "binary-xsys-exemption-narrow" "$copy" binary-no-net-no-exec \
+  '+: file .*zzprobe[^/]*/p\.go$' \
+  '+: linked symbol syscall\.Exec$'
+
+# --- binary-windows-fsnotify: windows must poll, never link fsnotify -------
+# A stub module claiming the import path github.com/fsnotify/fsnotify,
+# blank-imported only from a _windows.go file: only the windows iterations
+# see it, so this proves the windows-rejects-fsnotify half. The replace is
+# unconditional, so it also wins over the real fsnotify require once the
+# tree links fsnotify (the unix build may then fail against the stub; the
+# assertion is on the windows message only).
+copy=$(mkcopy)
+stubdir=$(mktemp -d)
+COPIES+=("$stubdir")
+cat >"$stubdir/go.mod" <<'EOF'
+module github.com/fsnotify/fsnotify
+
+go 1.27
+EOF
+cat >"$stubdir/p.go" <<'EOF'
+package fsnotify
+
+const X = 1
+EOF
+(cd "$copy" && go mod edit \
+  -require="github.com/fsnotify/fsnotify@v0.0.0" \
+  -replace="github.com/fsnotify/fsnotify=${stubdir}")
+cat >"$copy/cmd/gruntled/zz_probe_windows.go" <<'EOF'
+package main
+
+import _ "github.com/fsnotify/fsnotify"
+EOF
+run_case_msg "binary-windows-fsnotify" "$copy" binary-no-net-no-exec \
+  '+^windows/amd64: package github\.com/fsnotify/fsnotify \(windows must use stat polling, no fsnotify\)$' \
+  '+^windows/arm64: package github\.com/fsnotify/fsnotify \(windows must use stat polling, no fsnotify\)$'
 
 # --- hcl-comment-in-import-block: a /* */ comment before the spec (G21) ----
 # The old line-based scan required a spec line to begin with the quote, so
