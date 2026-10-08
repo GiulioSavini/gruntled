@@ -1,7 +1,7 @@
 # Requirements: gruntled
 
 **Defined:** 2026-10-08
-**Core Value:** see `.planning/PROJECT.md` (zero false positives: a reported diagnostic is always real)
+**Core Value:** see `.planning/PROJECT.md` → Core Value (tell the user, before they run anything slow, that a dependency output reference is broken)
 
 ## v0.3 Requirements
 
