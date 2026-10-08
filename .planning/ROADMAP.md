@@ -61,7 +61,12 @@ Plans:
   2. A unit with a finding present in `<path>` and absent in `<dir>` is Broken; a finding present in both is never reported as Broken
   3. A unit directly consuming a module that gained or lost a `variable` or `output` name is Impacted; a module with an unchanged surface impacts nothing
   4. Without `--base`, only Broken is reported and labelled "no baseline"
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 09-01-PLAN.md — domain impact package (position-free finding identity, surface diff, Compute) + GRT100 stability test
+- [ ] 09-02-PLAN.md — blasting use case, BlastText/BlastJSON presenters
+- [ ] 09-03-PLAN.md — `blast` CLI, testscript scenarios, docs/cli.md, phase gate
 
 ### Phase 10: Watch Daemon & Status File
 **Goal**: User can leave `gruntled watch` running and see current diagnostics from a prompt or editor bar after each save.

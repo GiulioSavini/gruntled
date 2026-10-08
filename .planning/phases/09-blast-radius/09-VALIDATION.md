@@ -38,11 +38,12 @@ created: 2026-10-08
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| TBD | TBD | TBD | BLAST-01 | unit+rapid | `go test ./internal/domain/impact/ -run 'TestCompute\|TestDisjoint' -count=1` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | BLAST-01 | script | `go test ./cmd/gruntled -run 'TestScripts/blast_(nobase\|exitcodes)' -count=1` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | BLAST-01 | presenter golden | `go test ./internal/interfaces/presenter/ -run Blast -count=1` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | BLAST-01 | unit | `go test ./internal/application/blasting/ -count=1` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | BLAST-02 | unit+script | `go test ./internal/domain/impact/ -run 'TestNewFindings\|TestSurface' -count=1` ; `TestScripts/blast_impacted` | ❌ W0 | ⬜ pending |
+| 9-01-T1 | 01 | 1 | BLAST-01 | unit | `go test ./internal/infrastructure/hclconv/ -run Stability -count=1` | ❌ W0 | ⬜ pending |
+| 9-01-T2 | 01 | 1 | BLAST-01, BLAST-02 | unit+rapid | `go test ./internal/domain/impact/ -count=1` | ❌ W0 | ⬜ pending |
+| 9-02-T1 | 02 | 2 | BLAST-01 | unit | `go test ./internal/application/blasting/ -count=1` | ❌ W0 | ⬜ pending |
+| 9-02-T2 | 02 | 2 | BLAST-01 | presenter golden | `go test ./internal/interfaces/presenter/ -run Blast -count=1` | ❌ W0 | ⬜ pending |
+| 9-03-T1 | 03 | 3 | BLAST-01, BLAST-02 | script | `go test ./cmd/gruntled -run 'TestScripts/(blast|usage)' -count=1` | ❌ W0 | ⬜ pending |
+| 9-03-T2 | 03 | 3 | BLAST-01, BLAST-02 | full gate + doc tests | `go vet ./... && go test -count=1 ./... && scripts/check-architecture.sh` | ✅ | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
