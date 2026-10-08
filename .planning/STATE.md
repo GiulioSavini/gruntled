@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.3
 milestone_name: Watch & Blast
 status: executing
-stopped_at: Completed 11-03-PLAN.md
-last_updated: "2026-10-08T12:41:04.961Z"
-last_activity: "2026-10-08 — completed 11-03 (single instance + snapshot publishing wired into watch)"
+stopped_at: Completed 11-04-PLAN.md
+last_updated: "2026-10-08T12:47:09.652Z"
+last_activity: "2026-10-08 — completed 11-04 (gruntled report over socket / windows report file)"
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 19
-  completed_plans: 15
+  completed_plans: 16
 ---
 
 # Project State
@@ -25,11 +25,11 @@ See: .planning/PROJECT.md (updated 2026-10-08)
 ## Current Position
 
 Phase: 11 of 11 (Report, Single Instance & Release Proof) — executing
-Plan: 3 of 7 (11-03 complete)
+Plan: 4 of 7 (11-04 complete)
 Status: Phase 11 in progress
-Last activity: 2026-10-08 — completed 11-03 (single instance + snapshot publishing wired into watch)
+Last activity: 2026-10-08 — completed 11-04 (gruntled report over socket / windows report file)
 
-Progress: [████░░░░░░] 3/7 Phase 11 plans (v0.3: 3/4 phases verified)
+Progress: [██████░░░░] 4/7 Phase 11 plans (v0.3: 3/4 phases verified)
 
 ## Performance Metrics
 
@@ -92,6 +92,7 @@ Progress: [████░░░░░░] 3/7 Phase 11 plans (v0.3: 3/4 phases 
 | Phase 11 P01 | 4min | 2 tasks | 8 files |
 | Phase 11 P02 | 12min | 2 tasks | 11 files |
 | Phase 11 P03 | 6min | 2 tasks | 7 files |
+| Phase 11 P04 | 15min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -127,6 +128,7 @@ Per-plan decision history lives in the phase SUMMARY files and git history.
 - [Phase 11]: 11-02: ipc lock = flock O_NOFOLLOW (unix) / CreateFile share 0 (windows); Probe never creates; LockRetry 20ms injected sleep
 - [Phase 11]: 11-02: AF_UNIX on raw syscall, os.NewFile non-blocking + SyscallConn accept; Close via quit chan wakes accept, waits handlers, removes socket; server always answers v=1, client mismatch -> *VersionError
 - [Phase 11]: Watch takes the per-repo lock before watcher/index; second watch prints location and exits 0; snapshots pre-rendered via shared renderReport
+- [Phase 11]: report exits 3 for no daemon/indexing/mismatch; windows reads the report file only while the lock is held
 
 ### Pending Todos
 
@@ -138,6 +140,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-10-08T12:41:04.959Z
-Stopped at: Completed 11-03-PLAN.md
+Last session: 2026-10-08T12:47:09.650Z
+Stopped at: Completed 11-04-PLAN.md
 Resume file: None
