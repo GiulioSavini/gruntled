@@ -1,0 +1,192 @@
+# blast with a baseline: removing output "id" and adding variable "name" in
+# modules/vpc breaks live/app (GRT001 on dependency.db.outputs.id) and puts
+# the other direct consumers of modules/vpc at risk.
+exec gruntled-exit 1 blast --base base cur
+stdout '^baseline: base$'
+stdout '^Broken \(1\):$'
+stdout '^  live/app$'
+stdout '^    live/app/terragrunt.hcl:7:\d+: GRT001 dependency "db" output "id"'
+stdout '^Impacted \(2\):$'
+stdout '^  live/cache \(module modules/vpc: \+variable name, -output id\)$'
+stdout '^  live/db \(module modules/vpc: \+variable name, -output id\)$'
+# Broken and Impacted are disjoint: live/app is listed once, under Broken
+stdout -count=1 '^  live/app'
+! stdout '^  live/app \(module'
+# consumers of other modules and consumers of consumers are not Impacted
+! stdout 'live/other'
+! stdout 'live/edge'
+# the GRT100 present in both trees is not new
+! stdout 'GRT100'
+! stdout 'live/bad'
+! stderr .
+
+# json: sorted, disjoint, with a summary
+exec gruntled-exit 1 blast --base base --format json cur
+stdout '"baseline": true'
+! stdout '"note"'
+stdout '"broken": \[\n\s+\{\n\s+"unit": "live/app"'
+stdout '"impacted": \[\n\s+\{\n\s+"unit": "live/cache",\n\s+"module": "modules/vpc"[\s\S]*"unit": "live/db"'
+! stdout '"impacted": \[[\s\S]*"unit": "live/app"'
+stdout '"added_variables": \[\n\s+"name"\n\s+\]'
+stdout '"removed_outputs": \[\n\s+"id"\n\s+\]'
+stdout '"summary": \{\n\s+"broken": 1,\n\s+"impacted": 2\n\s+\}'
+! stderr .
+
+# comment-only edit and reordering of the module: names unchanged, nothing
+# Impacted
+exec gruntled-exit 0 blast --base base comment
+stdout '^Broken \(0\):$'
+stdout '^Impacted \(0\):$'
+! stderr .
+
+# a new module and a deleted module are not diffed: nothing Impacted
+exec gruntled-exit 0 blast --base base newmod
+stdout '^Broken \(0\):$'
+stdout '^Impacted \(0\):$'
+! stderr .
+-- base/live/app/terragrunt.hcl --
+terraform {
+  source = "../../modules/vpc"
+}
+dependency "db" {
+  config_path = "../db"
+}
+inputs = { db_id = dependency.db.outputs.id }
+-- base/live/bad/main.tf --
+output "o" { value = "x" }
+-- base/live/bad/terragrunt.hcl --
+dependency "x" {
+-- base/live/cache/terragrunt.hcl --
+terraform {
+  source = "../../modules/vpc"
+}
+-- base/live/db/terragrunt.hcl --
+terraform {
+  source = "../../modules/vpc"
+}
+-- base/live/edge/terragrunt.hcl --
+terraform {
+  source = "../../modules/other"
+}
+dependency "db" {
+  config_path = "../db"
+}
+-- base/live/other/terragrunt.hcl --
+terraform {
+  source = "../../modules/other"
+}
+-- base/modules/other/main.tf --
+output "x" { value = "x" }
+-- base/modules/vpc/main.tf --
+variable "cidr" {}
+output "id" { value = "x" }
+-- cur/live/app/terragrunt.hcl --
+terraform {
+  source = "../../modules/vpc"
+}
+dependency "db" {
+  config_path = "../db"
+}
+inputs = { db_id = dependency.db.outputs.id }
+-- cur/live/bad/main.tf --
+output "o" { value = "x" }
+-- cur/live/bad/terragrunt.hcl --
+dependency "x" {
+-- cur/live/cache/terragrunt.hcl --
+terraform {
+  source = "../../modules/vpc"
+}
+-- cur/live/db/terragrunt.hcl --
+terraform {
+  source = "../../modules/vpc"
+}
+-- cur/live/edge/terragrunt.hcl --
+terraform {
+  source = "../../modules/other"
+}
+dependency "db" {
+  config_path = "../db"
+}
+-- cur/live/other/terragrunt.hcl --
+terraform {
+  source = "../../modules/other"
+}
+-- cur/modules/other/main.tf --
+output "x" { value = "x" }
+-- cur/modules/vpc/main.tf --
+variable "cidr" {}
+variable "name" {}
+-- comment/live/app/terragrunt.hcl --
+terraform {
+  source = "../../modules/vpc"
+}
+dependency "db" {
+  config_path = "../db"
+}
+inputs = { db_id = dependency.db.outputs.id }
+-- comment/live/bad/main.tf --
+output "o" { value = "x" }
+-- comment/live/bad/terragrunt.hcl --
+dependency "x" {
+-- comment/live/cache/terragrunt.hcl --
+terraform {
+  source = "../../modules/vpc"
+}
+-- comment/live/db/terragrunt.hcl --
+terraform {
+  source = "../../modules/vpc"
+}
+-- comment/live/edge/terragrunt.hcl --
+terraform {
+  source = "../../modules/other"
+}
+dependency "db" {
+  config_path = "../db"
+}
+-- comment/live/other/terragrunt.hcl --
+terraform {
+  source = "../../modules/other"
+}
+-- comment/modules/other/main.tf --
+output "x" { value = "x" }
+-- comment/modules/vpc/main.tf --
+# reordered, with a comment: same names
+output "id" { value = "x" } # the vpc id
+
+variable "cidr" {}
+-- newmod/live/app/terragrunt.hcl --
+terraform {
+  source = "../../modules/vpc"
+}
+dependency "db" {
+  config_path = "../db"
+}
+inputs = { db_id = dependency.db.outputs.id }
+-- newmod/live/bad/main.tf --
+output "o" { value = "x" }
+-- newmod/live/bad/terragrunt.hcl --
+dependency "x" {
+-- newmod/live/cache/terragrunt.hcl --
+terraform {
+  source = "../../modules/vpc"
+}
+-- newmod/live/db/terragrunt.hcl --
+terraform {
+  source = "../../modules/vpc"
+}
+-- newmod/live/edge/terragrunt.hcl --
+terraform {
+  source = "../../modules/extra"
+}
+dependency "db" {
+  config_path = "../db"
+}
+-- newmod/live/other/terragrunt.hcl --
+terraform {
+  source = "../../modules/other"
+}
+-- newmod/modules/extra/main.tf --
+output "y" { value = "y" }
+-- newmod/modules/vpc/main.tf --
+variable "cidr" {}
+output "id" { value = "x" }

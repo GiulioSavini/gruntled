@@ -1,0 +1,99 @@
+# blast 0: base and path are the same tree, even a broken one
+exec gruntled-exit 0 blast --base broken broken
+stdout '^baseline: broken$'
+stdout '^Broken \(0\):$'
+stdout '^Impacted \(0\):$'
+! stderr .
+
+# blast 1: a GRT001 that exists only in path
+exec gruntled-exit 1 blast --base clean broken
+stdout '^baseline: clean$'
+stdout '^Broken \(1\):$'
+stdout '^  app$'
+stdout 'GRT001 dependency "vpc" output "vpc_idd"'
+stdout '^Impacted \(0\):$'
+! stderr .
+
+# blast 0: the pre-existing finding moved down one line, it is not new
+exec gruntled-exit 0 blast --base broken shifted
+stdout '^Broken \(0\):$'
+! stdout 'GRT001'
+! stderr .
+
+# blast 0: the finding was fixed in path
+exec gruntled-exit 0 blast --base broken clean
+stdout '^Broken \(0\):$'
+! stderr .
+
+# flags after the path and "--" give identical output
+exec gruntled-exit 1 blast --base clean --format json broken
+cp stdout $WORK/a.json
+exec gruntled-exit 1 blast broken --format json --base clean
+cp stdout $WORK/b.json
+exec gruntled-exit 1 blast --format=json --base=clean -- broken
+cp stdout $WORK/c.json
+cmp $WORK/a.json $WORK/b.json
+cmp $WORK/a.json $WORK/c.json
+stdout '"kind": "blast"'
+stdout '"baseline": true'
+! stdout '"note"'
+
+# blast 2: invalid --format (sarif is not supported by blast)
+exec gruntled-exit 2 blast --format sarif clean
+stderr 'invalid --format "sarif" \(want text or json\)'
+stderr '^usage: gruntled blast \[--base dir\] \[--format text\|json\] \[path\]$'
+! stdout .
+exec gruntled-exit 2 blast --format xml clean
+stderr 'invalid --format "xml" \(want text or json\)'
+! stdout .
+
+# blast 2: unknown flag, more than one path, --base without a value
+exec gruntled-exit 2 blast --bogus clean
+stderr 'flag provided but not defined'
+! stdout .
+exec gruntled-exit 2 blast --base clean clean broken
+stderr 'more than one path given'
+! stdout .
+exec gruntled-exit 2 blast clean --base
+stderr 'flag needs an argument'
+! stdout .
+
+# blast 3: path or base cannot be opened; never a silent fallback
+exec gruntled-exit 3 blast --base clean missing/
+stderr 'cannot open repository'
+! stdout .
+exec gruntled-exit 3 blast --base missing/ clean
+stderr 'cannot open repository'
+! stdout .
+
+-- clean/vpc/terragrunt.hcl --
+-- clean/vpc/main.tf --
+output "vpc_id" { value = "x" }
+-- clean/app/terragrunt.hcl --
+dependency "vpc" {
+  config_path = "../vpc"
+}
+inputs = { id = dependency.vpc.outputs.vpc_id }
+-- clean/app/main.tf --
+variable "id" {}
+-- broken/vpc/terragrunt.hcl --
+-- broken/vpc/main.tf --
+output "vpc_id" { value = "x" }
+-- broken/app/terragrunt.hcl --
+dependency "vpc" {
+  config_path = "../vpc"
+}
+inputs = { id = dependency.vpc.outputs.vpc_idd }
+-- broken/app/main.tf --
+variable "id" {}
+-- shifted/vpc/terragrunt.hcl --
+-- shifted/vpc/main.tf --
+output "vpc_id" { value = "x" }
+-- shifted/app/terragrunt.hcl --
+
+dependency "vpc" {
+  config_path = "../vpc"
+}
+inputs = { id = dependency.vpc.outputs.vpc_idd }
+-- shifted/app/main.tf --
+variable "id" {}

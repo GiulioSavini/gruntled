@@ -1,0 +1,49 @@
+# blast without --base: every current finding is Broken, Impacted is not
+# computed and the output says so.
+exec gruntled-exit 1 blast broken
+stdout -count=1 '^baseline: none \(no baseline\)$'
+stdout '^Broken \(1\):$'
+stdout '^  app$'
+stdout '^    app/terragrunt.hcl:4:17: GRT001 '
+! stdout 'Impacted'
+! stderr .
+
+# json: baseline false, the note, an empty impacted list
+exec gruntled-exit 1 blast --format json broken
+stdout '"kind": "blast"'
+stdout '"baseline": false'
+stdout '"note": "no baseline"'
+stdout '"impacted": \[\]'
+stdout '"code": "GRT001"'
+! stderr .
+
+# clean tree: nothing Broken, exit 0
+exec gruntled-exit 0 blast clean
+stdout '^baseline: none \(no baseline\)$'
+stdout '^Broken \(0\):$'
+! stdout 'Impacted'
+! stderr .
+exec gruntled-exit 0 blast --format json clean
+stdout '"broken": \[\]'
+stdout '"baseline": false'
+
+-- clean/vpc/terragrunt.hcl --
+-- clean/vpc/main.tf --
+output "vpc_id" { value = "x" }
+-- clean/app/terragrunt.hcl --
+dependency "vpc" {
+  config_path = "../vpc"
+}
+inputs = { id = dependency.vpc.outputs.vpc_id }
+-- clean/app/main.tf --
+variable "id" {}
+-- broken/vpc/terragrunt.hcl --
+-- broken/vpc/main.tf --
+output "vpc_id" { value = "x" }
+-- broken/app/terragrunt.hcl --
+dependency "vpc" {
+  config_path = "../vpc"
+}
+inputs = { id = dependency.vpc.outputs.vpc_idd }
+-- broken/app/main.tf --
+variable "id" {}

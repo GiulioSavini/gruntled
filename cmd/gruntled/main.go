@@ -2,7 +2,8 @@
 // with os.OpenRoot, wires the Terragrunt loader and Terraform surface reader
 // (infrastructure) into the use cases (application), and hands the results
 // to the presenters (interfaces): check runs the analyzers, graph only
-// builds the repository graph. It parses arguments and maps results to exit
+// builds the repository graph, blast compares a tree against a baseline
+// tree. It parses arguments and maps results to exit
 // codes; it holds no analysis logic.
 package main
 
@@ -15,6 +16,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/GiulioSavini/gruntled/internal/application/blasting"
 	"github.com/GiulioSavini/gruntled/internal/application/checking"
 	"github.com/GiulioSavini/gruntled/internal/application/indexing"
 	"github.com/GiulioSavini/gruntled/internal/infrastructure/terragrunt"
@@ -45,11 +47,34 @@ const topUsage = `usage: gruntled <command> [arguments]
 Commands:
   check   check a Terragrunt repository for broken dependency output references
   graph   print the repository graph as JSON (--json)
+  blast   report which units a change breaks (Broken) or puts at risk (Impacted) against --base
 
 Flags:
   --version   print the version and commit, then exit
 
-Run "gruntled check -h" or "gruntled graph -h" for details.
+Run "gruntled check -h", "gruntled graph -h" or "gruntled blast -h" for details.
+`
+
+const blastUsage = `usage: gruntled blast [--base dir] [--format text|json] [path]
+
+Compare the Terragrunt repository at path (default ".") with the baseline
+tree at --base. Broken lists the units with findings that are new in path
+(a finding that only moved to another line is not new). Impacted lists the
+units that use a module whose variable or output names changed and are not
+Broken; only direct consumers are listed. Without --base every finding is
+Broken and Impacted is not computed ("no baseline"). gruntled never runs
+git: check the baseline out yourself, for example with git worktree.
+Flags may appear before or after path; "--" ends flag parsing.
+
+Flags:
+  --base dir           baseline tree to compare against (default: none)
+  --format text|json   output format (default "text")
+
+Exit codes:
+  0  comparison completed, no error diagnostic in Broken
+  1  comparison completed, at least one error diagnostic in Broken
+  2  usage error: unknown flag, invalid --format, more than one path
+  3  comparison could not run: path or --base missing, not a directory or unreadable, an internal failure, or stdout write failed
 `
 
 const checkUsage = `usage: gruntled check [--format text|json|sarif] [path]
@@ -102,6 +127,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return runCheck(args[1:], stdout, stderr)
 	case "graph":
 		return runGraph(args[1:], stdout, stderr)
+	case "blast":
+		return runBlast(args[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "gruntled: unknown command %q\n", args[0])
 		fmt.Fprint(stderr, topUsage)
@@ -261,6 +288,69 @@ func runGraph(args []string, stdout, stderr io.Writer) int {
 	}
 	if !writeOut(stdout, stderr, &buf) {
 		return exitFailure
+	}
+	return exitOK
+}
+
+func runBlast(args []string, stdout, stderr io.Writer) int {
+	var base, format *string
+	dir, code, done := parseArgs("blast", blastUsage, args, stderr, func(fs *flag.FlagSet) {
+		base = fs.String("base", "", "baseline tree to compare against")
+		format = fs.String("format", "text", "output format: text or json")
+	})
+	if done {
+		return code
+	}
+	switch *format {
+	case "text", "json":
+	default:
+		fmt.Fprintf(stderr, "gruntled: invalid --format %q (want text or json)\n", *format)
+		fmt.Fprint(stderr, blastUsage)
+		return exitUsage
+	}
+
+	root, ok := openRepo(dir, stderr)
+	if !ok {
+		return exitFailure
+	}
+	defer root.Close()
+	fsys := root.FS()
+	cur := blasting.Sources{Units: terragrunt.NewLoader(fsys), Surfaces: tfsurface.NewReader(fsys)}
+
+	// A --base that cannot be opened is a failure, never a silent fallback
+	// to "no baseline".
+	var baseSrc *blasting.Sources
+	if *base != "" {
+		baseRoot, ok := openRepo(*base, stderr)
+		if !ok {
+			return exitFailure
+		}
+		defer baseRoot.Close()
+		baseFS := baseRoot.FS()
+		baseSrc = &blasting.Sources{Units: terragrunt.NewLoader(baseFS), Surfaces: tfsurface.NewReader(baseFS)}
+	}
+
+	res, err := blasting.Blast(context.Background(), cur, baseSrc)
+	if err != nil {
+		fmt.Fprintf(stderr, "gruntled: %v\n", err)
+		return exitFailure
+	}
+
+	var buf bytes.Buffer
+	if *format == "json" {
+		err = presenter.BlastJSON(&buf, res)
+	} else {
+		err = presenter.BlastText(&buf, res, *base)
+	}
+	if err != nil {
+		fmt.Fprintf(stderr, "gruntled: %v\n", err)
+		return exitFailure
+	}
+	if !writeOut(stdout, stderr, &buf) {
+		return exitFailure
+	}
+	if res.HasErrors() {
+		return exitFindings
 	}
 	return exitOK
 }

@@ -8,6 +8,7 @@ exec gruntled-exit 0 -h
 stderr 'usage: gruntled <command>'
 stderr '^  check   '
 stderr '^  graph   print the repository graph as JSON \(--json\)$'
+stderr '^  blast   '
 stderr '^  --version   print the version and commit, then exit$'
 exec gruntled-exit 0 --help
 exec gruntled-exit 0 help
@@ -25,6 +26,15 @@ stderr '^  0  graph printed, even with unknown units$'
 stderr '^  2  usage error'
 stderr '^  3  analysis could not run'
 ! stderr '^  1  '
+! stdout .
+
+# blast help: exit 0 with the exit-code table
+exec gruntled-exit 0 blast -h
+stderr '^usage: gruntled blast \[--base dir\] \[--format text\|json\] \[path\]$'
+stderr '^  0  comparison completed'
+stderr '^  1  comparison completed, at least one error diagnostic in Broken$'
+stderr '^  2  usage error'
+stderr '^  3  comparison could not run'
 ! stdout .
 
 # unknown command: exit 2
