@@ -102,8 +102,8 @@ Plans:
 
 Plans:
 - [x] 11-01-PLAN.md — statusfile EnsureDir (symlink/owner) + presenter SanitizeReason (phase-10 findings 2, 3)
-- [ ] 11-02-PLAN.md — ipc package: crash-safe lock, raw-syscall AF_UNIX server/client, windows dump transport
-- [ ] 11-03-PLAN.md — `watch` wiring: shared renderer, lock-first single instance, serve snapshot, already-running
+- [x] 11-02-PLAN.md — ipc package: crash-safe lock, raw-syscall AF_UNIX server/client, windows dump transport
+- [x] 11-03-PLAN.md — `watch` wiring: shared renderer, lock-first single instance, serve snapshot, already-running
 - [ ] 11-04-PLAN.md — `gruntled report` (socket / windows file), docs/cli.md, parity tests
 - [ ] 11-05-PLAN.md — (wave 4, after 11-03) six-target proof self-tests for socket code, mktemp fix, macOS/Windows CI job
 - [ ] 11-06-PLAN.md — README for watch/report/blast, guard test, phase gate, bookkeeping (wave 5)
