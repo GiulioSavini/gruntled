@@ -13,6 +13,7 @@ import (
 
 	"github.com/GiulioSavini/gruntled/internal/application/watching"
 	"github.com/GiulioSavini/gruntled/internal/domain/diagnostic"
+	"github.com/GiulioSavini/gruntled/internal/infrastructure/ipc"
 	"github.com/GiulioSavini/gruntled/internal/infrastructure/statusfile"
 	"github.com/GiulioSavini/gruntled/internal/infrastructure/terragrunt"
 	"github.com/GiulioSavini/gruntled/internal/infrastructure/tfsurface"
@@ -75,6 +76,8 @@ type watchDeps struct {
 	maxWait time.Duration
 	// loaderHook, when set, sees the Loader before the daemon starts.
 	loaderHook func(*terragrunt.Loader)
+	// sleep pauses between lock and ping retries.
+	sleep func(time.Duration)
 }
 
 func defaultWatchDeps() watchDeps {
@@ -84,6 +87,7 @@ func defaultWatchDeps() watchDeps {
 		newPoll:   watch.NewPoll,
 		env:       statusfile.OSEnv(),
 		goos:      runtime.GOOS,
+		sleep:     time.Sleep,
 	}
 }
 
@@ -148,6 +152,14 @@ func runWatchWith(ctx context.Context, args []string, stdout, stderr io.Writer, 
 		return exitOK
 	}
 
+	// Single instance first: a second watch is detected even while the
+	// first is still running its initial index.
+	inst, code, done := acquireInstance(root, statusPath, deps, stdout, stderr)
+	if done {
+		return code
+	}
+	defer inst.close()
+
 	// The watcher exists before the initial index starts, so no change made
 	// during that index is lost.
 	w, backend, ok := openWatcher(root, *o.poll, *o.pollInterval, deps, stderr)
@@ -163,10 +175,11 @@ func runWatchWith(ctx context.Context, args []string, stdout, stderr io.Writer, 
 	}
 
 	pub := &watchPublisher{
-		stdout: stdout,
-		stderr: stderr,
-		now:    deps.now,
-		status: statusfile.NewWriter(statusPath),
+		stdout:    stdout,
+		stderr:    stderr,
+		now:       deps.now,
+		status:    statusfile.NewWriter(statusPath),
+		snapshots: inst.store,
 	}
 	err = watch.Run(ctx, watch.Config{
 		Watcher: w,
@@ -222,6 +235,11 @@ type watchPublisher struct {
 	// reported by runWatchWith from Run's error.
 	ready   bool
 	printed diagnostic.Set
+	// snapshots, when set, receives every published snapshot.
+	snapshots func(*ipc.Snapshot)
+	// last is the most recent snapshot; gen counts successful indexes.
+	last *ipc.Snapshot
+	gen  uint64
 }
 
 func (p *watchPublisher) publish(ev watch.Event) {
@@ -240,6 +258,12 @@ func (p *watchPublisher) publish(ev watch.Event) {
 			p.printed = ev.Report.Diagnostics
 		}
 		p.ready = true
+		p.gen++
+		if s, err := buildSnapshot(ev.Report, p.gen); err == nil {
+			p.setSnapshot(s)
+		} else {
+			fmt.Fprintf(p.stderr, "gruntled: rendering report: %v\n", err)
+		}
 	case watch.EventFailed:
 		reason := "unknown error"
 		if ev.Err != nil {
@@ -249,6 +273,13 @@ func (p *watchPublisher) publish(ev watch.Event) {
 		if p.ready {
 			fmt.Fprintf(p.stderr, "gruntled: reindex failed: %s\n", presenter.SanitizeReason(reason))
 		}
+		// The last good bytes stay served, marked failed with the reason.
+		if p.last != nil {
+			s := *p.last
+			s.State = ipc.StateFailed
+			s.LastError = presenter.SanitizeReason(reason)
+			p.setSnapshot(&s)
+		}
 	case watch.EventStopped:
 		_ = presenter.StatusStopped(&line, stamp)
 	default:
@@ -257,5 +288,14 @@ func (p *watchPublisher) publish(ev watch.Event) {
 	if err := p.status.Write(line.String()); err != nil && !p.writeFailed {
 		p.writeFailed = true
 		fmt.Fprintf(p.stderr, "gruntled: cannot write status file %s: %v (further failures are not reported)\n", p.status.Path, err)
+	}
+}
+
+// setSnapshot records s and hands it on. Snapshots are never mutated once
+// handed on: handlers may be reading them.
+func (p *watchPublisher) setSnapshot(s *ipc.Snapshot) {
+	p.last = s
+	if p.snapshots != nil {
+		p.snapshots(s)
 	}
 }
