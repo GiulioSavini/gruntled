@@ -2,15 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.3
 milestone_name: Watch & Blast
-status: ready_to_plan
-stopped_at: Roadmap created for v0.3
-last_updated: "2026-10-08T07:55:48.908Z"
-last_activity: 2026-10-08 — completed v0.2 milestone
+status: executing
+stopped_at: Completed 08-01-PLAN.md
+last_updated: "2026-10-08T08:12:04.007Z"
+last_activity: 2026-10-08 — completed 08-01 persistent parse store
 progress:
   total_phases: 4
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 2
+  completed_plans: 1
+  percent: 50
 ---
 
 # Project State
@@ -25,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-10-08)
 ## Current Position
 
 Phase: 8 of 11 (Incremental Index Foundation)
-Plan: —
-Status: Not started, ready to plan
-Last activity: 2026-10-08 — v0.3 roadmap created
+Plan: 2 of 2 (08-01 complete)
+Status: In progress
+Last activity: 2026-10-08 — completed 08-01 persistent parse store
 
-Progress: [░░░░░░░░░░] 0% (v0.3: 0/4 phases)
+Progress: [█████░░░░░] 50% of Phase 8 plans (v0.3: 0/4 phases)
 
 ## Performance Metrics
 
@@ -77,6 +78,7 @@ Progress: [░░░░░░░░░░] 0% (v0.3: 0/4 phases)
 | Phase 07 P03 | 5min | 1 tasks | 1 files |
 | Phase 07 P04 | 8min | 3 tasks | 5 files |
 | Phase 07 P05 | 15min | 3 tasks | 0 files |
+| Phase 08 P01 | 2min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -84,6 +86,9 @@ Progress: [░░░░░░░░░░] 0% (v0.3: 0/4 phases)
 
 Decisions are logged in PROJECT.md Key Decisions table (v0.1 and v0.2 decisions recorded there).
 Per-plan decision history lives in the phase SUMMARY files and git history.
+- [Phase 08]: Only parse results persist across LoadUnits; discovery/resolution/assembly recomputed so incremental == full by construction
+- [Phase 08]: GRT100 driven by per-load touched set, store pruned to touched on success
+- [Phase 08]: Dirty-set contract: Invalidate on create/write/remove/rename (old+new); negative entries cached
 
 ### Pending Todos
 
@@ -95,6 +100,6 @@ None open.
 
 ## Session Continuity
 
-Last session: 2026-10-08
-Stopped at: Completed v0.2 milestone
+Last session: 2026-10-08T08:12:04.006Z
+Stopped at: Completed 08-01-PLAN.md
 Resume file: None
