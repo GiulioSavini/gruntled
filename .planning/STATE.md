@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.3
 milestone_name: Watch & Blast
 status: executing
-stopped_at: Completed 11-06-PLAN.md
-last_updated: "2026-10-08T13:11:44.951Z"
-last_activity: "2026-10-08 — completed 11-06 (README/docs for watch, report, blast; phase gate green; 11-07 windows CI pending)"
+stopped_at: Completed 11-07-PLAN.md
+last_updated: "2026-10-08T13:30:13.981Z"
+last_activity: "2026-10-08 — completed 11-07 (CI green on all jobs incl. macos+windows, run 37782939975)"
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 19
-  completed_plans: 18
+  completed_plans: 19
 ---
 
 # Project State
@@ -25,11 +25,11 @@ See: .planning/PROJECT.md (updated 2026-10-08)
 ## Current Position
 
 Phase: 11 of 11 (Report, Single Instance & Release Proof) — executing
-Plan: 6 of 7 (11-01..11-06 complete; 11-07 CI confirmation pending)
-Status: Phase 11 in progress — windows CI (test-os windows-latest) red on pre-existing tests, fixed in 11-07
-Last activity: 2026-10-08 — completed 11-06 (README/docs for watch, report, blast; phase gate green)
+Plan: 7 of 7 (11-01..11-07 complete)
+Status: Phase 11 plans complete — CI green on linux, macos, windows (run 37782939975); awaiting phase verification
+Last activity: 2026-10-08 — completed 11-07 (.gitattributes LF + narrow windows test skips; CI all green)
 
-Progress: [█████████░] 6/7 Phase 11 plans (v0.3: 3/4 phases verified)
+Progress: [██████████] 7/7 Phase 11 plans (v0.3: 3/4 phases verified)
 
 ## Performance Metrics
 
@@ -95,6 +95,7 @@ Progress: [█████████░] 6/7 Phase 11 plans (v0.3: 3/4 phases 
 | Phase 11 P04 | 15min | 2 tasks | 9 files |
 | Phase 11 P05 | 12min | 2 tasks | 3 files |
 | Phase 11 P06 | 14min | 3 tasks | 7 files |
+| Phase 11 P07 | 25min | 1 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -140,6 +141,7 @@ Per-plan decision history lives in the phase SUMMARY files and git history.
 - [Phase 11]: 11-06: report exit codes mirror check (0/1), 3 for no daemon/indexing/mismatch
 - [Phase 11]: 11-06: sun_path overflow is a hard exit 3
 - [Phase 11]: 11-06: windows CI (test-os windows-latest) red on pre-existing tests in run 37780137349; pending 11-07
+- [Phase 11]: .gitattributes '* text=auto eol=lf' plus narrow windows test skips make CI green on all OSes (run 37782939975)
 
 ### Pending Todos
 
@@ -151,6 +153,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-10-08T13:11:44.946Z
-Stopped at: Completed 11-06-PLAN.md
+Last session: 2026-10-08T13:30:13.978Z
+Stopped at: Completed 11-07-PLAN.md
 Resume file: None
