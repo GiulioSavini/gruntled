@@ -75,6 +75,24 @@ jobs:
       - name: test-check-architecture
         run: bash scripts/test-check-architecture.sh
 
+  # The darwin accept/flock path and the windows exclusive-lock and report
+  # file code compile everywhere but only run on their own OS, so the tests
+  # run there too. No -race (slow on these runners); check keeps -race and
+  # architecture keeps the scripts on ubuntu.
+  test-os:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: test
+        run: go test -count=1 ./...
+
   # Proves the user recipes in docs/ci.md run for real: the documented
   # install + check commands (against the clean fixture, since this repo's
   # root holds the deliberately broken sarif-fixture) and the pre-commit hook
