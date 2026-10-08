@@ -1,0 +1,39 @@
+# missing path: exit 3
+exec gruntled-exit 3 watch missing/
+stderr 'cannot open repository'
+! stdout .
+
+# path is a regular file: exit 3
+exec gruntled-exit 3 watch afile
+stderr 'cannot open repository'
+! stdout .
+
+# --print-status-path prints the absolute per-repo path and exits 0
+# without starting a daemon or creating the file
+exec gruntled-exit 0 watch --print-status-path repo
+stdout '^(/|[A-Za-z]:\\).*[/\\]gruntled[/\\][0-9a-f]{12}[/\\]status$'
+! stderr .
+
+# the path does not depend on how the repository is spelled
+exec gruntled-exit 0 watch --print-status-path repo
+cp stdout $WORK/a.txt
+exec gruntled-exit 0 watch --print-status-path ./repo/
+cp stdout $WORK/b.txt
+cmp $WORK/a.txt $WORK/b.txt
+
+# invalid durations: exit 2
+exec gruntled-exit 2 watch --debounce abc repo
+stderr 'invalid value "abc" for flag -debounce'
+! stdout .
+exec gruntled-exit 2 watch --poll-interval 0s repo
+stderr '--poll-interval must be positive'
+! stdout .
+exec gruntled-exit 2 watch --debounce 0s repo
+stderr '--debounce must be positive'
+! stdout .
+
+-- afile --
+x
+-- repo/vpc/terragrunt.hcl --
+-- repo/vpc/main.tf --
+output "vpc_id" { value = "x" }
