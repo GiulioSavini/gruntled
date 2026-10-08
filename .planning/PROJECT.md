@@ -2,16 +2,18 @@
 
 > *Terragrunt, but gruntled.*
 
-## Current Milestone: v0.2 CI-Ready
+## Current State: v0.2.0 shipped 2026-10-08
 
-**Goal:** Make the validated `check` engine something a team can drop into pre-commit and CI
-today, and add the two diagnostics the existing graph already answers.
+`gruntled check` reports `GRT001`, `GRT002`, `GRT003` and `GRT100` in text, JSON or SARIF;
+`gruntled graph --json` prints the repository graph. Installable from the tagged `v0.2.0` GitHub
+release (static binaries for 6 targets plus checksums), as a pre-commit hook, or via the
+GitHub Actions / GitLab CI recipes in `docs/ci.md`.
 
-**Target features:**
-- `GRT002` (`config_path` to no unit) and `GRT003` (dependency cycle)
-- `gruntled graph --json`
-- SARIF output, pre-commit hook, CI recipes
-- Tagged releases with static binaries
+## Next Milestone Goals
+
+v0.3 (not yet planned):
+- `gruntled watch`: daemon with in-memory incremental reindexing, status file, and `gruntled report`
+- `gruntled blast`: Broken vs Impacted
 
 ## What This Is
 
@@ -43,23 +45,26 @@ is built on top of that one answer being correct and trustworthy.
 - ✓ `gruntled check`: deterministic output, stable exit code, text and JSON — v0.1
 - ✓ Synthetic repo generator and golden tests — v0.1
 - ✓ Real-corpus experiment: 0 false positives, every injected mutation caught (denis256 8/8), faster than `terragrunt hcl validate` in 3 of 3 runs — v0.1
+- ✓ MORE-01 `GRT002`: `dependency.config_path` pointing at no unit — v0.2
+- ✓ MORE-02 `GRT003`: dependency cycle between units, deterministic member order — v0.2
+- ✓ MORE-06 `GRT002`/`GRT003` corpus validation (0 findings on iso20022/secret, denis256 exact oracle set, 13/13 mutations) — v0.2
+- ✓ INT-01 `gruntled graph --json` — v0.2
+- ✓ INT-02 `gruntled check --format sarif`, accepted by GitHub code scanning — v0.2
+- ✓ INT-03 pre-commit hook via `.pre-commit-hooks.yaml` — v0.2
+- ✓ INT-04 GitHub Actions and GitLab CI recipes, GitHub recipe run in own CI — v0.2
+- ✓ REL-01 static binaries for linux/darwin/windows on amd64/arm64 with checksums, tagged release — v0.2
+- ✓ REL-02 `gruntled --version` with build-time injected version and commit — v0.2
 
 ### Active
 
-**v0.2 — CI-Ready**
+**v0.3 candidates** (detailed IDs in `milestones/v0.2-REQUIREMENTS.md`, Future Requirements)
 
-- [ ] `GRT002`: `dependency.config_path` pointing at no unit
-- [ ] `GRT003`: dependency cycle between units
-- [ ] `gruntled graph --json`
-- [ ] SARIF output accepted by GitHub code scanning
-- [ ] pre-commit hook and CI recipes
-- [ ] Tagged releases with static binaries
+- [ ] `gruntled watch`: daemon with in-memory incremental reindexing, status file, `gruntled report` (DAEMON-01..05)
+- [ ] `gruntled blast`: Broken vs Impacted (BLAST-01..02)
 
 **Later**
 
-- [ ] `gruntled watch`: daemon with in-memory incremental reindexing, status file, `gruntled report` (v0.3)
-- [ ] `gruntled blast`: Broken vs Impacted (v0.3)
-- [ ] `GRT004`-`GRT006`
+- [ ] `GRT004`-`GRT006` (MORE-03..05; `GRT004` needs a diff and belongs with blast)
 
 ### Out of Scope
 
@@ -83,6 +88,11 @@ is built on top of that one answer being correct and trustworthy.
 - **Planning or applying infrastructure** — gruntled is strictly read-only.
 
 ## Context
+
+**Shipped state (v0.2.0, 2026-10-08):** ~25.9k lines of Go (~17.9k of them tests). Go 1.27,
+`hashicorp/hcl/v2`, stdlib `flag`. CI: architecture rules, `go test -race`, SARIF schema check,
+SARIF upload proof, release packaging dry run and `recipe-check`; tag-triggered `release.yml`.
+Repository public on GitHub since Phase 6 (needed for code scanning without GHAS).
 
 **The problem is parsing, not the cloud.** Terragrunt documents O(n²) complexity in
 `locals` evaluation and the fact that `include` files are re-evaluated in the context
@@ -162,16 +172,24 @@ error — this needs an explicit, tested decision.
 | Terragrunt-only scope | Removes every external binary dependency; makes the idempotency and air-gap guarantees demonstrable instead of declared | — Pending |
 | Warm index as the differentiator, not the checks | Terragrunt is stateless by design; upstream can absorb checks but not this | — Pending |
 | Own HCL parser from M1 — do NOT import Terragrunt as a library | Verified by compiling: `ParseConfigFile`/`PartialParseConfigFile` are exported, but the only `*ParsingContext` constructor requires `*venv.Venv` from `internal/venv`, which Go refuses to import from an external module, and no exported function anywhere returns one. Importing also pulls 672 modules including full AWS/Azure/GCP SDKs and requires Go 1.27. Reversed on 2026-09-01 | ✓ Good |
-| Structural decode only — never evaluate expression values | `GRT001` compares names read off the HCL AST; it never needs a value. This removes state, `mock_outputs` and most functions from scope by construction rather than by suppression | — Pending |
-| v0.1 ships `GRT001` + syntax only | One diagnostic justifies the tool. More checks before the idea is validated means more bug surface and more false-positive risk | — Pending |
-| v0.1 ships `check` only, no daemon | A daemon on top of an unverified engine is wasted work. `check` is itself the experiment, and is already useful in pre-commit and CI | — Pending |
+| Structural decode only — never evaluate expression values | `GRT001` compares names read off the HCL AST; it never needs a value. This removes state, `mock_outputs` and most functions from scope by construction rather than by suppression | ✓ Good (0 false positives on corpus, v0.1 and v0.2) |
+| v0.1 ships `GRT001` + syntax only | One diagnostic justifies the tool. More checks before the idea is validated means more bug surface and more false-positive risk | ✓ Good (v0.1 experiment passed) |
+| v0.1 ships `check` only, no daemon | A daemon on top of an unverified engine is wasted work. `check` is itself the experiment, and is already useful in pre-commit and CI | ✓ Good (v0.1 experiment passed) |
 | No on-disk index cache in v1 | Premature optimisation: versioning, invalidation and corruption traded against a sub-second startup | — Pending |
 | Status file over desktop notifications | `notify-send` is absent on the developer's WSL2 machine; PowerShell toasts cost ~1s and break the no-external-process rule. A status file is readable from a prompt, tmux or an editor and works everywhere | — Pending |
 | Impacted only when module surface changes | Reporting twelve units because a comment changed destroys trust in the signal | — Pending |
-| Open the repository once M1 passes its test | If the experiment fails, nothing was published and nothing needs explaining | — Pending |
+| Open the repository once M1 passes its test | If the experiment fails, nothing was published and nothing needs explaining | ✓ Good (public since v0.2 Phase 6) |
 | Name: gruntled | Memorable, ownable, no relevant collision, and the joke carries the README | — Pending |
 | mock_outputs never suppresses GRT001, and severity stays error | With merge-with-state, a renamed output silently falls back to the mock value at `apply`, which is exactly the bug gruntled exists to catch. Mock facts only enrich the message. `enabled = false`, `skip_outputs = true` or any non-literal value for either keeps GRT001 silent, because Terragrunt then never reads the module's outputs. Suppressing would also make the Phase 4 mutation run report 0/8 on the primary corpus | ✓ Locked (Phase 3) |
-| v0.2 is adoption (CI, SARIF, releases, GRT002/003) before the daemon | The one-shot engine is validated but not installable. GRT002/003 are pure graph queries; GRT004 needs a diff (belongs with blast), GRT005/006 overlap `terragrunt hcl validate --inputs` and carry merge-related false-positive risk | — Pending |
+| v0.2 is adoption (CI, SARIF, releases, GRT002/003) before the daemon | The one-shot engine is validated but not installable. GRT002/003 are pure graph queries; GRT004 needs a diff (belongs with blast), GRT005/006 overlap `terragrunt hcl validate --inputs` and carry merge-related false-positive risk | ✓ Good (v0.2.0 shipped) |
+| SARIF URIs relative to the analysed directory; CI prefixes them with jq | `upload-sarif` `checkout_path` does not rewrite artifact URIs; users analysing a subdirectory must prefix or run from repo root (documented in `docs/ci.md`) | ✓ Good (alerts land on correct files/lines) |
+| Repository made public for code scanning | Code scanning without GHAS requires a public repo; history secret-scanned clean first | ✓ Good |
+| 6 release targets incl. windows/arm64 | User decision 2026-10-01, overriding the 5-target lock; target list lives only in `check-architecture.sh` and `build-release.sh`, kept equal by a test | ✓ Good |
+| No goreleaser; `scripts/build-release.sh` + one `gh release create` | Single packaging path also run on every push/PR as a dry run; no extra tool or config to trust | ✓ Good (first real run green) |
+| `release.yml` re-runs architecture proof and tests on the tagged commit | `needs:` cannot span workflows, so the release cannot depend on `ci.yml`; tag guard `vX.Y.Z[-suffix]` + must be on master | ✓ Good |
+| `--version` from ldflags only, `ReadBuildInfo` fallback dropped | Local `go build` stamps a VCS pseudo-version that broke the `dev (none)` contract; `go install @tag` therefore prints `dev (none)`, documented | ⚠️ Revisit (go install users see no version) |
+| `recipe-check` CI job proves `docs/ci.md` recipes | Docs that are executed cannot drift; `TestCIDoc` guards the pins | ✓ Good (installs from checkout, not `@tag`) |
+| Empty `config_path` matches terragrunt per case | Block `""` unresolved and silent; `dependencies.paths` entry `""` is a `GRT003` self-loop, as terragrunt v1.1.6 does | ✓ Good |
 | stdlib flag instead of cobra for v0.1 | One subcommand. cobra/pflag link `net`, `net/url` and `net/netip` plus `text/template`, while the stdlib keeps `binary-no-net-no-exec` a one-line CI proof. Revisit when v2 adds several subcommands | ✓ Locked (Phase 3) |
 
 ## Success Criteria for v0.1
@@ -201,4 +219,4 @@ files are parsed once and shared from day one, so `gruntled check` should alread
 import-the-library plan.
 
 ---
-*Last updated: 2026-09-29 after starting milestone v0.2 CI-Ready*
+*Last updated: 2026-10-08 after v0.2 milestone*
