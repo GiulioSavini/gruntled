@@ -23,15 +23,19 @@ func codeDiag(t *testing.T, code diagnostic.Code, sev diagnostic.Severity, line 
 }
 
 // countingWriter records how many Write calls it received.
+// It deliberately has no WriteString method, so io.WriteString goes
+// through Write and every write is counted.
 type countingWriter struct {
-	bytes.Buffer
+	buf   bytes.Buffer
 	calls int
 }
 
 func (c *countingWriter) Write(p []byte) (int, error) {
 	c.calls++
-	return c.Buffer.Write(p)
+	return c.buf.Write(p)
 }
+
+func (c *countingWriter) String() string { return c.buf.String() }
 
 func TestStatusLine(t *testing.T) {
 	e := diagnostic.SeverityError
