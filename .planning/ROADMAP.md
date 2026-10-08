@@ -77,15 +77,16 @@ Plans:
   2. Changes under `.git`, `.terraform`, `.terragrunt-cache` and editor swap/backup files trigger no reindex; newly created and deleted directories are picked up
   3. The daemon writes a one-line status (e.g. `gruntled: 2 errors (GRT001×1 GRT003×1) @ 14:02:11` or `gruntled: ok @ …`) atomically to a documented per-repository path outside the repository, readable with `cat`
   4. `--poll` (and windows) uses stat polling and yields the same results as the fsnotify watcher
-**Plans**: 6 plans
+**Plans**: 7 plans
 
 Plans:
 - [ ] 10-01-PLAN.md — extend Step 9 binary proof (x/sys/unix scan exemption, per-target nm symbol check, windows-no-fsnotify) + self-test cases
 - [ ] 10-02-PLAN.md — Loader mutex, batch Invalidate with path contract, watching.Indexer
 - [ ] 10-03-PLAN.md — presenter status lines, statusfile path + atomic writer
-- [ ] 10-04-PLAN.md — watch core: ignore, pending, debouncer, poll adapter, contract suite, run loop
+- [ ] 10-04-PLAN.md — watch core: ignore, pending, debouncer, poll adapter, contract suite
 - [ ] 10-05-PLAN.md — fsnotify native adapter behind !windows, safety net, dependency
 - [ ] 10-06-PLAN.md — `gruntled watch` CLI wiring, docs, parity/status tests, bookkeeping
+- [ ] 10-07-PLAN.md — watch run loop (single indexer goroutine, skip-stale publish)
 
 ### Phase 11: Report, Single Instance & Release Proof
 **Goal**: User can query a running daemon, never get two for one repository, and trust the release binaries still cannot touch net or exec.
