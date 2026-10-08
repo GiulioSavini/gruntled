@@ -24,12 +24,12 @@ See: .planning/PROJECT.md (updated 2026-10-08)
 
 ## Current Position
 
-Phase: 11 of 11 (Report, Single Instance & Release Proof) — executing
+Phase: 11 of 11 (Report, Single Instance & Release Proof) — complete
 Plan: 7 of 7 (11-01..11-07 complete)
-Status: Phase 11 plans complete — CI green on linux, macos, windows (run 37782939975); awaiting phase verification
+Status: v0.3 complete — phases 8-11 verified passed, phase 11 sec audit clean; next: audit-milestone, then complete-milestone (tag needs the person)
 Last activity: 2026-10-08 — completed 11-07 (.gitattributes LF + narrow windows test skips; CI all green)
 
-Progress: [██████████] 7/7 Phase 11 plans (v0.3: 3/4 phases verified)
+Progress: [██████████] 19/19 plans (v0.3: 4/4 phases verified)
 
 ## Performance Metrics
 
