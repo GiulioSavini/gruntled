@@ -50,3 +50,25 @@ None blocking. I did not run a stub scan beyond the behavioral checks above, whi
 None required.
 
 _Verifier: Claude (gsd-verifier)_
+
+## Security
+
+Audit by `proj-sec:auditor` on 2026-10-08, diff `48a41d4..b96c4c8`. Verdict: fix-small.
+
+| # | Severity | Location | Problem | Status |
+|---|----------|----------|---------|--------|
+| 1 | medium | `internal/domain/impact/impact.go` `NewFindings` | The baseline was treated as a set. A second identical GRT001 added on another line in the same unit and file was hidden, and `blast` exited 0. | Fixed in `fix(09-sec)`: the baseline is now a multiset. Regression test `TestNewFindingsCountsDuplicates`. |
+| 2 | low | `internal/interfaces/presenter/blast.go:95-105,135-147` | Text output prints variable and output names, paths and GRT100 messages raw. `tfsurface` does not validate labels, so a hostile repo can inject terminal escape sequences. JSON output is safe. The `check` text presenter has the same exposure. | Open. Quote with `strconv.Quote`, or reject labels that `hclsyntax.ValidIdentifier` refuses. Fix across presenters in one go. |
+| 3 | low | `cmd/gruntled/main.go` runBlast → `BlastText(..., *base)` | The text header echoes the `--base` argument verbatim, so an absolute path appears on stdout. | Open. Print a fixed label or `filepath.Base`. |
+| info | — | `impact.FindingKey` | A finding that goes from warning to error is not counted as new. This is the documented design. | Revisit if exit codes should count it. |
+
+Checked and OK:
+- Both trees are opened with `os.OpenRoot`, so neither symlinks nor `..` escape the root.
+- Every error path exits 3, with no silent fallback to "no baseline".
+- No new imports or dependencies.
+- Memory grows linearly.
+- JSON output is deterministic.
+
+Not run:
+- `govulncheck`: go1.26 toolchain against go1.27 packages.
+- `-race`: no C compiler.
