@@ -14,9 +14,12 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"unicode"
 
 	"github.com/GiulioSavini/gruntled/internal/application/checking"
 	"github.com/GiulioSavini/gruntled/internal/domain/diagnostic"
+	"github.com/GiulioSavini/gruntled/internal/infrastructure/ipc"
+	"github.com/GiulioSavini/gruntled/internal/infrastructure/statusfile"
 	"github.com/GiulioSavini/gruntled/internal/infrastructure/terragrunt"
 	"github.com/GiulioSavini/gruntled/internal/infrastructure/tfsurface"
 	"github.com/GiulioSavini/gruntled/internal/infrastructure/watch"
@@ -504,4 +507,76 @@ func TestWatchStatusInsideRepo(t *testing.T) {
 		}
 		check(t, filepath.Join(link, "s"), filepath.Join(dir, "s"))
 	})
+}
+
+// TestRenderSnapshotParity: the daemon's snapshot bytes equal what check
+// writes for every format, and Summary equals check's text-mode stderr.
+func TestRenderSnapshotParity(t *testing.T) {
+	for _, fixture := range []string{"testdata/sarif-fixture", "testdata/clean-fixture"} {
+		rep := freshReport(t, fixture)
+		snap, err := buildSnapshot(rep, 7)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if snap.State != ipc.StateReady || snap.Generation != 7 || snap.HasErrors != rep.Diagnostics.HasErrors() {
+			t.Fatalf("%s: snapshot state %q gen %d hasErrors %v", fixture, snap.State, snap.Generation, snap.HasErrors)
+		}
+		for _, f := range []struct {
+			format string
+			got    []byte
+		}{{"text", snap.Text}, {"json", snap.JSON}, {"sarif", snap.SARIF}} {
+			t.Run(fixture+"/"+f.format, func(t *testing.T) {
+				var stdout, stderr bytes.Buffer
+				code := run([]string{"check", "--format", f.format, fixture}, &stdout, &stderr)
+				if code != exitOK && code != exitFindings {
+					t.Fatalf("check exit %d; stderr:\n%s", code, stderr.String())
+				}
+				if !bytes.Equal(f.got, stdout.Bytes()) {
+					t.Fatalf("snapshot %s differs from check stdout:\n%s\nwant:\n%s", f.format, f.got, stdout.Bytes())
+				}
+				if f.format == "text" && !bytes.Equal(snap.Summary, stderr.Bytes()) {
+					t.Fatalf("snapshot summary %q, check stderr %q", snap.Summary, stderr.Bytes())
+				}
+			})
+		}
+	}
+}
+
+func TestRenderReportFormats(t *testing.T) {
+	rep := freshReport(t, "testdata/sarif-fixture")
+	for _, f := range []string{"json", "sarif"} {
+		out, sum, err := renderReport(f, rep)
+		if err != nil || len(out) == 0 || sum != nil {
+			t.Fatalf("%s: out %d bytes, summary %q, err %v", f, len(out), sum, err)
+		}
+	}
+	if _, sum, err := renderReport("text", rep); err != nil || len(sum) == 0 {
+		t.Fatalf("text: summary %q, err %v", sum, err)
+	}
+	if _, _, err := renderReport("yaml", rep); err == nil {
+		t.Fatal("unknown format rendered without error")
+	}
+}
+
+// TestWatchFailedReasonSanitised: a reindex failure after a ready index
+// reaches stderr without control runes.
+func TestWatchFailedReasonSanitised(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	p := &watchPublisher{
+		stdout: &stdout,
+		stderr: &stderr,
+		now:    func() time.Time { return watchStamp },
+		status: statusfile.NewWriter(filepath.Join(t.TempDir(), "st", "status")),
+	}
+	p.publish(watch.Event{Kind: watch.EventReady, Report: freshReport(t, repo(t, "vpc_id"))})
+	p.publish(watch.Event{Kind: watch.EventFailed, Err: errors.New("bad \x1b[31mred\x1b[0m\r\nline\x07")})
+	got := stderr.String()
+	if !strings.Contains(got, "reindex failed: bad") {
+		t.Fatalf("stderr has no reindex failure line:\n%q", got)
+	}
+	for _, r := range strings.TrimSuffix(got, "\n") {
+		if unicode.IsControl(r) {
+			t.Fatalf("stderr has control rune %U:\n%q", r, got)
+		}
+	}
 }
