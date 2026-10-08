@@ -361,7 +361,17 @@ func countingPoll(calls *atomic.Int32) func(string, time.Duration) (watch.Watche
 }
 
 func TestWatchBackendSelection(t *testing.T) {
+	// Windows always polls (deps.goos forces it), so the injected native
+	// constructor is never called there: the two native-fallback subtests
+	// only apply where a native backend exists.
+	nativeOnly := func(t *testing.T) {
+		t.Helper()
+		if runtime.GOOS == "windows" {
+			t.Skip("no native watcher on windows")
+		}
+	}
 	t.Run("watch limit falls back to polling", func(t *testing.T) {
+		nativeOnly(t)
 		var nativeCalls, pollCalls atomic.Int32
 		deps := testDeps(t)
 		deps.newNative = func(string) (watch.Watcher, error) {
@@ -383,6 +393,7 @@ func TestWatchBackendSelection(t *testing.T) {
 	})
 
 	t.Run("other native error is exit 3", func(t *testing.T) {
+		nativeOnly(t)
 		deps := testDeps(t)
 		deps.newNative = func(string) (watch.Watcher, error) { return nil, errors.New("boom") }
 		var stdout, stderr bytes.Buffer
