@@ -123,7 +123,7 @@ None yet.
 
 ### Blockers/Concerns
 
-- Phase 10 must address the Phase 8 security findings before sharing `Loader` with the daemon: enforce a single indexer goroutine or a mutex, and revalidate after watcher overflow. See `phases/08-incremental-index-foundation/08-VERIFICATION.md` → Security. Findings 1, 3, 4 closed in 10-02 (Loader mutex, batch Invalidate, fail-safe path contract); finding 2 has the Indexer resync hook, completed by 10-05/10-06.
+- RESOLVED in Phase 10: the Phase 8 security findings (`phases/08-incremental-index-foundation/08-VERIFICATION.md` → Security) are closed. 1 Loader shared with the daemon: Loader mutex (10-02) plus a single indexer goroutine in `watch.Run`, the only caller of `Indexer.Index` (10-07, wired in 10-06). 2 Lost events after watcher overflow: `Changes.Resync` → `Indexer.Index(resync)` → `Invalidate(".")` (10-02, 10-04), native overflow/error marks resync and a 30 s stat safety net feeds the same dirty set (10-05). 3 Per-path Invalidate cost: single-pass batch Invalidate (10-02). 4 Path contract: repo-relative slash paths only; empty/./absolute/../backslash paths clear the whole store (10-02, enforced again in the watcher pending set by 10-04).
 
 ## Session Continuity
 

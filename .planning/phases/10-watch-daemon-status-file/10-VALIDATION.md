@@ -1,9 +1,9 @@
 ---
 phase: 10
 slug: watch-daemon-status-file
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: complete
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-10-08
 ---
 
@@ -38,14 +38,18 @@ created: 2026-10-08
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| TBD | TBD | TBD | DAEMON-01 | unit | `go test ./internal/infrastructure/watch -run 'TestIgnored\|TestDebouncer'` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | DAEMON-01 | integration | `go test ./internal/infrastructure/watch -run TestWatcherContract` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | DAEMON-01 | integration | `go test ./cmd/gruntled -run 'TestWatchParity\|TestWatchReindexesOnlyChanged\|TestWatchBackendSelection'` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | DAEMON-01 (phase 8 sec) | unit | `go test ./internal/infrastructure/terragrunt -run 'Invalidate\|Concurrent\|Incremental'` | partial | ⬜ pending |
-| TBD | TBD | TBD | DAEMON-03 | unit golden | `go test ./internal/interfaces/presenter -run TestStatusLine` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | DAEMON-03 | unit | `go test ./internal/infrastructure/statusfile -run 'TestDir\|TestWrite'` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | DAEMON-03 | integration | `go test ./cmd/gruntled -run TestWatchStatusFile` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | proof | script | `bash scripts/check-architecture.sh` (6 targets, nm check, windows without fsnotify) | ✅ needs edit | ⬜ pending |
+| 10-01-01 | 01 | 1 | proof (DAEMON-01) | script | `bash scripts/check-architecture.sh` (6 targets, per-target nm check, x/sys/unix exemption, windows without fsnotify) | ✅ | ✅ green |
+| 10-01-02 | 01 | 1 | proof (DAEMON-01) | script self-test | `bash -n scripts/test-check-architecture.sh` locally; full run in CI only | ✅ | ✅ green (syntax; CI runs cases) |
+| 10-02-01 | 02 | 1 | DAEMON-01 (phase 8 sec 1, 3, 4) | unit + property | `go test ./internal/infrastructure/terragrunt -run 'Invalidate\|Concurrent\|Incremental'` | ✅ | ✅ green |
+| 10-02-02 | 02 | 1 | DAEMON-01 (phase 8 sec 2) | unit | `go test ./internal/application/watching -run TestIndex` | ✅ | ✅ green |
+| 10-03-01 | 03 | 1 | DAEMON-03 | unit golden | `go test ./internal/interfaces/presenter -run TestStatusLine` | ✅ | ✅ green |
+| 10-03-02 | 03 | 1 | DAEMON-03 | unit | `go test ./internal/infrastructure/statusfile -run 'TestDir\|TestWrite'` | ✅ | ✅ green |
+| 10-04-01 | 04 | 1 | DAEMON-01 | unit | `go test ./internal/infrastructure/watch -run 'TestIgnored\|TestPending\|TestDebouncer'` | ✅ | ✅ green |
+| 10-04-02 | 04 | 1 | DAEMON-01 | integration | `go test ./internal/infrastructure/watch -run 'TestWatcherContractPoll\|TestPoll'` | ✅ | ✅ green |
+| 10-07-01 | 07 | 2 | DAEMON-01, DAEMON-03 | unit | `go test ./internal/infrastructure/watch -run TestRun` | ✅ | ✅ green |
+| 10-05-01 | 05 | 2 | DAEMON-01 | integration + proof | `go test ./internal/infrastructure/watch -run 'TestWatcherContractNative\|TestNative' && bash scripts/check-architecture.sh` | ✅ | ✅ green |
+| 10-06-01 | 06 | 3 | DAEMON-01, DAEMON-03 | integration + testscript | `go test ./cmd/gruntled -run 'TestWatchStatusFile\|TestWatchDebounceDefault\|TestWatchParity\|TestWatchReindexesOnlyChanged\|TestWatchBackendSelection\|TestWatchStdoutOnChange\|TestWatchQuietRepo\|TestWatchStatusInsideRepo\|TestScripts/watch_'` | ✅ | ✅ green |
+| 10-06-02 | 06 | 3 | DAEMON-01, DAEMON-03 | docs + full suite | `go test ./cmd/gruntled -run TestHelpMatchesDocs` then the full suite command | ✅ | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -53,13 +57,13 @@ created: 2026-10-08
 
 ## Wave 0 Requirements
 
-- [ ] `internal/infrastructure/watch/{ignore,debounce,contract,poll,native_unix}_test.go`
-- [ ] `internal/infrastructure/statusfile/{path,write}_test.go`
-- [ ] `internal/interfaces/presenter/status_test.go`
-- [ ] `internal/application/watching/watching_test.go`
-- [ ] `cmd/gruntled/watch_test.go`, `testdata/script/watch_usage.txtar`, `watch_exitcodes.txtar`
-- [ ] `internal/infrastructure/terragrunt` tests: batch Invalidate, path contract, concurrent use
-- [ ] `scripts/check-architecture.sh` + `scripts/test-check-architecture.sh` cases (nm check, x/sys/unix exemption, windows-no-fsnotify)
+- [x] `internal/infrastructure/watch/{ignore,debounce,contract,poll,native_unix}_test.go`
+- [x] `internal/infrastructure/statusfile/{path,write}_test.go`
+- [x] `internal/interfaces/presenter/status_test.go`
+- [x] `internal/application/watching/watching_test.go`
+- [x] `cmd/gruntled/watch_test.go`, `testdata/script/watch_usage.txtar`, `watch_exitcodes.txtar`
+- [x] `internal/infrastructure/terragrunt` tests: batch Invalidate, path contract, concurrent use
+- [x] `scripts/check-architecture.sh` + `scripts/test-check-architecture.sh` cases (nm check, x/sys/unix exemption, windows-no-fsnotify)
 
 ---
 
@@ -74,11 +78,11 @@ created: 2026-10-08
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 150s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 150s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** complete 2026-10-08 (10-06); CI-only items (`-race`, `scripts/test-check-architecture.sh`) still to be confirmed on CI after the push

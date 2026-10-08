@@ -10,6 +10,7 @@ runs Terraform, Terragrunt or any other program.
 gruntled check [--format text|json|sarif] [path]
 gruntled graph --json [path]
 gruntled blast [--base dir] [--format text|json] [path]
+gruntled watch [--poll] [--poll-interval d] [--debounce d] [--status-file p] [--print-status-path] [path]
 gruntled --version
 ```
 
@@ -24,6 +25,8 @@ gruntled check --format=json -- -oddly-named-dir
 gruntled graph --json live/
 gruntled blast --base ../base .
 gruntled blast --base ../base --format json live/
+gruntled watch live/
+gruntled watch --print-status-path live/
 ```
 
 - Flags may appear before or after the path. The Go standard library `flag`
@@ -31,8 +34,9 @@ gruntled blast --base ../base --format json live/
   after each positional.
 - `--` ends flag parsing. Everything after it is a path, even if it starts with `-`.
 - More than one path is a usage error (exit 2).
-- `gruntled -h` lists the commands. `gruntled check -h`, `gruntled graph -h`
-  and `gruntled blast -h` print the usage texts below and exit 0.
+- `gruntled -h` lists the commands. `gruntled check -h`, `gruntled graph -h`,
+  `gruntled blast -h` and `gruntled watch -h` print the usage texts below and
+  exit 0.
 
 ```
 usage: gruntled <command> [arguments]
@@ -41,11 +45,13 @@ Commands:
   check   check a Terragrunt repository for broken dependency output references
   graph   print the repository graph as JSON (--json)
   blast   report which units a change breaks (Broken) or puts at risk (Impacted) against --base
+  watch   reindex on every save and keep a one-line status file outside the repository
 
 Flags:
   --version   print the version and commit, then exit
 
-Run "gruntled check -h", "gruntled graph -h" or "gruntled blast -h" for details.
+Run "gruntled check -h", "gruntled graph -h", "gruntled blast -h" or
+"gruntled watch -h" for details.
 ```
 
 ```
@@ -153,6 +159,36 @@ Exit codes:
   3  comparison could not run: path or --base missing, not a directory or unreadable, an internal failure, or stdout write failed
 ```
 
+`gruntled watch` keeps the analysis of `check` up to date while you edit.
+It indexes the repository fully once, then after every save reindexes only
+the files that changed and keeps a one-line status file outside the
+repository that a shell prompt, tmux status bar or editor can read. It runs
+until SIGINT or SIGTERM (Ctrl-C), then writes a final `stopped` line and
+exits 0. Details are in [gruntled watch](#gruntled-watch).
+
+```
+usage: gruntled watch [--poll] [--poll-interval d] [--debounce d] [--status-file p] [--print-status-path] [path]
+
+Watch the Terragrunt repository at path (default "."): index it fully, then
+reindex only the changed files after each save, until interrupted
+(SIGINT/SIGTERM). After every index a one-line status is written
+atomically to a status file outside the repository; the diagnostics that
+changed are printed to stdout in the same text format as check.
+Flags may appear before or after path; "--" ends flag parsing.
+
+Flags:
+  --poll                 use stat polling instead of the native watcher (always on windows)
+  --poll-interval d      polling period (default 500ms)
+  --debounce d           quiet period after the last change before reindexing (default 150ms)
+  --status-file p        write the status line to p instead of the default path; p must be outside the repository
+  --print-status-path    print the status file path for path, then exit
+
+Exit codes:
+  0  clean shutdown after SIGINT/SIGTERM, or --print-status-path / -h
+  2  usage error: unknown flag, invalid duration, more than one path, --status-file inside the repository
+  3  watch could not start: path missing, not a directory or unreadable, no watcher, or the initial index failed
+```
+
 ## Exit codes
 
 | Code | Meaning |
@@ -197,6 +233,16 @@ Exit 3 also covers a `--base` directory that cannot be opened. As printed by
 ```
 
 CI can tell findings in the repository (1) apart from gruntled failing to run (3).
+
+`gruntled watch` exits 0, 2 or 3 only: findings never end the daemon, they
+are reported in the status file and on stdout. As printed by
+`gruntled watch -h`:
+
+```
+  0  clean shutdown after SIGINT/SIGTERM, or --print-status-path / -h
+  2  usage error: unknown flag, invalid duration, more than one path, --status-file inside the repository
+  3  watch could not start: path missing, not a directory or unreadable, no watcher, or the initial index failed
+```
 
 ## Output formats
 
@@ -636,6 +682,139 @@ whose target is a Terragrunt stack (`terragrunt.stack.hcl`); and units whose
 `terragrunt.hcl` is itself included by another unit, which are checked once per
 including unit instead.
 
+## gruntled watch
+
+`gruntled watch [path]` is a foreground daemon. It never forks or
+daemonizes itself; run it in a terminal, a tmux pane, in the background or
+under a service manager (see [Running in the background](#running-in-the-background)).
+
+### Flags
+
+| Flag | Default | Meaning |
+|------|---------|---------|
+| `--poll` | off | Use stat polling instead of the native watcher. Always on for windows. |
+| `--poll-interval d` | `500ms` | Period of the stat scan when polling. Must be positive. |
+| `--debounce d` | `150ms` | Trailing quiet period: reindex once no change arrived for this long (a burst is still flushed after at most 1 s). Must be positive. |
+| `--status-file p` | see below | Write the status line to `p`. A relative `p` is made absolute first. `p` must be outside the repository, also after resolving symlinks, or the command exits 2. |
+| `--print-status-path` | off | Print the status file path for `path` to stdout and exit 0, without starting the daemon or creating the file. |
+
+Durations use Go syntax (`250ms`, `2s`).
+
+### Behaviour
+
+- **Start.** The watcher is set up first, then the repository is indexed in
+  full, so a change made during the initial index is not lost. A failed
+  initial index is exit 3.
+- **Incremental.** Each debounced batch of changed paths is handed to the
+  parse cache, which drops only the entries under those paths; the rest of
+  the repository is served from memory. The result is by construction the
+  same as a fresh `gruntled check`.
+- **Debounce.** 150 ms after the last change (trailing), capped at 1 s from
+  the first change of a burst. An editor's save-and-rename sequence gives one
+  reindex.
+- **Ignored paths.** Anything under `.git`, `.terraform` or
+  `.terragrunt-cache`, and editor swap, backup and temp files (`*~`,
+  `*.swp`/`.swo`/`.swn`/`.swx`, `.#*`, `#*#`, `*.tmp`, JetBrains
+  `___jb_tmp___`/`___jb_old___`, `.DS_Store`) never trigger a reindex.
+- **New and deleted directories** are picked up: a new unit directory is
+  watched and indexed, a deleted one disappears from the results.
+- **Backends.** On linux and darwin the native watcher (inotify, kqueue) is
+  used, with a stat re-scan every 30 s as a safety net for lost kernel
+  events; an event queue overflow triggers a full revalidation. If the OS
+  watch limit is exhausted, gruntled prints
+  `gruntled: native watcher unavailable (...); falling back to polling` on
+  stderr and polls. On windows, and with `--poll`, it stat-polls every
+  `--poll-interval`. Polling compares size and modification time, so an edit
+  that keeps both identical is invisible to it.
+- **stderr** carries one banner line,
+  `gruntled: watching <root> (fsnotify|poll); status: <status file>`, the
+  fallback notice and hints, a failed reindex, and the first failure to write
+  the status file (later ones are not repeated; a write failure never stops
+  the daemon).
+
+### stdout
+
+After an index, if the set of diagnostics differs from the last one printed,
+gruntled prints the new set in the same text format as `check` (one
+`path:line:col: CODE message` line per diagnostic, repo-relative paths). The
+first set is printed if it is non-empty. A save that does not change the
+diagnostics prints nothing, and a clean repository prints nothing at all.
+There is no summary line and no JSON or SARIF mode.
+
+### Status file
+
+The status file holds exactly one line, newline-terminated. The stamp is
+local time, `HH:MM:SS`, of the moment the line was written:
+
+```
+gruntled: indexing... @ 14:02:09
+gruntled: ok @ 14:02:11
+gruntled: 1 error (GRT001×1) @ 14:02:11
+gruntled: 3 errors (GRT001×2 GRT003×1) @ 14:02:11
+gruntled: failed (<reason>) @ 14:02:11
+gruntled: stopped @ 14:05:40
+```
+
+- Only error diagnostics are counted, grouped per code in ascending code
+  order; `×` is U+00D7. A failure reason has whitespace collapsed and is cut
+  to 120 characters.
+- `indexing...` is written while the initial index runs, `stopped` on a
+  clean shutdown. A failed reindex writes `failed (...)` and the daemon
+  keeps running; the next successful index replaces it.
+- **Atomic.** Every update writes a temporary file in the same directory
+  and renames it over the status file, so a reader sees the previous line or
+  the new one, never a partial line.
+- **Permissions.** The directory is created with mode 0700 and the file with
+  0600. An existing directory that group or others can access is refused
+  (the write fails and is reported once on stderr; not checked on windows).
+- **Path.** By default `<base>/gruntled/<hash12>/status`, where
+  - `base` is `$XDG_RUNTIME_DIR` on linux when it is set and absolute,
+    otherwise `os.UserCacheDir` (`$XDG_CACHE_HOME` or `~/.cache` on linux,
+    `~/Library/Caches` on darwin, `%LocalAppData%` on windows), otherwise
+    `os.TempDir`;
+  - `hash12` is the first 12 hex characters of the SHA-256 of the absolute,
+    symlink-resolved repository path. There is no case folding: on a
+    case-insensitive filesystem two spellings of the same directory that
+    symlink resolution does not canonicalise get different status files.
+- The status file is never inside the repository: a `--status-file` (or a
+  default path) that lands inside it, also through a symlink, is exit 2.
+- `gruntled watch --print-status-path [path]` prints the path, so a prompt
+  or status bar does not have to recompute it:
+
+```
+# shell prompt / tmux status-right
+cat "$(gruntled watch --print-status-path .)" 2>/dev/null
+```
+
+- A daemon that crashed or was killed with SIGKILL leaves its last line
+  behind; nothing marks it stale yet.
+
+### Running in the background
+
+There is no daemonize flag. Use the shell, tmux or a service manager:
+
+```
+gruntled watch ~/live > /dev/null &        # background job, status file only
+tmux new-window -d 'gruntled watch ~/live' # stdout visible in a tmux window
+```
+
+A systemd user unit (`~/.config/systemd/user/gruntled-live.service`):
+
+```
+[Unit]
+Description=gruntled watch for ~/live
+
+[Service]
+ExecStart=%h/go/bin/gruntled watch %h/live
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+```
+
+`systemctl --user enable --now gruntled-live` starts it; `systemctl --user
+stop` sends SIGTERM, which writes `stopped` and exits 0.
+
 ## Guarantees
 
 - **Deterministic.** The same repository gives identical bytes on stdout and
@@ -655,6 +834,8 @@ including unit instead.
   `root.FS()`, an `fs.FS` that has no write methods. A test runs `check` on a
   read-only tree and verifies nothing changed.
 - **No cache, no telemetry.** Nothing is stored between runs and nothing is sent anywhere.
+  `gruntled watch` keeps its parse cache in memory only; the one file it
+  writes is its status file, always outside the repository.
 
 ## Known limitations
 
@@ -691,3 +872,10 @@ including unit instead.
   so editing the flagged line can reopen an alert as new.
 - SARIF has no `relatedLocations`: cycle members and GRT001's target module
   appear only in the message.
+- `watch`: a daemon that crashed or was killed with SIGKILL leaves its last
+  status line behind, which then looks current. There is no liveness check
+  yet.
+- `watch --poll` (and windows) compares size and modification time only: an
+  edit that keeps both identical is not seen until the next change.
+- `watch` under WSL on a Windows drive (`/mnt/c/...`): inotify does not see
+  edits made from the Windows side. gruntled prints a hint; use `--poll`.

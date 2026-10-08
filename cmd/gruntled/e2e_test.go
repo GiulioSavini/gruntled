@@ -421,6 +421,7 @@ func TestHelpMatchesDocs(t *testing.T) {
 		{"check", 4},
 		{"graph", 3},
 		{"blast", 4},
+		{"watch", 3},
 	} {
 		_, stderr, code := runCLI(t, c.cmd, "-h")
 		if code != exitOK {
