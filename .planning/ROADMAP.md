@@ -46,7 +46,11 @@ See `milestones/v0.2-ROADMAP.md`.
   2. The rapid stateful property test runs in CI, shrinks failures to a minimal operation sequence, and uses no real watcher or sleeps
   3. `check` output on the existing fixtures is unchanged (no regression from the persistent cache)
   4. Unchanged files are not re-parsed on a reindex (observable via cache hit count)
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 08-01-PLAN.md — persistent parse store, Invalidate, CacheStats
+- [ ] 08-02-PLAN.md — rapid stateful incremental == full test
 
 ### Phase 9: Blast Radius
 **Goal**: User can see which units a change breaks and which it puts at risk, against a baseline directory.
