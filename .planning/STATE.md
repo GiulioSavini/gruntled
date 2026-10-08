@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.3
 milestone_name: Watch & Blast
 status: executing
-stopped_at: Completed 10-04-PLAN.md
-last_updated: "2026-10-08T09:32:25.588Z"
-last_activity: 2026-10-08 — completed 10-04 (watch core: ignore, debounce, pending, poll adapter)
+stopped_at: Completed 10-05-PLAN.md
+last_updated: "2026-10-08T09:36:03.299Z"
+last_activity: "2026-10-08 — completed 10-05 (fsnotify native watcher)"
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 12
-  completed_plans: 9
-  percent: 75
+  completed_plans: 10
+  percent: 83
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-10-08)
 ## Current Position
 
 Phase: 10 of 11 (Watch Daemon & Status File) — executing
-Plan: 5 of 7 (10-01, 10-02, 10-03, 10-04 complete)
-Status: Ready to execute 10-05
-Last activity: 2026-10-08 — completed 10-04 (watch core: ignore, debounce, pending, poll adapter)
+Plan: 6 of 7 (10-01 .. 10-05 complete)
+Status: Ready to execute 10-06
+Last activity: 2026-10-08 — completed 10-05 (fsnotify native watcher)
 
-Progress: [██████░░░░] 4/7 Phase 10 plans (v0.3: 2/4 phases)
+Progress: [███████░░░] 5/7 Phase 10 plans (v0.3: 2/4 phases)
 
 ## Performance Metrics
 
@@ -87,6 +87,7 @@ Progress: [██████░░░░] 4/7 Phase 10 plans (v0.3: 2/4 phases)
 | Phase 10 P02 | 6min | 2 tasks | 5 files |
 | Phase 10 P03 | 4min | 2 tasks | 6 files |
 | Phase 10 P04 | 5min | 2 tasks | 11 files |
+| Phase 10 P05 | 8min | 1 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -112,6 +113,7 @@ Per-plan decision history lives in the phase SUMMARY files and git history.
 - [Phase 10]: pending.add: '.', volume paths, empty/abs/backslash/'..' -> resync; ignored paths dropped without signalling; take drains Ready under the same mutex
 - [Phase 10]: Debouncer pure (Add/Due/Flush, caller time), DefaultQuiet 150ms / DefaultMaxWait 1s, empty Changes do not arm
 - [Phase 10]: Poll: baseline in constructor, dirs reported only on add/remove/type change, unreadable subdir keeps previous entries, root failure -> resync; scanner reusable as native safety net
+- [Phase 10]: 10-05: native watcher baseline taken after watches; ENFILE counts as watch limit; safety net 30s feeds same dirty set
 
 ### Pending Todos
 
@@ -123,6 +125,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-10-08T09:32:25.587Z
-Stopped at: Completed 10-04-PLAN.md
+Last session: 2026-10-08T09:36:03.297Z
+Stopped at: Completed 10-05-PLAN.md
 Resume file: None
