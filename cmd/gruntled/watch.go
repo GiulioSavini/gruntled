@@ -38,7 +38,7 @@ Flags:
   --print-status-path    print the status file path for path, then exit
 
 Exit codes:
-  0  clean shutdown after SIGINT/SIGTERM, or --print-status-path / -h
+  0  clean shutdown after SIGINT/SIGTERM, already watching (another daemon runs for path), or --print-status-path / -h
   2  usage error: unknown flag, invalid duration, more than one path, --status-file inside the repository
   3  watch could not start: path missing, not a directory or unreadable, no watcher, or the initial index failed
 `

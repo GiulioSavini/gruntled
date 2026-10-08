@@ -142,9 +142,12 @@ repositories with dynamic include paths some units stay unchecked: on the
 secondary corpus `denis256/terragrunt-tests`, 54 of 1146 units are skipped this
 way. All 8 known broken references there are still reported.
 
-**Not built yet:**
-- Everything under "Later" in the roadmap: the `gruntled watch` daemon,
-  `gruntled blast` (Broken vs Impacted), diagnostics `GRT004`-`GRT006`.
+**New in v0.3:** `gruntled watch` (incremental daemon with a status file),
+`gruntled report` (prints what the running daemon last published) and
+`gruntled blast` (Broken vs Impacted against a baseline tree). See
+[Watch, report and blast](#watch-report-and-blast).
+
+**Later:** diagnostics `GRT004`-`GRT006`.
 
 ### Usage
 
@@ -172,6 +175,49 @@ work before or after the path.
 
 The full reference, including the JSON schema and the `mock_outputs` rule,
 is in [`docs/cli.md`](docs/cli.md).
+
+### Watch, report and blast
+
+`gruntled watch [--poll] [path]` indexes the repository once, then reindexes
+only the changed files after each save (150 ms debounce, capped at 1 s). It
+runs in the foreground until Ctrl-C/SIGTERM, prints changed diagnostics in
+the `check` text format, and keeps a one-line status file
+(`gruntled: ok @ 14:02:11`, `gruntled: 1 error (GRT001×1) @ ...`). `--poll`
+uses stat polling instead of the native watcher. Only one daemon runs per
+repository: a second `gruntled watch` on the same repository prints where
+the first one runs (`gruntled: already watching ...`) and exits 0.
+
+The status file lives outside the repository, at
+`<base>/gruntled/<hash>/status`. `base` is `$XDG_RUNTIME_DIR` on linux when
+set, otherwise the user cache directory, otherwise the temp directory.
+Print the path with `gruntled watch --print-status-path [path]`, for example
+in a shell prompt or tmux status bar:
+
+```console
+$ cat "$(gruntled watch --print-status-path)"
+gruntled: ok @ 14:02:11
+```
+
+`gruntled report [--format text|json|sarif] [path]` prints the result the
+running daemon last published, with the same bytes and exit codes as
+`check` (0 clean, 1 error diagnostics). It never starts a daemon: with none
+running, or while the first index is still in progress, it exits 3.
+
+`gruntled blast --base dir [--format text|json] [path]` compares `path`
+with a baseline tree you checked out yourself (for example with
+`git worktree`). **Broken** lists units with findings that are new in
+`path`; **Impacted** lists units that use a module whose variable or output
+names changed. Without `--base` every finding is Broken.
+
+**Windows limitation.** There is no native watcher on Windows: `watch`
+always uses stat polling. There is no socket either: the daemon rewrites a
+report file after each index and `report` reads it, so `report` shows the
+last published result with no live query of the daemon.
+
+On linux and darwin `report` talks to the daemon over a local unix socket
+in the runtime directory, opened with the standard `syscall` package. The
+binary still links no `net` package and spawns no process; the
+`binary-no-net-no-exec` check proves that for all six release targets.
 
 ## Architecture
 

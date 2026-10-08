@@ -188,7 +188,7 @@ Flags:
   --print-status-path    print the status file path for path, then exit
 
 Exit codes:
-  0  clean shutdown after SIGINT/SIGTERM, or --print-status-path / -h
+  0  clean shutdown after SIGINT/SIGTERM, already watching (another daemon runs for path), or --print-status-path / -h
   2  usage error: unknown flag, invalid duration, more than one path, --status-file inside the repository
   3  watch could not start: path missing, not a directory or unreadable, no watcher, or the initial index failed
 ```
@@ -267,7 +267,7 @@ are reported in the status file and on stdout. As printed by
 `gruntled watch -h`:
 
 ```
-  0  clean shutdown after SIGINT/SIGTERM, or --print-status-path / -h
+  0  clean shutdown after SIGINT/SIGTERM, already watching (another daemon runs for path), or --print-status-path / -h
   2  usage error: unknown flag, invalid duration, more than one path, --status-file inside the repository
   3  watch could not start: path missing, not a directory or unreadable, no watcher, or the initial index failed
 ```
@@ -896,14 +896,18 @@ per index with the same code `check` uses; `report` only copies those bytes.
   darwin/amd64, darwin/arm64, windows/amd64, windows/arm64), because the rule runs
   `go list -deps` once per GOOS/GOARCH, not only on the build host. The import
   half is exact; the process-spawn half is a source scan for qualified calls,
-  so it is a strong guard, not a formal proof.
+  so it is a strong guard, not a formal proof. The local unix socket used by
+  `watch` and `report` on linux and darwin is opened with the standard
+  `syscall` package, not `net`, so the proof holds with it linked in.
 - **No writes.** gruntled opens the repository with `os.OpenRoot`, which also
   refuses paths that escape the repository, and hands the parsers only
   `root.FS()`, an `fs.FS` that has no write methods. A test runs `check` on a
   read-only tree and verifies nothing changed.
 - **No cache, no telemetry.** Nothing is stored between runs and nothing is sent anywhere.
-  `gruntled watch` keeps its parse cache in memory only; the one file it
-  writes is its status file, always outside the repository.
+  `gruntled watch` keeps its parse cache in memory only; what it writes
+  (status file, lock file, unix socket on linux and darwin, report file on
+  windows) lives in the per-repository runtime directory, always outside the
+  repository.
 
 ## Known limitations
 
@@ -947,3 +951,6 @@ per index with the same code `check` uses; `report` only copies those bytes.
   edit that keeps both identical is not seen until the next change.
 - `watch` under WSL on a Windows drive (`/mnt/c/...`): inotify does not see
   edits made from the Windows side. gruntled prints a hint; use `--poll`.
+- `report` on windows has no live query: it reads the report file the daemon
+  rewrites after each index, so it shows the last published result and
+  cannot ask the daemon anything else.
