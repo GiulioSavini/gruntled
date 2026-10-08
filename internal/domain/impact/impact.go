@@ -32,19 +32,23 @@ func KeyOf(d diagnostic.Diagnostic) FindingKey {
 	return FindingKey{Code: k.Code, Unit: k.Unit, File: k.File, Message: k.Message}
 }
 
-// NewFindings returns the diagnostics of cur whose FindingKey is absent
-// from base, in cur's canonical order. A finding that only moved, or only
-// changed severity, is not new. Never nil.
+// NewFindings returns the diagnostics of cur whose FindingKey occurs more
+// often in cur than in base, in cur's canonical order: base is a multiset, so
+// a second identical finding added elsewhere is new. A finding that only
+// moved, or only changed severity, is not new. Never nil.
 func NewFindings(base, cur diagnostic.Set) []diagnostic.Diagnostic {
-	seen := make(map[FindingKey]struct{}, base.Len())
+	seen := make(map[FindingKey]int, base.Len())
 	for _, d := range base.All() {
-		seen[KeyOf(d)] = struct{}{}
+		seen[KeyOf(d)]++
 	}
 	out := []diagnostic.Diagnostic{}
 	for _, d := range cur.All() {
-		if _, ok := seen[KeyOf(d)]; !ok {
-			out = append(out, d)
+		k := KeyOf(d)
+		if seen[k] > 0 {
+			seen[k]--
+			continue
 		}
+		out = append(out, d)
 	}
 	return out
 }

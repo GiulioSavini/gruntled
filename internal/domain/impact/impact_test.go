@@ -88,6 +88,21 @@ func TestNewFindings(t *testing.T) {
 	}
 }
 
+// A second identical finding added in another place is new: the baseline is
+// a multiset, not a set, or blast would exit 0 on a fresh error.
+func TestNewFindingsCountsDuplicates(t *testing.T) {
+	old := unitDiag(t, diagnostic.SeverityError, "live/a", 3, "dup")
+	added := unitDiag(t, diagnostic.SeverityError, "live/a", 9, "dup")
+
+	got := impact.NewFindings(diagnostic.NewSet(old), diagnostic.NewSet(old, added))
+	if len(got) != 1 {
+		t.Fatalf("want 1 new duplicate, got %v", got)
+	}
+	if got := impact.NewFindings(diagnostic.NewSet(old, added), diagnostic.NewSet(old)); len(got) != 0 {
+		t.Fatalf("removed duplicate is not new, got %v", got)
+	}
+}
+
 func TestCompute(t *testing.T) {
 	baseG := graph(t,
 		[]repograph.Unit{
