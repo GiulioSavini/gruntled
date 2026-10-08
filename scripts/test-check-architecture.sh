@@ -15,9 +15,18 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# One private temp directory per run holds the captured script output and
+# every repo copy; the EXIT trap removes it. mkcopy runs in a command
+# substitution, so its own COPIES+= never reaches this shell: creating the
+# copies under OUT_DIR is what gets them cleaned up.
+OUT_DIR=$(mktemp -d)
+COPIES+=("$OUT_DIR")
+OUT="$OUT_DIR/out"
+ERR="$OUT_DIR/err"
+
 mkcopy() {
   local d
-  d=$(mktemp -d)
+  d=$(mktemp -d "$OUT_DIR/copy.XXXXXX")
   cp -R go.mod "$d/go.mod"
   if [ -f go.sum ]; then
     cp -R go.sum "$d/go.sum"
@@ -56,12 +65,12 @@ run_case() {
   local copy="$2"
   local expect="$3" # "zero", or a space-separated list of rule names that must fail
   local rc=0
-  bash "$copy/scripts/check-architecture.sh" >/tmp/tca-out.$$ 2>/tmp/tca-err.$$ || rc=$?
+  bash "$copy/scripts/check-architecture.sh" >"$OUT" 2>"$ERR" || rc=$?
   if [ "$expect" = zero ]; then
     if [ "$rc" -ne 0 ]; then
       echo "FAIL $name (expected exit 0, got $rc)"
-      cat /tmp/tca-out.$$ /tmp/tca-err.$$ >&2
-      rm -f /tmp/tca-out.$$ /tmp/tca-err.$$
+      cat "$OUT" "$ERR" >&2
+      rm -f "$OUT" "$ERR"
       exit 1
     fi
   else
@@ -69,21 +78,21 @@ run_case() {
     # this case targets, or the case proves nothing about those rules.
     if [ "$rc" -eq 0 ]; then
       echo "FAIL $name (expected rule(s) '${expect}' to fail, got exit $rc)"
-      cat /tmp/tca-out.$$ /tmp/tca-err.$$ >&2
-      rm -f /tmp/tca-out.$$ /tmp/tca-err.$$
+      cat "$OUT" "$ERR" >&2
+      rm -f "$OUT" "$ERR"
       exit 1
     fi
     for rule in $expect; do
-      if ! grep -q -x -F "=== RULE FAILED: ${rule} ===" /tmp/tca-err.$$; then
+      if ! grep -q -x -F "=== RULE FAILED: ${rule} ===" "$ERR"; then
         echo "FAIL $name (expected rule ${rule} to fail, got exit $rc)"
-        cat /tmp/tca-out.$$ /tmp/tca-err.$$ >&2
-        rm -f /tmp/tca-out.$$ /tmp/tca-err.$$
+        cat "$OUT" "$ERR" >&2
+        rm -f "$OUT" "$ERR"
         exit 1
       fi
     done
   fi
   echo "PASS $name"
-  rm -f /tmp/tca-out.$$ /tmp/tca-err.$$
+  rm -f "$OUT" "$ERR"
 }
 
 # run_case_msg is run_case for one expected rule plus message assertions:
@@ -93,29 +102,29 @@ run_case() {
 run_case_msg() {
   local name="$1" copy="$2" rule="$3" rc=0 arg re
   shift 3
-  bash "$copy/scripts/check-architecture.sh" >/tmp/tca-out.$$ 2>/tmp/tca-err.$$ || rc=$?
-  if [ "$rc" -eq 0 ] || ! grep -q -x -F "=== RULE FAILED: ${rule} ===" /tmp/tca-err.$$; then
+  bash "$copy/scripts/check-architecture.sh" >"$OUT" 2>"$ERR" || rc=$?
+  if [ "$rc" -eq 0 ] || ! grep -q -x -F "=== RULE FAILED: ${rule} ===" "$ERR"; then
     echo "FAIL $name (expected rule ${rule} to fail, got exit $rc)"
-    cat /tmp/tca-out.$$ /tmp/tca-err.$$ >&2
-    rm -f /tmp/tca-out.$$ /tmp/tca-err.$$
+    cat "$OUT" "$ERR" >&2
+    rm -f "$OUT" "$ERR"
     exit 1
   fi
   for arg in "$@"; do
     re=${arg#?}
     case "$arg" in
     +*)
-      if ! cat /tmp/tca-out.$$ /tmp/tca-err.$$ | grep -q -E -e "$re"; then
+      if ! cat "$OUT" "$ERR" | grep -q -E -e "$re"; then
         echo "FAIL $name (expected output matching '${re}')"
-        cat /tmp/tca-out.$$ /tmp/tca-err.$$ >&2
-        rm -f /tmp/tca-out.$$ /tmp/tca-err.$$
+        cat "$OUT" "$ERR" >&2
+        rm -f "$OUT" "$ERR"
         exit 1
       fi
       ;;
     -*)
-      if cat /tmp/tca-out.$$ /tmp/tca-err.$$ | grep -q -E -e "$re"; then
+      if cat "$OUT" "$ERR" | grep -q -E -e "$re"; then
         echo "FAIL $name (expected no output matching '${re}')"
-        cat /tmp/tca-out.$$ /tmp/tca-err.$$ >&2
-        rm -f /tmp/tca-out.$$ /tmp/tca-err.$$
+        cat "$OUT" "$ERR" >&2
+        rm -f "$OUT" "$ERR"
         exit 1
       fi
       ;;
@@ -126,7 +135,7 @@ run_case_msg() {
     esac
   done
   echo "PASS $name"
-  rm -f /tmp/tca-out.$$ /tmp/tca-err.$$
+  rm -f "$OUT" "$ERR"
 }
 
 # --- clean: unmodified copy exits 0 ----------------------------------------
@@ -738,6 +747,80 @@ EOF
 run_case_msg "binary-windows-fsnotify" "$copy" binary-no-net-no-exec \
   '+^windows/amd64: package github\.com/fsnotify/fsnotify \(windows must use stat polling, no fsnotify\)$' \
   '+^windows/arm64: package github\.com/fsnotify/fsnotify \(windows must use stat polling, no fsnotify\)$'
+
+# The next three cases pin Step 9 against the ipc package (single instance
+# lock and report socket), which cmd/gruntled links. Sockets and locks are
+# raw stdlib syscall there; net must never come in through that door.
+
+# --- binary-net-in-unix-socket-file: net in a linux||darwin ipc file -------
+# Only the four unix targets compile the probe, so they and only they must
+# report net; a windows line would mean the case proves nothing about the
+# unix socket build.
+copy=$(mkcopy)
+cat >"$copy/internal/infrastructure/ipc/zz_probe_unix.go" <<'EOF'
+//go:build linux || darwin
+
+package ipc
+
+import _ "net"
+EOF
+run_case_msg "binary-net-in-unix-socket-file" "$copy" binary-no-net-no-exec \
+  '+^linux/amd64: package net$' \
+  '+^linux/arm64: package net$' \
+  '+^darwin/amd64: package net$' \
+  '+^darwin/arm64: package net$' \
+  '-^windows/(amd64|arm64): package net$'
+
+# --- binary-net-in-windows-ipc-file: net in the windows ipc build ----------
+copy=$(mkcopy)
+cat >"$copy/internal/infrastructure/ipc/zz_probe_windows.go" <<'EOF'
+//go:build windows
+
+package ipc
+
+import _ "net"
+EOF
+run_case_msg "binary-net-in-windows-ipc-file" "$copy" binary-no-net-no-exec \
+  '+^windows/amd64: package net$' \
+  '+^windows/arm64: package net$' \
+  '-^(linux|darwin)/(amd64|arm64): package net$'
+
+# --- binary-raw-socket-allowed: raw syscall sockets stay legal --------------
+# socket/bind/listen/accept through package syscall, kept reachable by an
+# exported var set in init, links no forbidden package or symbol: the proof
+# is strict without ruling out the raw AF_UNIX approach.
+copy=$(mkcopy)
+cat >"$copy/internal/infrastructure/ipc/zz_probe_unix.go" <<'EOF'
+//go:build linux || darwin
+
+package ipc
+
+import "syscall"
+
+var ZZProbeRawSocket func(path string) error
+
+func init() { ZZProbeRawSocket = zzProbeRawSocket }
+
+func zzProbeRawSocket(path string) error {
+	fd, err := syscall.Socket(syscall.AF_UNIX, syscall.SOCK_STREAM, 0)
+	if err != nil {
+		return err
+	}
+	defer syscall.Close(fd)
+	if err := syscall.Bind(fd, &syscall.SockaddrUnix{Name: path}); err != nil {
+		return err
+	}
+	if err := syscall.Listen(fd, 1); err != nil {
+		return err
+	}
+	nfd, _, err := syscall.Accept(fd)
+	if err != nil {
+		return err
+	}
+	return syscall.Close(nfd)
+}
+EOF
+run_case "binary-raw-socket-allowed" "$copy" zero
 
 # --- hcl-comment-in-import-block: a /* */ comment before the spec (G21) ----
 # The old line-based scan required a spec line to begin with the quote, so

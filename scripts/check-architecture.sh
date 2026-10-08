@@ -534,6 +534,17 @@ fi
 # binary-exec-in-test-allowed, binary-aliased-start-process,
 # binary-xsys-exemption-narrow and binary-windows-fsnotify pin exactly
 # what is covered.
+#
+# Sockets and locks (internal/infrastructure/ipc: the single instance lock
+# and the report socket) use the standard syscall package only: AF_UNIX
+# socket/bind/listen/accept and flock on unix, CreateFile with share mode 0
+# on windows. That needs no new exemption: net and net/* stay forbidden on
+# every target by half 1, os/exec by halves 1 and 3, and
+# golang.org/x/sys/windows by half 4; the golang.org/x/sys/unix scan
+# exemption is unchanged. The self-test cases
+# binary-net-in-unix-socket-file and binary-net-in-windows-ipc-file prove
+# a net import in either ipc build fails here, and
+# binary-raw-socket-allowed proves raw syscall sockets pass.
 release_targets="linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64"
 sym_re='^(os\.StartProcess|syscall\.(forkExec|ForkExec|Exec|StartProcess|CreateProcess|CreateProcessAsUser)|os/exec\.)'
 sym_re="${sym_re}"'|^golang\.org/x/sys/(unix|windows)\.(Exec|Execveat|ForkExec|StartProcess|forkExec[A-Za-z0-9]*|CreateProcess|CreateProcessAsUser|ShellExecute|KexecFileLoad|kexecFileLoad)($|\.)'
