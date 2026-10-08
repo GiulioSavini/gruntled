@@ -9,11 +9,14 @@
 release (static binaries for 6 targets plus checksums), as a pre-commit hook, or via the
 GitHub Actions / GitLab CI recipes in `docs/ci.md`.
 
-## Next Milestone Goals
+## Current Milestone: v0.3 Watch & Blast
 
-v0.3 (not yet planned):
-- `gruntled watch`: daemon with in-memory incremental reindexing, status file, and `gruntled report`
-- `gruntled blast`: Broken vs Impacted
+**Goal:** Turn the one-shot `check` into live feedback: a daemon that keeps the graph current on every save, and a `blast` command that tells Broken apart from Impacted for a change.
+
+**Target features:**
+- `gruntled watch`: in-memory index, incremental reindex equal to a full rescan, one-line status file, single instance
+- `gruntled report`: query the running daemon over a unix socket
+- `gruntled blast <path>`: Broken vs Impacted, where Impacted means the module's `variable`/`output` surface changed
 
 ## What This Is
 
@@ -219,4 +222,4 @@ files are parsed once and shared from day one, so `gruntled check` should alread
 import-the-library plan.
 
 ---
-*Last updated: 2026-10-08 after v0.2 milestone*
+*Last updated: 2026-10-08 after starting milestone v0.3*

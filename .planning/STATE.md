@@ -1,7 +1,7 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.2
-milestone_name: CI-Ready
+milestone: v0.3
+milestone_name: Watch & Blast
 status: completed
 stopped_at: Completed v0.2 milestone
 last_updated: "2026-10-08T07:55:48.908Z"
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-08)
 
 **Core value:** Tell the user, before they run anything slow, that `dependency.X.outputs.Y` does not exist in the module it points to.
-**Current focus:** Planning next milestone (v0.3)
+**Current focus:** v0.3 Watch & Blast — defining requirements
 
 ## Current Position
 
-Phase: none active — v0.2 CI-Ready (phases 5-7) complete and archived
+Phase: Not started (defining requirements)
 Plan: —
-Status: v0.2 milestone complete (v0.2.0 released 2026-10-01, milestone closed 2026-10-08); next milestone not yet defined
-Last activity: 2026-10-08 — completed v0.2 milestone (archives in milestones/v0.2-*)
+Status: Defining requirements for v0.3 Watch & Blast
+Last activity: 2026-10-08 — Milestone v0.3 started
 
 ## Performance Metrics
 
