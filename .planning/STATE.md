@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.3
 milestone_name: Watch & Blast
 status: executing
-stopped_at: Completed 10-01-PLAN.md
-last_updated: "2026-10-08T09:17:43.788Z"
-last_activity: 2026-10-08 — completed 10-01 (Step 9 nm linker proof)
+stopped_at: Completed 10-02-PLAN.md
+last_updated: "2026-10-08T09:21:45.265Z"
+last_activity: 2026-10-08 — completed 10-02 (Loader mutex + batch Invalidate, watching.Indexer)
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 12
-  completed_plans: 6
-  percent: 50
+  completed_plans: 7
+  percent: 58
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-10-08)
 ## Current Position
 
 Phase: 10 of 11 (Watch Daemon & Status File) — executing
-Plan: 2 of 7 (10-01 complete)
-Status: Ready to execute 10-02
-Last activity: 2026-10-08 — completed 10-01 (Step 9 nm linker proof, x/sys/unix scan exemption, windows-no-fsnotify)
+Plan: 3 of 7 (10-01, 10-02 complete)
+Status: Ready to execute 10-03
+Last activity: 2026-10-08 — completed 10-02 (Loader mutex + batch Invalidate fail-safe contract, ports.InvalidatingLoader, watching.Indexer)
 
-Progress: [█░░░░░░░░░] 1/7 Phase 10 plans (v0.3: 2/4 phases)
+Progress: [███░░░░░░░] 2/7 Phase 10 plans (v0.3: 2/4 phases)
 
 ## Performance Metrics
 
@@ -84,6 +84,7 @@ Progress: [█░░░░░░░░░] 1/7 Phase 10 plans (v0.3: 2/4 phases)
 | Phase 09 P02 | 4min | 2 tasks | 4 files |
 | Phase 09 P03 | 12min | 2 tasks | 8 files |
 | Phase 10 P01 | 9min | 2 tasks | 2 files |
+| Phase 10 P02 | 6min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -101,6 +102,8 @@ Per-plan decision history lives in the phase SUMMARY files and git history.
 - [Phase 09]: Blast change tokens ordered -variable,+variable,-output,+output; no-baseline output drops Impacted
 - [Phase 09]: blast: unopenable --base exits 3, never silent no-baseline fallback; exit 1 only on error findings in Broken (HasErrors)
 - [Phase 10]: Step 9 proof: per-target go tool nm linker check; textual scan exempts exactly golang.org/x/sys/unix; windows rejects fsnotify and x/sys/windows
+- [Phase 10]: Loader mutex-guarded (LoadUnits/Invalidate/CacheStats) but single indexer goroutine still the model; out-of-contract Invalidate path (empty/./abs/../backslash) clears whole store
+- [Phase 10]: watching.Indexer is the single seam daemon->Loader; resync = Invalidate("."), Report/error = checking.Check unchanged
 
 ### Pending Todos
 
@@ -108,11 +111,10 @@ None yet.
 
 ### Blockers/Concerns
 
-- Phase 10 must address the Phase 8 security findings before sharing `Loader` with the daemon: enforce a single indexer goroutine or a mutex, and revalidate after watcher overflow. See `phases/08-incremental-index-foundation/08-VERIFICATION.md` → Security.
-None open.
+- Phase 10 must address the Phase 8 security findings before sharing `Loader` with the daemon: enforce a single indexer goroutine or a mutex, and revalidate after watcher overflow. See `phases/08-incremental-index-foundation/08-VERIFICATION.md` → Security. Findings 1, 3, 4 closed in 10-02 (Loader mutex, batch Invalidate, fail-safe path contract); finding 2 has the Indexer resync hook, completed by 10-05/10-06.
 
 ## Session Continuity
 
-Last session: 2026-10-08T09:17:43.786Z
-Stopped at: Completed 10-01-PLAN.md
+Last session: 2026-10-08T09:21:45.263Z
+Stopped at: Completed 10-02-PLAN.md
 Resume file: None

@@ -81,7 +81,7 @@ Plans:
 
 Plans:
 - [x] 10-01-PLAN.md — extend Step 9 binary proof (x/sys/unix scan exemption, per-target nm symbol check, windows-no-fsnotify) + self-test cases
-- [ ] 10-02-PLAN.md — Loader mutex, batch Invalidate with path contract, watching.Indexer
+- [x] 10-02-PLAN.md — Loader mutex, batch Invalidate with path contract, watching.Indexer
 - [ ] 10-03-PLAN.md — presenter status lines, statusfile path + atomic writer
 - [ ] 10-04-PLAN.md — watch core: ignore, pending, debouncer, poll adapter, contract suite
 - [ ] 10-05-PLAN.md — fsnotify native adapter behind !windows, safety net, dependency
@@ -109,5 +109,5 @@ Plans:
 | 7. Distribution & CI Integration | v0.2 | 5/5 | Complete | 2026-10-01 |
 | 8. Incremental Index Foundation | v0.3 | 2/2 | Complete | 2026-10-08 |
 | 9. Blast Radius | v0.3 | 3/3 | Complete | 2026-10-08 |
-| 10. Watch Daemon & Status File | v0.3 | 1/7 | In Progress | - |
+| 10. Watch Daemon & Status File | v0.3 | 2/7 | In Progress | - |
 | 11. Report, Single Instance & Release Proof | v0.3 | 0/? | Not started | - |
