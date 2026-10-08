@@ -3,6 +3,7 @@ module github.com/GiulioSavini/gruntled
 go 1.27
 
 require (
+	github.com/fsnotify/fsnotify v1.10.1
 	github.com/hashicorp/hcl/v2 v2.25.0
 	github.com/rogpeppe/go-internal v1.16.0
 	github.com/zclconf/go-cty v1.19.0
