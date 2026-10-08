@@ -53,7 +53,17 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
+| DAEMON-01 | Phase 10 | Pending |
+| DAEMON-02 | Phase 8 | Pending |
+| DAEMON-03 | Phase 10 | Pending |
+| DAEMON-04 | Phase 11 | Pending |
+| DAEMON-05 | Phase 11 | Pending |
+| DAEMON-06 | Phase 11 | Pending |
+| BLAST-01 | Phase 9 | Pending |
+| BLAST-02 | Phase 9 | Pending |
 
 ---
 *Requirements defined: 2026-10-08*
 *Last updated: 2026-10-08 after starting milestone v0.3*
+
+**Coverage:** 8/8 v0.3 requirements mapped, 0 orphans.
