@@ -21,6 +21,27 @@ const (
 	pingPause   = 100 * time.Millisecond
 )
 
+// openRepoRoot opens dir and returns its absolute, symlink-resolved path:
+// the key every per-repository runtime path (lock, socket, report file,
+// status file) derives from. watch and report both resolve it here, so
+// they always agree on the directory. The caller closes the handle.
+func openRepoRoot(dir string, stderr io.Writer) (*os.Root, string, bool) {
+	h, ok := openRepo(dir, stderr)
+	if !ok {
+		return nil, "", false
+	}
+	root, err := filepath.Abs(dir)
+	if err == nil {
+		root, err = filepath.EvalSymlinks(root)
+	}
+	if err != nil {
+		_ = h.Close()
+		fmt.Fprintf(stderr, "gruntled: cannot open repository: %v\n", err)
+		return nil, "", false
+	}
+	return h, root, true
+}
+
 // instance is the single running daemon of one repository: it holds the
 // lock and publishes snapshots through a socket or, where there is none,
 // a report file. Its paths always derive from statusfile.Dir(root), never

@@ -114,20 +114,13 @@ func runWatchWith(ctx context.Context, args []string, stdout, stderr io.Writer, 
 		}
 	}
 
-	rootHandle, ok := openRepo(dir, stderr)
+	rootHandle, root, ok := openRepoRoot(dir, stderr)
 	if !ok {
 		return exitFailure
 	}
 	defer rootHandle.Close()
-	root, err := filepath.Abs(dir)
-	if err == nil {
-		root, err = filepath.EvalSymlinks(root)
-	}
-	if err != nil {
-		fmt.Fprintf(stderr, "gruntled: cannot open repository: %v\n", err)
-		return exitFailure
-	}
 
+	var err error
 	statusPath := *o.statusFile
 	if statusPath != "" {
 		if statusPath, err = filepath.Abs(statusPath); err != nil {

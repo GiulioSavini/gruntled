@@ -11,6 +11,7 @@ gruntled check [--format text|json|sarif] [path]
 gruntled graph --json [path]
 gruntled blast [--base dir] [--format text|json] [path]
 gruntled watch [--poll] [--poll-interval d] [--debounce d] [--status-file p] [--print-status-path] [path]
+gruntled report [--format text|json|sarif] [path]
 gruntled --version
 ```
 
@@ -27,6 +28,8 @@ gruntled blast --base ../base .
 gruntled blast --base ../base --format json live/
 gruntled watch live/
 gruntled watch --print-status-path live/
+gruntled report live/
+gruntled report --format sarif live/ > gruntled.sarif
 ```
 
 - Flags may appear before or after the path. The Go standard library `flag`
@@ -35,8 +38,8 @@ gruntled watch --print-status-path live/
 - `--` ends flag parsing. Everything after it is a path, even if it starts with `-`.
 - More than one path is a usage error (exit 2).
 - `gruntled -h` lists the commands. `gruntled check -h`, `gruntled graph -h`,
-  `gruntled blast -h` and `gruntled watch -h` print the usage texts below and
-  exit 0.
+  `gruntled blast -h`, `gruntled watch -h` and `gruntled report -h` print the
+  usage texts below and exit 0.
 
 ```
 usage: gruntled <command> [arguments]
@@ -46,12 +49,13 @@ Commands:
   graph   print the repository graph as JSON (--json)
   blast   report which units a change breaks (Broken) or puts at risk (Impacted) against --base
   watch   reindex on every save and keep a one-line status file outside the repository
+  report  print the result of the running watch daemon, like check
 
 Flags:
   --version   print the version and commit, then exit
 
-Run "gruntled check -h", "gruntled graph -h", "gruntled blast -h" or
-"gruntled watch -h" for details.
+Run "gruntled check -h", "gruntled graph -h", "gruntled blast -h",
+"gruntled watch -h" or "gruntled report -h" for details.
 ```
 
 ```
@@ -189,6 +193,30 @@ Exit codes:
   3  watch could not start: path missing, not a directory or unreadable, no watcher, or the initial index failed
 ```
 
+`gruntled report` prints what a running `gruntled watch` last published for
+the same repository, without analysing anything itself. Details are in
+[gruntled report](#gruntled-report).
+
+```
+usage: gruntled report [--format text|json|sarif] [path]
+
+Print the diagnostics of the watch daemon running for the Terragrunt
+repository at path (default "."), in the same format and bytes as check.
+The daemon is only read; report never starts one. It prints the last
+published result: after a failed reindex that is the previous result,
+with a warning on stderr.
+Flags may appear before or after path; "--" ends flag parsing.
+
+Flags:
+  --format text|json|sarif   output format (default "text")
+
+Exit codes:
+  0  report printed, no error diagnostic
+  1  report printed, at least one error diagnostic (GRT001-GRT003, GRT100)
+  2  usage error: unknown flag, invalid --format, more than one path
+  3  no daemon is running for the repository, the daemon is still indexing, protocol mismatch, or the daemon could not be queried
+```
+
 ## Exit codes
 
 | Code | Meaning |
@@ -242,6 +270,18 @@ are reported in the status file and on stdout. As printed by
   0  clean shutdown after SIGINT/SIGTERM, or --print-status-path / -h
   2  usage error: unknown flag, invalid duration, more than one path, --status-file inside the repository
   3  watch could not start: path missing, not a directory or unreadable, no watcher, or the initial index failed
+```
+
+`gruntled report` exits 0 and 1 exactly as `check` would for the result it
+prints. Exit 3 means there is no result to print: no daemon runs for the
+repository, it has not finished its first index, it speaks another protocol
+version, or it could not be queried. As printed by `gruntled report -h`:
+
+```
+  0  report printed, no error diagnostic
+  1  report printed, at least one error diagnostic (GRT001-GRT003, GRT100)
+  2  usage error: unknown flag, invalid --format, more than one path
+  3  no daemon is running for the repository, the daemon is still indexing, protocol mismatch, or the daemon could not be queried
 ```
 
 ## Output formats
@@ -814,6 +854,34 @@ WantedBy=default.target
 
 `systemctl --user enable --now gruntled-live` starts it; `systemctl --user
 stop` sends SIGTERM, which writes `stopped` and exits 0.
+
+## gruntled report
+
+`gruntled report [--format text|json|sarif] [path]` prints the result of the
+`gruntled watch` daemon running for the repository at `path`, in the same
+formats and with the same bytes as `gruntled check`: stdout is identical and,
+for `text`, so is the summary on stderr. The daemon renders every format once
+per index with the same code `check` uses; `report` only copies those bytes.
+
+- **Read-only.** The query never changes the daemon's state, and `report`
+  never starts a daemon or creates a directory, file or socket. With no
+  daemon it prints `gruntled: no watch daemon is running for <root>` and
+  exits 3.
+- **Last published result.** `report` shows the result of the last completed
+  index. Before the first index finishes it exits 3 with
+  `gruntled: the daemon is still indexing; try again`. After a failed
+  reindex it prints the previous result and, on stderr,
+  `gruntled: last reindex failed: <reason>; showing the previous result`;
+  the exit code follows the result printed.
+- **linux and darwin.** `report` asks the daemon over a unix socket in the
+  repository's runtime directory (next to the status file), with a 2 s
+  timeout. A daemon built with another protocol version is refused with
+  `gruntled: daemon runs protocol vX, this gruntled speaks vY; restart the daemon`.
+- **windows.** There is no socket: the daemon rewrites a report file in the
+  runtime directory after each index, and `report` reads it only while the
+  daemon holds its lock, so a file left behind by a dead daemon is reported
+  as no daemon. There is no live query and no version negotiation beyond the
+  version recorded in the file.
 
 ## Guarantees
 
