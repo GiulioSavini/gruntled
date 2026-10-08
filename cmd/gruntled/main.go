@@ -245,24 +245,16 @@ func runCheck(args []string, stdout, stderr io.Writer) int {
 		return exitFailure
 	}
 
-	var buf bytes.Buffer
-	switch *format {
-	case "json":
-		err = presenter.JSON(&buf, rep.Graph, rep.Diagnostics)
-	case "sarif":
-		err = presenter.SARIF(&buf, rep.Graph, rep.Diagnostics, presenter.ToolInfo{Version: version})
-	default:
-		err = presenter.Text(&buf, rep.Diagnostics)
-	}
+	out, summary, err := renderReport(*format, rep)
 	if err != nil {
 		fmt.Fprintf(stderr, "gruntled: %v\n", err)
 		return exitFailure
 	}
-	if !writeOut(stdout, stderr, &buf) {
+	if !writeOut(stdout, stderr, bytes.NewBuffer(out)) {
 		return exitFailure
 	}
-	if *format == "text" {
-		if err := presenter.Summary(stderr, rep.Graph, rep.Diagnostics); err != nil {
+	if summary != nil {
+		if _, err := stderr.Write(summary); err != nil {
 			return exitFailure
 		}
 	}

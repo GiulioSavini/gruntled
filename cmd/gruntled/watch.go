@@ -9,7 +9,6 @@ import (
 	"io"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"time"
 
 	"github.com/GiulioSavini/gruntled/internal/application/watching"
@@ -248,7 +247,7 @@ func (p *watchPublisher) publish(ev watch.Event) {
 		}
 		_ = presenter.StatusFailed(&line, reason, stamp)
 		if p.ready {
-			fmt.Fprintf(p.stderr, "gruntled: reindex failed: %s\n", strings.TrimSpace(reason))
+			fmt.Fprintf(p.stderr, "gruntled: reindex failed: %s\n", presenter.SanitizeReason(reason))
 		}
 	case watch.EventStopped:
 		_ = presenter.StatusStopped(&line, stamp)
