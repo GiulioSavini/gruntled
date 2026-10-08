@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v0.3
 milestone_name: Watch & Blast
-status: executing
-stopped_at: Completed 11-07-PLAN.md
-last_updated: "2026-10-08T13:30:13.981Z"
-last_activity: "2026-10-08 — completed 11-07 (CI green on all jobs incl. macos+windows, run 37782939975)"
+status: milestone_complete
+stopped_at: Phase 11 verified (passed); v0.3 phases all complete — next audit-milestone
+last_updated: "2026-10-08T13:45:25.297Z"
+last_activity: 2026-10-08 — completed 11-07 (.gitattributes LF + narrow windows test skips; CI all green)
 progress:
   total_phases: 4
   completed_phases: 4

@@ -33,7 +33,7 @@ See `milestones/v0.2-ROADMAP.md`.
 - [x] **Phase 8: Incremental Index Foundation** - Persistent parse cache; incremental reindex provably equals full rescan (completed 2026-10-08)
 - [x] **Phase 9: Blast Radius** - `gruntled blast --base` reports disjoint Broken and Impacted unit sets (completed 2026-10-08)
 - [x] **Phase 10: Watch Daemon & Status File** - `gruntled watch` reindexes on save and writes an atomic status line (completed 2026-10-08)
-- [ ] **Phase 11: Report, Single Instance & Release Proof** - Socket/lock/attach, `report`, six-target no-net/no-exec proof, docs
+- [x] **Phase 11: Report, Single Instance & Release Proof** - Socket/lock/attach, `report`, six-target no-net/no-exec proof, docs (completed 2026-10-08)
 
 ## Phase Details
 
@@ -119,4 +119,4 @@ Plans:
 | 8. Incremental Index Foundation | v0.3 | 2/2 | Complete | 2026-10-08 |
 | 9. Blast Radius | v0.3 | 3/3 | Complete | 2026-10-08 |
 | 10. Watch Daemon & Status File | v0.3 | 7/7 | Complete | 2026-10-08 |
-| 11. Report, Single Instance & Release Proof | v0.3 | 7/7 | In Progress | - |
+| 11. Report, Single Instance & Release Proof | v0.3 | 7/7 | Complete | 2026-10-08 |
