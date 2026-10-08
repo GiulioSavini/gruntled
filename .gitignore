@@ -4,3 +4,6 @@
 
 # Local output of scripts/build-release.sh
 /dist/
+
+# rapid failure files (testdata/rapid/<Test>/*.fail)
+internal/infrastructure/terragrunt/testdata/rapid/
