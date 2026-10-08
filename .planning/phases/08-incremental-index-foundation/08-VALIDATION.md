@@ -1,9 +1,9 @@
 ---
 phase: 8
 slug: incremental-index-foundation
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: approved
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-10-08
 ---
 
@@ -17,7 +17,7 @@ created: 2026-10-08
 
 | Property | Value |
 |----------|-------|
-| **Framework** | Go `testing` + pgregory.net/rapid v1.3.0 (test-only, to add) |
+| **Framework** | Go `testing` + pgregory.net/rapid v1.3.0 (test-only) |
 | **Config file** | none |
 | **Quick run command** | `go test ./internal/infrastructure/terragrunt/ -run 'TestIncremental\|TestPersistentCache\|TestLoader' -count=1` |
 | **Full suite command** | `go vet ./... && go test -count=1 ./...` (CI adds `-race`) |
@@ -38,10 +38,10 @@ created: 2026-10-08
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| TBD | TBD | TBD | DAEMON-02 | rapid stateful | `go test ./internal/infrastructure/terragrunt/ -run TestIncrementalEqualsFull -count=1` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | DAEMON-02 (SC4) | unit | `go test ./internal/infrastructure/terragrunt/ -run TestPersistentCache -count=1` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | DAEMON-02 (SC3) | golden/e2e | `go test ./cmd/gruntled/ -count=1` | ✅ | ⬜ pending |
-| TBD | TBD | TBD | proof | shell | `go list -deps ./cmd/gruntled \| grep -c rapid` → 0 | n/a | ⬜ pending |
+| 08-01-T1 | 08-01 | 1 | DAEMON-02 (SC4) | unit | `go test ./internal/infrastructure/terragrunt/ -run TestPersistentCache -count=1` | ✅ | ✅ green |
+| 08-01-T2 | 08-01 | 1 | DAEMON-02 (SC3) | golden/e2e | `go test ./cmd/gruntled/ -count=1` | ✅ | ✅ green |
+| 08-02-T1 | 08-02 | 2 | proof | shell | `go list -deps ./cmd/gruntled \| grep -c rapid` → 0; `go mod tidy -diff` clean | n/a | ✅ green |
+| 08-02-T2 | 08-02 | 2 | DAEMON-02 (SC1) | rapid stateful | `go test ./internal/infrastructure/terragrunt/ -run TestIncremental -count=1` | ✅ | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -49,9 +49,9 @@ created: 2026-10-08
 
 ## Wave 0 Requirements
 
-- [ ] `go get pgregory.net/rapid@v1.3.0` + `go mod tidy`
-- [ ] `internal/infrastructure/terragrunt/incremental_test.go` — model + render helper + non-vacuity guard
-- [ ] `internal/infrastructure/terragrunt/cache_test.go` — stats, no stale GRT100, negative-entry and dir-prefix invalidation
+- [x] `go get pgregory.net/rapid@v1.3.0` + `go mod tidy`
+- [x] `internal/infrastructure/terragrunt/incremental_test.go` — model + render helper + non-vacuity guard
+- [x] `internal/infrastructure/terragrunt/cache_test.go` — stats, no stale GRT100, negative-entry and dir-prefix invalidation
 
 ---
 
@@ -59,17 +59,17 @@ created: 2026-10-08
 
 | Behavior | Requirement | Why Manual | Test Instructions |
 |----------|-------------|------------|-------------------|
-| Shrinking yields a minimal sequence | DAEMON-02 (SC2) | Needs a deliberately broken Invalidate | Temporarily skip eviction, run the rapid test, confirm a short failing sequence, revert |
+| Shrinking yields a minimal sequence | DAEMON-02 (SC2) | Needs a deliberately broken Invalidate | Temporarily skip eviction, run the rapid test, confirm a short failing sequence, revert. Done in 08-02: no-op Invalidate shrinks to 3 actions, no prefix eviction to 3 actions (see 08-02-SUMMARY) |
 
 ---
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 90s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 90s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved 2026-10-08
