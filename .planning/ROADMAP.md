@@ -98,7 +98,16 @@ Plans:
   3. A second `gruntled watch` on the same repository prints where the daemon runs and exits 0; after a daemon crash, a restart succeeds (stale socket and lock recovered)
   4. The no-net/no-exec binary proof passes on all six release targets with watcher and socket code linked in
   5. README documents `watch`, `report`, `blast`, the status file path and the Windows limitation
-**Plans**: TBD
+**Plans**: 7 plans
+
+Plans:
+- [ ] 11-01-PLAN.md — statusfile EnsureDir (symlink/owner) + presenter SanitizeReason (phase-10 findings 2, 3)
+- [ ] 11-02-PLAN.md — ipc package: crash-safe lock, raw-syscall AF_UNIX server/client, windows dump transport
+- [ ] 11-03-PLAN.md — `watch` wiring: shared renderer, lock-first single instance, serve snapshot, already-running
+- [ ] 11-04-PLAN.md — `gruntled report` (socket / windows file), docs/cli.md, parity tests
+- [ ] 11-05-PLAN.md — six-target proof self-tests for socket code, mktemp fix, macOS/Windows CI job
+- [ ] 11-06-PLAN.md — README for watch/report/blast, guard test, phase gate, bookkeeping
+- [ ] 11-07-PLAN.md — checkpoint: macOS/Windows CI confirmation (person)
 
 ## Progress
 
@@ -110,4 +119,4 @@ Plans:
 | 8. Incremental Index Foundation | v0.3 | 2/2 | Complete | 2026-10-08 |
 | 9. Blast Radius | v0.3 | 3/3 | Complete | 2026-10-08 |
 | 10. Watch Daemon & Status File | v0.3 | 7/7 | Complete | 2026-10-08 |
-| 11. Report, Single Instance & Release Proof | v0.3 | 0/? | Not started | - |
+| 11. Report, Single Instance & Release Proof | v0.3 | 0/7 | Planned | - |
