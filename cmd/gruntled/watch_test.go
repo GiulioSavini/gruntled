@@ -461,6 +461,15 @@ func TestWatchDebounceDefault(t *testing.T) {
 	if *o.debounce != watch.DefaultQuiet {
 		t.Fatalf("default --debounce %v, want %v", *o.debounce, watch.DefaultQuiet)
 	}
+	if *o.pollInterval != watch.DefaultPollInterval {
+		t.Fatalf("default --poll-interval %v, want %v", *o.pollInterval, watch.DefaultPollInterval)
+	}
+	// The help text spells the defaults out; keep it in step.
+	for _, want := range []string{"(default " + watch.DefaultQuiet.String() + ")", "(default " + watch.DefaultPollInterval.String() + ")"} {
+		if !strings.Contains(watchUsage, want) {
+			t.Errorf("watchUsage does not mention %q", want)
+		}
+	}
 }
 
 func TestWatchStatusInsideRepo(t *testing.T) {

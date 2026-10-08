@@ -3,7 +3,7 @@
 // (infrastructure) into the use cases (application), and hands the results
 // to the presenters (interfaces): check runs the analyzers, graph only
 // builds the repository graph, blast compares a tree against a baseline
-// tree. It parses arguments and maps results to exit
+// tree, watch reindexes on every change and keeps a status file. It parses arguments and maps results to exit
 // codes; it holds no analysis logic.
 package main
 
@@ -15,6 +15,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/GiulioSavini/gruntled/internal/application/blasting"
 	"github.com/GiulioSavini/gruntled/internal/application/checking"
@@ -48,11 +50,13 @@ Commands:
   check   check a Terragrunt repository for broken dependency output references
   graph   print the repository graph as JSON (--json)
   blast   report which units a change breaks (Broken) or puts at risk (Impacted) against --base
+  watch   reindex on every save and keep a one-line status file outside the repository
 
 Flags:
   --version   print the version and commit, then exit
 
-Run "gruntled check -h", "gruntled graph -h" or "gruntled blast -h" for details.
+Run "gruntled check -h", "gruntled graph -h", "gruntled blast -h" or
+"gruntled watch -h" for details.
 `
 
 const blastUsage = `usage: gruntled blast [--base dir] [--format text|json] [path]
@@ -109,9 +113,21 @@ Exit codes:
   3  analysis could not run: path missing, not a directory or unreadable, an internal failure, or stdout write failed
 `
 
-func main() { os.Exit(run(os.Args[1:], os.Stdout, os.Stderr)) }
+func main() {
+	// The first SIGINT/SIGTERM cancels ctx (watch shuts down cleanly); stop
+	// restores the default handling, so a second signal kills the process.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	code := runCtx(ctx, os.Args[1:], os.Stdout, os.Stderr)
+	stop()
+	os.Exit(code)
+}
 
+// run is runCtx without cancellation; tests and testscript use it.
 func run(args []string, stdout, stderr io.Writer) int {
+	return runCtx(context.Background(), args, stdout, stderr)
+}
+
+func runCtx(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
 		fmt.Fprint(stderr, topUsage)
 		return exitUsage
@@ -129,6 +145,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return runGraph(args[1:], stdout, stderr)
 	case "blast":
 		return runBlast(args[1:], stdout, stderr)
+	case "watch":
+		return runWatch(ctx, args[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "gruntled: unknown command %q\n", args[0])
 		fmt.Fprint(stderr, topUsage)
