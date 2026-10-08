@@ -1,0 +1,25 @@
+# no daemon: exit 3 with a clear message, nothing created
+env XDG_RUNTIME_DIR=$WORK/rt
+mkdir $WORK/rt
+exec gruntled-exit 3 report repo
+stderr 'no watch daemon is running for '
+! stdout .
+! exists $WORK/rt/gruntled
+
+# every format behaves the same
+exec gruntled-exit 3 report --format json repo
+stderr 'no watch daemon'
+! stdout .
+exec gruntled-exit 3 report --format sarif repo
+stderr 'no watch daemon'
+! stdout .
+! exists $WORK/rt/gruntled
+
+# missing path: exit 3
+exec gruntled-exit 3 report missing/
+stderr 'cannot open repository'
+! stdout .
+
+-- repo/vpc/terragrunt.hcl --
+-- repo/vpc/main.tf --
+output "vpc_id" { value = "x" }

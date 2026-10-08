@@ -1,0 +1,31 @@
+# top-level help lists report
+exec gruntled-exit 0 help
+stderr '^  report  '
+
+# report help: exit 0, flags and exit codes
+exec gruntled-exit 0 report -h
+stderr '^usage: gruntled report '
+stderr '--format text\|json\|sarif'
+stderr '^  0  '
+stderr '^  1  '
+stderr '^  2  usage error'
+stderr '^  3  no daemon'
+! stdout .
+
+# unknown flag: exit 2 with usage
+exec gruntled-exit 2 report --bogus
+stderr 'flag provided but not defined'
+stderr '^usage: gruntled report '
+! stdout .
+
+# invalid format: exit 2 with usage
+exec gruntled-exit 2 report --format xml
+stderr 'invalid --format "xml"'
+stderr '^usage: gruntled report '
+! stdout .
+
+# more than one path: exit 2
+exec gruntled-exit 2 report a b
+stderr 'more than one path given'
+stderr '^usage: gruntled report '
+! stdout .
