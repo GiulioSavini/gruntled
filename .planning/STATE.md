@@ -98,6 +98,7 @@ None yet.
 
 ### Blockers/Concerns
 
+- Phase 10 must address the Phase 8 security findings before sharing `Loader` with the daemon: enforce a single indexer goroutine or a mutex, and revalidate after watcher overflow. See `phases/08-incremental-index-foundation/08-VERIFICATION.md` → Security.
 None open.
 
 ## Session Continuity

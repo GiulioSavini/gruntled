@@ -49,3 +49,27 @@ None required.
 None.
 
 _Verifier: Claude (gsd-verifier)_
+
+## Security
+
+Audit by `proj-sec:auditor` on 2026-10-08, diff `4c9a380~1..d73c85f`. Verdict: fix-small with no critical or high findings, so nothing was fixed in this phase. All items below must be handled by Phase 10 (watch daemon), which is the first concurrent, long-lived user of the cache.
+
+| # | Severity | Location | Problem | Fix |
+|---|----------|----------|---------|-----|
+| 1 | medium | `internal/infrastructure/terragrunt/loader.go:21-35` | `Loader` is documented as not safe for concurrent use, but nothing enforces it. Concurrent `Invalidate` and `LoadUnits` would cause a concurrent map write and crash the runtime. | Add a `sync.Mutex` across `LoadUnits`, `Invalidate` and `CacheStats`, or make "single indexer goroutine" a Phase 10 requirement. |
+| 2 | medium | `internal/infrastructure/terragrunt/parse.go:197-208` | Correctness depends on every change reaching `Invalidate`. Dropped watcher events or changes made while the daemon was down leave stale entries, including negative ones. | Store size and mtime in `parsedFile` and re-stat on each hit, or call `Invalidate(".")` whenever the watcher overflows. A periodic revalidate is already in the milestone research. |
+| 3 | low | `loader.go:55-68` | `Invalidate` makes one cache scan per path, O(n·cache) on event bursts. | Build the prefix set once and do a single pass. |
+| 4 | low | `loader.go:55` | Absolute, `../` or backslash paths match nothing and are ignored silently. | Document the repo-relative slash-path contract, or report the ignored paths. |
+| 5 | low | `loader.go:194,651` | `fs.Stat` of the autoinclude and stack files runs on every load. | No staleness risk; cost note only. |
+
+Checked and OK:
+- Cached `parsedFile` values are never mutated.
+- Memory is bounded by pruning after each load.
+- A failed load leaves the cache valid.
+- The read path is still size-capped.
+- No new exec, net, cgo or unsafe use.
+- `rapid` is not linked into the binary.
+
+Not run:
+- `govulncheck`: the `@latest` build is go1.26 and two packages need go1.27.
+- `-race`: no C compiler.
