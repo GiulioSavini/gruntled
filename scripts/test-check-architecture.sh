@@ -707,28 +707,12 @@ run_case_msg "binary-xsys-exemption-narrow" "$copy" binary-no-net-no-exec \
   '+: linked symbol syscall\.Exec$'
 
 # --- binary-windows-fsnotify: windows must poll, never link fsnotify -------
-# A stub module claiming the import path github.com/fsnotify/fsnotify,
-# blank-imported only from a _windows.go file: only the windows iterations
-# see it, so this proves the windows-rejects-fsnotify half. The replace is
-# unconditional, so it also wins over the real fsnotify require once the
-# tree links fsnotify (the unix build may then fail against the stub; the
-# assertion is on the windows message only).
+# The tree already requires the real fsnotify (unix native watcher), so a
+# blank import from a _windows.go file is enough: only the windows
+# iterations see it, which proves the windows-rejects-fsnotify half. A stub
+# module would break the unix build of the native watcher and trip the
+# compile gate first.
 copy=$(mkcopy)
-stubdir=$(mktemp -d)
-COPIES+=("$stubdir")
-cat >"$stubdir/go.mod" <<'EOF'
-module github.com/fsnotify/fsnotify
-
-go 1.27
-EOF
-cat >"$stubdir/p.go" <<'EOF'
-package fsnotify
-
-const X = 1
-EOF
-(cd "$copy" && go mod edit \
-  -require="github.com/fsnotify/fsnotify@v0.0.0" \
-  -replace="github.com/fsnotify/fsnotify=${stubdir}")
 cat >"$copy/cmd/gruntled/zz_probe_windows.go" <<'EOF'
 package main
 
