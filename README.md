@@ -203,11 +203,13 @@ running daemon last published, with the same bytes and exit codes as
 `check` (0 clean, 1 error diagnostics). It never starts a daemon: with none
 running, or while the first index is still in progress, it exits 3.
 
-`gruntled blast --base dir [--format text|json] [path]` compares `path`
-with a baseline tree you checked out yourself (for example with
+`gruntled blast --base dir [--format text|json] [--depth N] [path]` compares
+`path` with a baseline tree you checked out yourself (for example with
 `git worktree`). **Broken** lists units with findings that are new in
-`path`; **Impacted** lists units that use a module whose variable or output
-names changed. Without `--base` every finding is Broken.
+`path`; **Impacted** lists the units that use a module whose variable or
+output names changed and, transitively, the units that depend on them
+through dependency blocks, each with its distance and one shortest path
+(`--depth N` stops at distance N). Without `--base` every finding is Broken.
 
 **Windows limitation.** There is no native watcher on Windows: `watch`
 always uses stat polling. There is no socket either: the daemon rewrites a

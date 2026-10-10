@@ -124,10 +124,15 @@ both trees and reports two disjoint, path-sorted lists:
   the current module removed is reported as
   [GRT004](#grt004-dependency-output-removed-error-blast-only) instead of
   GRT001, at the same site.
-- **Impacted**: units of `path` that use a module whose declared variable or
-  output names differ between the trees, and are not already Broken. Only
-  direct consumers are listed: a unit that merely depends on an Impacted unit
-  is not Impacted.
+- **Impacted**: units of `path` that the change reaches, each with its
+  distance and one shortest path. An instantiating unit, one that uses a
+  module whose declared variable or output names differ between the trees,
+  is at distance 1. A dependent of a reached unit is one further away. A
+  dependent is reached only through a `dependency` block whose `enabled` is
+  absent or literally `true` and whose `skip_outputs` is absent or literally
+  `false`. Broken units are traversed, so their dependents are reached, but
+  they are listed only under Broken. `--depth N` lists Impacted units up to
+  distance N; `--depth 1` lists the instantiating units only.
 
 gruntled never runs git or any other program. Check the baseline out
 yourself, for example in CI:
@@ -1026,8 +1031,9 @@ per index with the same code `check` uses; `report` only copies those bytes.
 - `blast` Impacted compares variable and output NAMES only. An added
   required variable shows up only as a `+variable` change, never as Broken;
   a changed type, default, `sensitive` flag or output value is invisible.
-- `blast` Impacted is one hop: only units that use the changed module are
-  listed, not the units that depend on them.
+- `blast` Impacted is a lower bound: a non-literal `enabled` or
+  `skip_outputs` and a `dependencies { paths }` entry stop propagation, and
+  propagation is not gated on which outputs a dependent reads.
 - `blast` does not diff a module that is new, deleted, or has an unknown
   surface in either tree; consumers of a deleted local module show up only
   through other findings.
