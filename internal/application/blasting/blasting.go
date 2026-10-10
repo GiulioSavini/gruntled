@@ -1,7 +1,9 @@
 // Package blasting holds the blast use case: it checks the current tree
-// and, when given, a baseline tree, and hands both snapshots to
-// impact.Compute. It is pure orchestration; every decision lives in the
-// domain.
+// and, when given, a baseline tree, and hands both Reports to Between.
+// Between is the shared pure core that turns two Reports into an
+// impact.Result; it is the only place GRT004 (a removed output that is
+// still referenced) is produced, so check never emits it. The package is
+// pure orchestration; every decision lives in the domain.
 package blasting
 
 import (
@@ -9,6 +11,7 @@ import (
 
 	"github.com/GiulioSavini/gruntled/internal/application/checking"
 	"github.com/GiulioSavini/gruntled/internal/application/ports"
+	"github.com/GiulioSavini/gruntled/internal/domain/analysis"
 	"github.com/GiulioSavini/gruntled/internal/domain/impact"
 )
 
@@ -19,9 +22,10 @@ type Sources struct {
 	Surfaces ports.SurfaceReader
 }
 
-// Error reports which tree failed to check.
+// Error reports which stage of a blast failed.
 type Error struct {
-	// Stage is "current" or "baseline".
+	// Stage is "current" or "baseline" (that tree failed to check), or
+	// "compare" (Between failed to build a diagnostic).
 	Stage string
 	Err   error
 }
@@ -53,5 +57,31 @@ func Blast(ctx context.Context, cur Sources, base *Sources) (impact.Result, erro
 	if err != nil {
 		return impact.Result{}, &Error{Stage: "baseline", Err: err}
 	}
-	return impact.Compute(baseRep.Graph, baseRep.Diagnostics, curRep.Graph, curRep.Diagnostics), nil
+	res, err := Between(baseRep, curRep)
+	if err != nil {
+		return impact.Result{}, &Error{Stage: "compare", Err: err}
+	}
+	return res, nil
+}
+
+// Between returns the blast radius from base to cur. It reclassifies, in
+// cur's diagnostics only, every GRT001 that analysis.RemovedOutputs proves is
+// a removed output as GRT004 (analysis.SupersedeUnknownOutputs), then calls
+// impact.Compute. It is pure: it reads only the two Reports, so blast --base
+// and the watch daemon agree by construction. The error comes only from
+// building a diagnostic; on error the Result is zero.
+//
+// base must come from checking.Check: baseline diagnostics never contain
+// GRT004, which is what makes every GRT004 new and keeps Broken equal to
+// v0.3. A base holding GRT004 is outside the contract.
+func Between(base, cur checking.Report) (impact.Result, error) {
+	curD := cur.Diagnostics
+	if base.Graph != nil && cur.Graph != nil {
+		removed, err := analysis.RemovedOutputs(base.Graph, cur.Graph)
+		if err != nil {
+			return impact.Result{}, err
+		}
+		curD = analysis.SupersedeUnknownOutputs(cur.Diagnostics, removed)
+	}
+	return impact.Compute(base.Graph, base.Diagnostics, cur.Graph, curD), nil
 }
