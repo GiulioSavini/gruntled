@@ -1,9 +1,9 @@
 ---
 phase: 14
 slug: transitive-impact-with-paths
-status: draft
+status: validated
 nyquist_compliant: true
-wave_0_complete: false
+wave_0_complete: true
 created: 2026-10-10
 ---
 
@@ -52,15 +52,15 @@ PATH for every command: `export PATH=$HOME/.local/go/bin:$HOME/go/bin:$PATH`.
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 14-01-01 | 01 | 1 | BLAST-03, BLAST-04 | unit (internal) | `go test -count=1 -run 'TestPropagate' ./internal/domain/impact/` | ❌ W0 (transitive.go, transitive_internal_test.go) | ⬜ pending |
-| 14-01-02 | 01 | 1 | BLAST-03, BLAST-05 | unit + intended script updates | `go test -count=1 ./internal/domain/impact/ ./internal/application/blasting/ && go test -count=1 ./cmd/gruntled/ && bash scripts/compare-ref.sh v0.3.0` | ✅ impact_test.go (updated) | ⬜ pending |
-| 14-01-03 | 01 | 1 | BLAST-04, BLAST-05 | property vs independent oracle (exhaustive + xorshift) | `go test -count=1 -run 'TestTransitiveMatchesOracle' -v ./internal/domain/impact/` | ❌ W0 (oracle_test.go) | ⬜ pending |
-| 14-02-01 | 02 | 2 | BLAST-04 | unit (JSON v2) | `go test -count=1 -run 'TestBlastJSON\|TestBlastDeterministic' ./internal/interfaces/presenter/` | ✅ blast_test.go (extended) | ⬜ pending |
-| 14-02-02 | 02 | 2 | BLAST-04 | unit (text, elision, escape) | `go test -count=1 ./internal/interfaces/presenter/` | ✅ blast_test.go (extended) | ⬜ pending |
-| 14-02-03 | 02 | 2 | BLAST-04 | testscript + e2e escape + docs pins | `go test -count=1 -run 'TestScripts/blast\|TestTextOutputsEscapeControls\|TestRuleRegistryDoc\|TestHelpMatchesDocs' ./cmd/gruntled/` | ✅ | ⬜ pending |
-| 14-03-01 | 03 | 3 | BLAST-05 | cmd unit + testscript + doc pins | `go test -count=1 -run 'TestBlastDepthFlag\|TestScripts/blast_exitcodes\|TestScripts/usage\|TestHelpMatchesDocs\|TestRuleRegistryDoc' ./cmd/gruntled/` | ❌ W0 (blast_depth_test.go) | ⬜ pending |
-| 14-03-02 | 03 | 3 | BLAST-03, BLAST-04, BLAST-05 | testscript + synthrepo + snapshot equivalence | `go test -count=1 -run 'TestScripts/blast_transitive\|TestBlastTransitiveSynthrepo\|TestBlastDepth1MatchesV1' ./cmd/gruntled/ && bash scripts/compare-ref.sh v0.3.0` | ❌ W0 (blast_transitive.txtar, blast_transitive_test.go, blast_v1/, scripts/blast-snapshots.sh) | ⬜ pending |
-| 14-03-03 | 03 | 3 | all | doc guard + gate | full suite + compare-ref (+ perturb self-test) + build-release + `git diff --exit-code go.mod go.sum` | ✅ | ⬜ pending |
+| 14-01-01 | 01 | 1 | BLAST-03, BLAST-04 | unit (internal) | `go test -count=1 -run 'TestPropagate' ./internal/domain/impact/` | ✅ transitive.go, transitive_internal_test.go (created) | ✅ green |
+| 14-01-02 | 01 | 1 | BLAST-03, BLAST-05 | unit + intended script updates | `go test -count=1 ./internal/domain/impact/ ./internal/application/blasting/ && go test -count=1 ./cmd/gruntled/ && bash scripts/compare-ref.sh v0.3.0` | ✅ impact_test.go (updated) | ✅ green |
+| 14-01-03 | 01 | 1 | BLAST-04, BLAST-05 | property vs independent oracle (exhaustive + xorshift) | `go test -count=1 -run 'TestTransitiveMatchesOracle' -v ./internal/domain/impact/` | ✅ oracle_test.go (created) | ✅ green |
+| 14-02-01 | 02 | 2 | BLAST-04 | unit (JSON v2) | `go test -count=1 -run 'TestBlastJSON\|TestBlastDeterministic' ./internal/interfaces/presenter/` | ✅ blast_test.go (extended) | ✅ green |
+| 14-02-02 | 02 | 2 | BLAST-04 | unit (text, elision, escape) | `go test -count=1 ./internal/interfaces/presenter/` | ✅ blast_test.go (extended) | ✅ green |
+| 14-02-03 | 02 | 2 | BLAST-04 | testscript + e2e escape + docs pins | `go test -count=1 -run 'TestScripts/blast\|TestTextOutputsEscapeControls\|TestRuleRegistryDoc\|TestHelpMatchesDocs' ./cmd/gruntled/` | ✅ | ✅ green |
+| 14-03-01 | 03 | 3 | BLAST-05 | cmd unit + testscript + doc pins | `go test -count=1 -run 'TestBlastDepthFlag\|TestScripts/blast_exitcodes\|TestScripts/usage\|TestHelpMatchesDocs\|TestRuleRegistryDoc' ./cmd/gruntled/` | ✅ blast_depth_test.go (created) | ✅ green |
+| 14-03-02 | 03 | 3 | BLAST-03, BLAST-04, BLAST-05 | testscript + synthrepo + snapshot equivalence | `go test -count=1 -run 'TestScripts/blast_transitive\|TestBlastTransitiveSynthrepo\|TestBlastDepth1MatchesV1' ./cmd/gruntled/ && bash scripts/compare-ref.sh v0.3.0` | ✅ blast_transitive.txtar, blast_transitive_test.go, blast_v1/, scripts/blast-snapshots.sh (created) | ✅ green |
+| 14-03-03 | 03 | 3 | all | doc guard + gate | full suite + compare-ref (+ perturb self-test) + build-release + `git diff --exit-code go.mod go.sum` | ✅ | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -108,4 +108,4 @@ step of its own task, so no separate Wave 0 plan is needed.
 - [x] Feedback latency < 15s
 - [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending (draft at plan time; set to validated after execution)
+**Approval:** validated 2026-10-10 by gsd-verifier (every per-task command re-run green at 4c0406d, code identical to c1dbf6c; compare-ref 244/244 and perturbed 243/244; snapshots regenerated from the PROVENANCE hash with an empty `diff -r`; CI run 38083669867 at c1dbf6c green on linux -race, macos and windows). See 14-VERIFICATION.md.
