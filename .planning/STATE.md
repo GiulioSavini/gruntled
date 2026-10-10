@@ -2,15 +2,19 @@
 gsd_state_version: "1.0"
 milestone: v0.4
 milestone_name: Blast-aware Diagnostics
+current_phase: 13
+current_phase_name: Removed-Output Diagnostic & Shared Blast Core
 status: planning
-last_updated: "2026-10-10T11:40:13.363Z"
+stopped_at: Created ROADMAP.md (phases 13-17), STATE.md and REQUIREMENTS.md traceability for v0.4
+last_updated: "2026-10-10T13:27:56.473Z"
 last_activity: 2026-10-10
+state_head: 87171de4c8f5db25d67a13ae93a9f37591a8f0fc
 progress:
-  total_phases: 0
-  completed_phases: 0
+  total_phases: 5
+  completed_phases: 8
   total_plans: 0
   completed_plans: 0
-  percent: 0
+  percent: 100
 ---
 
 # Project State
@@ -20,132 +24,42 @@ progress:
 See: .planning/PROJECT.md (updated 2026-10-10)
 
 **Core value:** Tell the user, before they run anything slow, that `dependency.X.outputs.Y` does not exist in the module it points to.
-**Current focus:** Planning next milestone (v0.3 shipped 2026-10-10; tag v0.3.0 pending)
+**Current focus:** Phase 13 — Removed-Output Diagnostic & Shared Blast Core (milestone v0.4 Blast-aware Diagnostics, phases 13-17)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-10-10 — Milestone v0.4 started
+Phase: 13 of 17 (Removed-Output Diagnostic & Shared Blast Core)
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-10-10
+
+Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
-**Velocity:**
-- Total plans completed: 10
-- Average duration: ~29 min
-- Total execution time: 3.99 hours
+**Velocity (v0.4):**
+- Total plans completed: 0
+- Average duration: -
+- Total execution time: 0 hours
 
-**By Phase:**
-
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| Phase 1 P1 | 35min | 3 tasks | 14 files |
-| Phase 1 P2 | 15min | 2 tasks | 3 files |
-| Phase 1 P3 | 20min | 2 tasks | 6 files |
-| Phase 2 P1 | 25min | 2 tasks | 9 files |
-| Phase 2 P2 | 24min | 3 tasks | 5 files |
-| Phase 2 P3 | 53min | 3 tasks | 13 files |
-| Phase 2 P4 | 27min | 3 tasks | 8 files |
-| Phase 2 P5 | 40min | 3 tasks | 7 files |
-
-**Recent Trend:**
-- Last 5 plans: 25min, 24min, 53min, 27min, 40min
-- Trend: Plan 02-05 (loader + integration + fuzz, the phase's largest wiring surface) ran longer than the P4 baseline but in line with P3's similar-scope leaf-infrastructure plan; Phase 2 is now complete
+Earlier milestones: v0.1 26 plans, v0.2 17 plans, v0.3 24 plans. Per-plan timings live in the
+phase SUMMARY files under `.planning/milestones/*-phases/`.
 
 *Updated after each plan completion*
-| Phase 02 P05 | 40 | 3 tasks | 7 files |
-| Phase 03 P01 | 20 | 3 tasks | 7 files |
-| Phase 03 P03 | 40 | 3 tasks | 16 files |
-| Phase 03 P05 | 14 | 2 tasks | 2 files |
-| Phase 04 P03 | 35 | 2 tasks | 3 files |
-| Phase 05 P01 | interrupted | 3 tasks | 14 files |
-| Phase 05 P03 | 2 | 2 tasks | 4 files |
-| Phase 05 P02 | 5 | 3 tasks | 7 files |
-| Phase 05 P04 | 6min | 3 tasks | 10 files |
-| Phase 05 P05 | 15min | 2 tasks | 9 files |
-| Phase 05 P06 | 35min | 3 tasks | 5 files |
-| Phase 06 P01 | 6min | 2 tasks | 4 files |
-| Phase 06 P02 | 10min | 2 tasks | 3 files |
-| Phase 06 P03 | 9min | 2 tasks | 8 files |
-| Phase 06 P04 | 10min | 2 tasks | 4 files |
-| Phase 06 P05 | 15min | 3 tasks | 7 files |
-| Phase 07 P01 | 12min | 2 tasks | 8 files |
-| Phase 07 P02 | 19min | 3 tasks | 9 files |
-| Phase 07 P03 | 5min | 1 tasks | 1 files |
-| Phase 07 P04 | 8min | 3 tasks | 5 files |
-| Phase 07 P05 | 15min | 3 tasks | 0 files |
-| Phase 08 P01 | 2min | 2 tasks | 3 files |
-| Phase 08 P02 | 8min | 2 tasks | 5 files |
-| Phase 09 P01 | 2min | 2 tasks | 5 files |
-| Phase 09 P02 | 4min | 2 tasks | 4 files |
-| Phase 09 P03 | 12min | 2 tasks | 8 files |
-| Phase 10 P01 | 9min | 2 tasks | 2 files |
-| Phase 10 P02 | 6min | 2 tasks | 5 files |
-| Phase 10 P03 | 4min | 2 tasks | 6 files |
-| Phase 10 P04 | 5min | 2 tasks | 11 files |
-| Phase 10 P05 | 8min | 1 tasks | 5 files |
-| Phase 10 P07 | 10min | 1 tasks | 2 files |
-| Phase 10 P06 | 25min | 2 tasks | 9 files |
-| Phase 11 P01 | 4min | 2 tasks | 8 files |
-| Phase 11 P02 | 12min | 2 tasks | 11 files |
-| Phase 11 P03 | 6min | 2 tasks | 7 files |
-| Phase 11 P04 | 15min | 2 tasks | 9 files |
-| Phase 11 P05 | 12min | 2 tasks | 3 files |
-| Phase 11 P06 | 14min | 3 tasks | 7 files |
-| Phase 11 P07 | 25min | 1 tasks | 5 files |
 
 ## Accumulated Context
 
 ### Decisions
 
-Decisions are logged in PROJECT.md Key Decisions table (v0.1 and v0.2 decisions recorded there).
-Per-plan decision history lives in the phase SUMMARY files and git history.
-- [Phase 08]: Only parse results persist across LoadUnits; discovery/resolution/assembly recomputed so incremental == full by construction
-- [Phase 08]: GRT100 driven by per-load touched set, store pruned to touched on success
-- [Phase 08]: Dirty-set contract: Invalidate on create/write/remove/rename (old+new); negative entries cached
-- [Phase 08]: rapid incremental==full test compares serialised JSON+graph, seeded baseline per sequence; rapid test-only
-- [Phase 09]: KeyOf = diagnostic Key minus Line/Column; GRT100 message verbatim (pinned position-free by hclconv stability test)
-- [Phase 09]: Domain tests stay on pure allowlist (no rapid/fmt): property tests use fixed-seed LCG
-- [Phase 09]: Blast checks current tree first; staged *blasting.Error current|baseline
-- [Phase 09]: Blast change tokens ordered -variable,+variable,-output,+output; no-baseline output drops Impacted
-- [Phase 09]: blast: unopenable --base exits 3, never silent no-baseline fallback; exit 1 only on error findings in Broken (HasErrors)
-- [Phase 10]: Step 9 proof: per-target go tool nm linker check; textual scan exempts exactly golang.org/x/sys/unix; windows rejects fsnotify and x/sys/windows
-- [Phase 10]: Loader mutex-guarded (LoadUnits/Invalidate/CacheStats) but single indexer goroutine still the model; out-of-contract Invalidate path (empty/./abs/../backslash) clears whole store
-- [Phase 10]: watching.Indexer is the single seam daemon->Loader; resync = Invalidate("."), Report/error = checking.Check unchanged
-- [Phase 10]: Status line: errors only, codes sorted, single write; StatusFailed collapses whitespace, 120-rune cap
-- [Phase 10]: Status path <base>/gruntled/<sha256(EvalSymlinks root)[:12]>/status, base linux abs XDG_RUNTIME_DIR -> UserCacheDir -> TempDir; no case folding
-- [Phase 10]: statusfile.Writer: 0700 dir (refuse perm&077 on non-windows), 0600 tmp+rename, 5 attempts 10/20/40/80ms
-- [Phase 10]: pending.add: '.', volume paths, empty/abs/backslash/'..' -> resync; ignored paths dropped without signalling; take drains Ready under the same mutex
-- [Phase 10]: Debouncer pure (Add/Due/Flush, caller time), DefaultQuiet 150ms / DefaultMaxWait 1s, empty Changes do not arm
-- [Phase 10]: Poll: baseline in constructor, dirs reported only on add/remove/type change, unreadable subdir keeps previous entries, root failure -> resync; scanner reusable as native safety net
-- [Phase 10]: 10-05: native watcher baseline taken after watches; ENFILE counts as watch limit; safety net 30s feeds same dirty set
-- [Phase 10]: 10-07: Run single indexer goroutine; timer fire flushes at max(Now,Due); skip publish only if post-Index Take non-empty; Stopped only on cancel, initial failure leaves Failed
-- [Phase 10]: 10-06: status path inside repo (also via symlink) is exit 2, checked before --print-status-path
-- [Phase 10]: 10-06: initial index failure leaves 'failed' status, one stderr line, exit 3; reindex failures keep running
-- [Phase 10]: 10-06: Run debounce uses real clock; injected clock only stamps status lines; status write failure logged once, never fatal
-- [Phase 11]: 11-01: statusfile.CheckDir (Lstat; symlink/non-dir/perm&077/foreign uid -> ErrInsecureDir); EnsureRepoDir checks <base>/gruntled and <hash12>; Writer checks only its own dir
-- [Phase 11]: 11-01: presenter.SanitizeReason maps control runes to spaces + collapses whitespace; StatusFailed caps 120 runes after sanitising
-- [Phase 11]: 11-02: ipc lock = flock O_NOFOLLOW (unix) / CreateFile share 0 (windows); Probe never creates; LockRetry 20ms injected sleep
-- [Phase 11]: 11-02: AF_UNIX on raw syscall, os.NewFile non-blocking + SyscallConn accept; Close via quit chan wakes accept, waits handlers, removes socket; server always answers v=1, client mismatch -> *VersionError
-- [Phase 11]: Watch takes the per-repo lock before watcher/index; second watch prints location and exits 0; snapshots pre-rendered via shared renderReport
-- [Phase 11]: report exits 3 for no daemon/indexing/mismatch; windows reads the report file only while the lock is held
-- [Phase 11]: 11-05: Step 9 needs no exemption for ipc (stdlib syscall sockets/locks); self-tests pin net out of both ipc builds
-- [Phase 11]: 11-05: CI test-os matrix (macos, windows) runs go test without -race; ubuntu keeps -race + arch scripts
-- [Phase 11]: 11-06: AF_UNIX via stdlib syscall, no net package; Step 9 proof holds on six targets with ipc linked
-- [Phase 11]: 11-06: lock-first single instance; second watch prints location and exits 0 (watch -h/docs updated)
-- [Phase 11]: 11-06: daemon snapshot holds pre-rendered bytes; report copies them (byte parity with check)
-- [Phase 11]: 11-06: windows report = dump file read only while lock held (lock probe), no live query
-- [Phase 11]: 11-06: report exit codes mirror check (0/1), 3 for no daemon/indexing/mismatch
-- [Phase 11]: 11-06: sun_path overflow is a hard exit 3
-- [Phase 11]: 11-06: windows CI (test-os windows-latest) red on pre-existing tests in run 37780137349; pending 11-07
-- [Phase 11]: .gitattributes '* text=auto eol=lf' plus narrow windows test skips make CI green on all OSes (run 37782939975)
+Decisions are logged in PROJECT.md Key Decisions table. Binding research decisions for v0.4 are in
+`.planning/research/SUMMARY.md` ("Reconciled Conflicts"). Recent decisions affecting current work:
 
-- [Phase 12]: Editor patterns apply to files only (IgnoredEntry); dirs never pattern-ignored, symlinks only by `.#`
-- [Phase 12]: Parse cache entries carry their canonical path; Invalidate and reuse check it (symlink aliases)
-- [Phase 12]: Runtime dir and status path refused inside the repo by file identity (os.SameFile), exit 2
-- [Phase 12]: Presenter escapes C0/DEL/C1/Cf/U+2028-9 in text (escapeTerm) and as \uXXXX in JSON (escapeJSON)
-- [Phase 12]: darwin native watcher limitation from fsnotify#787 accepted and documented (≤30 s late)
+- [Roadmap v0.4]: five phases kept although `coarse` suggests 2-4: the type-fact and daemon phases are separately research-flagged and the proof phase must follow both
+- [Roadmap v0.4]: `GRT004` exists only in the blast core (`Between`), never in `check`/`report`; it reclassifies `GRT001` and can never add a finding
+- [Roadmap v0.4]: BLAST-11 (size bound) and SEC-01 (escaping) map to Phase 15 where the type renderer lands; Phase 14 fixes the linear path shape, Phase 16 re-runs the hostile-name fixture through `report --blast`
+- [Phase 12]: Presenter escapes C0/DEL/C1/Cf/U+2028-9 in text (`escapeTerm`) and as `\uXXXX` in JSON (`escapeJSON`)
+- [Phase 11]: `report` over raw-syscall AF_UNIX (no `net`), 0600 socket in a 0700 dir; windows reads a dump file while the lock is held
+- [Phase 9]: Blast baseline from `--base <dir>`, never git; exit 1 only on error findings in Broken
 
 ### Pending Todos
 
@@ -153,14 +67,26 @@ None yet.
 
 ### Blockers/Concerns
 
-- RESOLVED in Phase 10: the Phase 8 security findings (`phases/08-incremental-index-foundation/08-VERIFICATION.md` → Security) are closed. 1 Loader shared with the daemon: Loader mutex (10-02) plus a single indexer goroutine in `watch.Run`, the only caller of `Indexer.Index` (10-07, wired in 10-06). 2 Lost events after watcher overflow: `Changes.Resync` → `Indexer.Index(resync)` → `Invalidate(".")` (10-02, 10-04), native overflow/error marks resync and a 30 s stat safety net feeds the same dirty set (10-05). 3 Per-path Invalidate cost: single-pass batch Invalidate (10-02). 4 Path contract: repo-relative slash paths only; empty/./absolute/../backslash paths clear the whole store (10-02, enforced again in the watcher pending set by 10-04).
+- Phase 15 needs phase research before planning: `typeexpr` over `.tf.json` and legacy bare `list`/`map`, Terraform 1.15 output `type` release note and OpenTofu parity, `override.tf` and `.tf` + `.tofu` duplicates.
+- Phase 16 needs phase research before planning: first mutating socket op and locking, windows asymmetry, 64 MiB cap with a pre-rendered blast view, memory at thousands of units (figures so far are derived, not measured).
+- Phase 14 planning: choose the default text hop cap after measuring the 65-unit iso20022 corpus.
+
+## Deferred Items
+
+Items acknowledged and deferred, most recent first:
+
+| Category | Item | Status | Deferred At | Milestone |
+|----------|------|--------|-------------|-----------|
+| Diagnostic | MORE-04 `GRT005`, MORE-05 `GRT006` | Deferred (overlap `terragrunt hcl validate --inputs`, include-merge false-positive risk) | 2026-10-10 | v0.4 |
+| Daemon | `report` / `rebase` over AF_UNIX on windows | Deferred (needs a scoped `net` exception to the six-target proof) | 2026-10-10 | v0.4 |
+| Blast | `watch --base <dir>`, `blast --format sarif`, per-hop `file:line`, reference-gated propagation | Deferred | 2026-10-10 | v0.4 |
 
 ## Session Continuity
 
-Last session: 2026-10-08T13:30:13.978Z
-Stopped at: Completed 11-07-PLAN.md
+Last session: 2026-10-10 13:26
+Stopped at: Created ROADMAP.md (phases 13-17), STATE.md and REQUIREMENTS.md traceability for v0.4
 Resume file: None
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Plan Phase 13 with /gsd-plan-phase 13 (phases 15 and 16 need phase research first)

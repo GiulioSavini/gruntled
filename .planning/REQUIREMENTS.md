@@ -78,12 +78,29 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
+| MORE-03 | Phase 13 | Pending |
+| MORE-07 | Phase 13 | Pending |
+| BLAST-03 | Phase 14 | Pending |
+| BLAST-04 | Phase 14 | Pending |
+| BLAST-05 | Phase 14 | Pending |
+| BLAST-06 | Phase 15 | Pending |
+| BLAST-07 | Phase 15 | Pending |
+| BLAST-08 | Phase 15 | Pending |
+| BLAST-09 | Phase 15 | Pending |
+| BLAST-10 | Phase 15 | Pending |
+| BLAST-11 | Phase 15 | Pending |
+| SEC-01 | Phase 15 | Pending |
+| DAEMON-07 | Phase 16 | Pending |
+| DAEMON-08 | Phase 16 | Pending |
+| DAEMON-09 | Phase 16 | Pending |
+| DAEMON-10 | Phase 16 | Pending |
+| REL-03 | Phase 17 | Pending |
 
 **Coverage:**
-- v0.4 requirements: 19 total
-- Mapped to phases: 0
-- Unmapped: 19 ⚠️
+- v0.4 requirements: 17 total
+- Mapped to phases: 17 ✓
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-10-10*
-*Last updated: 2026-10-10 after sec review (bus #103-#119)*
+*Last updated: 2026-10-10 after roadmap creation (phases 13-17); total corrected from 19 to 17, the count of requirement IDs defined above*
