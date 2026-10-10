@@ -9,6 +9,8 @@ import (
 	"testing/fstest"
 
 	"github.com/GiulioSavini/gruntled/internal/infrastructure/hclconv"
+	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/hclsyntax"
 )
 
 // --- ReadFileLimited -------------------------------------------------------
@@ -552,6 +554,77 @@ func TestCheckJSONDepth(t *testing.T) {
 		src := []byte(`{"s": "abc` + "\n" + strings.Repeat("{", hclconv.MaxNestingDepth+2))
 		if err := hclconv.CheckJSONDepth(src); !errors.Is(err, hclconv.ErrNestingTooDeep) {
 			t.Fatalf("CheckJSONDepth = %v, want ErrNestingTooDeep", err)
+		}
+	})
+}
+
+// --- CheckNativeDepth: template control blocks (sec #261, #271) -------------
+
+// nestTemplate returns `x = "<open>×n<inner><close>×n"` as a quoted string.
+func nestTemplate(open, inner, close string, n int) []byte {
+	return []byte(`x = "` + strings.Repeat(open, n) + inner + strings.Repeat(close, n) + `"` + "\n")
+}
+
+func TestCheckNativeDepthTemplateControl(t *testing.T) {
+	const deep = hclconv.MaxNestingDepth + 1
+	rejects := []struct {
+		name string
+		src  []byte
+	}{
+		{"nested if", nestTemplate("%{if a}", "x", "%{endif}", deep)},
+		{"nested for", nestTemplate("%{for v in l}", "x", "%{endfor}", deep)},
+		{"strip markers", nestTemplate("%{~ if a ~}", "x", "%{~ endif ~}", deep)},
+		{"mixed if and for", nestTemplate("%{if a}%{for v in l}", "x", "%{endfor}%{endif}", deep/2+1)},
+		{"heredoc", []byte("x = <<EOT\n" + strings.Repeat("%{if a}\n", deep) + "x\n" + strings.Repeat("%{endif}\n", deep) + "EOT\n")},
+		// sec #271: the keyword after a comment or newline token.
+		{"block comment before keyword", nestTemplate("%{/*c*/if a}", "x", "%{endif}", deep)},
+		{"line comment before keyword", nestTemplate("%{#c\nif a}", "x", "%{endif}", deep)},
+		{"newline before keyword", nestTemplate("%{\nif a}", "x", "%{endif}", deep)},
+		{"strip marker and comment", nestTemplate("%{~/**/if a}", "x", "%{endif}", deep)},
+		{"newline before for", nestTemplate("%{\nfor x in [1]}", "x", "%{endfor}", deep)},
+	}
+	for _, c := range rejects {
+		t.Run("rejects "+c.name, func(t *testing.T) {
+			if err := hclconv.CheckNativeDepth(c.src); !errors.Is(err, hclconv.ErrNestingTooDeep) {
+				t.Fatalf("CheckNativeDepth = %v, want ErrNestingTooDeep", err)
+			}
+		})
+	}
+
+	realistic := []byte(`x = <<EOT
+%{ for k, v in m ~}
+%{ if v != "" ~}
+${k} = ${v}
+%{ else ~}
+${k} is empty
+%{ endif ~}
+%{ endfor ~}
+EOT
+`)
+	accepts := []struct {
+		name string
+		src  []byte
+	}{
+		{"990 nested ifs", nestTemplate("%{if a}", "x", "%{endif}", 990)},
+		{"50,000 sibling blocks", []byte(`x = "` + strings.Repeat("%{if a}y%{else}z%{endif}", 50_000) + `"` + "\n")},
+		{"realistic heredoc template", realistic},
+		{"stray endif first", []byte(`x = "%{endif}` + strings.Repeat("%{if a}", 990) + "x" + strings.Repeat("%{endif}", 990) + `"` + "\n")},
+		{"escaped directive", nestTemplate("%%{if a}", "x", "%%{endif}", deep)},
+	}
+	for _, c := range accepts {
+		t.Run("accepts "+c.name, func(t *testing.T) {
+			if err := hclconv.CheckNativeDepth(c.src); err != nil {
+				t.Fatalf("CheckNativeDepth = %v, want nil", err)
+			}
+		})
+	}
+
+	t.Run("escape is literal", func(t *testing.T) {
+		toks, _ := hclsyntax.LexConfig([]byte(`x = "%%{if a}y%%{endif}"`), "", hcl.InitialPos)
+		for _, tok := range toks {
+			if tok.Type == hclsyntax.TokenTemplateControl {
+				t.Fatalf("%%%%{ lexed as a template control token: %q", tok.Bytes)
+			}
 		}
 	})
 }
