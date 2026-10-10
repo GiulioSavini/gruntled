@@ -1,7 +1,6 @@
 package analysis_test
 
 import (
-	"math/rand/v2"
 	"reflect"
 	"strings"
 	"testing"
@@ -111,15 +110,30 @@ func TestRemovedOutputsDeterministic(t *testing.T) {
 	if len(want) != 12 {
 		t.Fatalf("got %d GRT004, want 12 (6 units x 2 sites of a)", len(want))
 	}
-	rng := rand.New(rand.NewPCG(13, 1))
-	for range 2 {
-		for range 10 {
-			got, err := analysis.RemovedOutputs(removedFixture(t, []string{"a", "b"}, rng.Perm), removedFixture(t, []string{"b"}, rng.Perm))
-			if err != nil {
-				t.Fatalf("RemovedOutputs: %v", err)
+	// The domain may not use randomness (check-architecture), so the
+	// shuffles are fixed: every rotation of the input, forwards and
+	// reversed, each run twice.
+	for k := range 8 {
+		for _, rev := range []bool{false, true} {
+			perm := func(n int) []int {
+				out := make([]int, n)
+				for i := range out {
+					j := (i + k) % n
+					if rev {
+						j = n - 1 - j
+					}
+					out[i] = j
+				}
+				return out
 			}
-			if !reflect.DeepEqual(got, want) {
-				t.Fatalf("result depends on input order:\n got %v\nwant %v", got, want)
+			for range 2 {
+				got, err := analysis.RemovedOutputs(removedFixture(t, []string{"a", "b"}, perm), removedFixture(t, []string{"b"}, perm))
+				if err != nil {
+					t.Fatalf("RemovedOutputs: %v", err)
+				}
+				if !reflect.DeepEqual(got, want) {
+					t.Fatalf("result depends on input order (rotation %d, reversed %v):\n got %v\nwant %v", k, rev, got, want)
+				}
 			}
 		}
 	}
