@@ -14,6 +14,13 @@
 #
 # Offline like compare-ref.sh: GOFLAGS=-mod=readonly GOPROXY=off, the ref
 # must name a commit, and the worktree and temp files are removed on exit.
+#
+# Requirements: bash, git, Go, GNU coreutils `realpath` (for `-m`) and
+# `sha256sum`, as on Linux and in CI. macOS/BSD ship neither in that form:
+# install coreutils and put its gnubin directory first on PATH (so
+# `realpath` and `sha256sum` are the GNU `grealpath` and `gsha256sum`), or
+# run the script on Linux or in CI. Without them the script fails closed:
+# it exits non-zero and writes nothing outside its temp directory.
 set -euo pipefail
 
 # Sourced before any cd, so BASH_SOURCE resolves from the caller's cwd.

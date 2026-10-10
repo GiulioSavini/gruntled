@@ -13,6 +13,13 @@
 # library existed, to run these cases against the functions extracted from
 # compare-ref.sh). TXTAR_REF_SCRIPTS overrides the scripts whose ref check
 # is tested (default: compare-ref.sh blast-snapshots.sh).
+#
+# Requirements: bash, git, Go, GNU coreutils `realpath` (for `-m`) and
+# `sha256sum`, as on Linux and in CI. macOS/BSD ship neither in that form:
+# install coreutils and put its gnubin directory first on PATH (so
+# `realpath` and `sha256sum` are the GNU `grealpath` and `gsha256sum`), or
+# run the script on Linux or in CI. Without them the script fails closed:
+# it exits non-zero and writes nothing outside its temp directory.
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."

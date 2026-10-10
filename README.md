@@ -469,6 +469,16 @@ the six release targets `linux/amd64`, `linux/arm64`, `darwin/amd64`,
 (linux, darwin) or `.zip` (windows), writes `checksums.txt` and checks that
 the host binary's `--version` prints the injected version.
 
+Three maintenance scripts are not part of CI and are run by hand:
+`scripts/compare-ref.sh <ref>` byte-compares `check` and `graph` output with
+the binary built from a git ref, `scripts/blast-snapshots.sh <ref> <dir>`
+regenerates the pre-Phase-14 blast snapshots, and
+`scripts/test-txtar-extract.sh` runs the negative tests of their shared txtar
+extraction. They need GNU coreutils `realpath` (with `-m`) and `sha256sum`,
+as on Linux. On macOS, install coreutils and put its gnubin directory first
+on `PATH`, or run them on Linux. Without these tools they fail closed: they
+exit non-zero and write nothing outside their temp directory.
+
 ## CI
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every push to

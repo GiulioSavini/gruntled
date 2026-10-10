@@ -20,6 +20,13 @@
 # temp file are removed on exit. <ref> must name a commit (git rev-parse
 # --verify --end-of-options); txtar member names and symlink targets must stay
 # inside the extracted tree, or the script stops before writing them.
+#
+# Requirements: bash, git, Go, GNU coreutils `realpath` (for `-m`) and
+# `sha256sum`, as on Linux and in CI. macOS/BSD ship neither in that form:
+# install coreutils and put its gnubin directory first on PATH (so
+# `realpath` and `sha256sum` are the GNU `grealpath` and `gsha256sum`), or
+# run the script on Linux or in CI. Without them the script fails closed:
+# it exits non-zero and writes nothing outside its temp directory.
 set -euo pipefail
 
 # Sourced before any cd, so BASH_SOURCE resolves from the caller's cwd.
