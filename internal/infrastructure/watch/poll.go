@@ -107,7 +107,7 @@ func (s *scanner) walk(dir, rel string, snap map[string]entry) error {
 		if d.IsDir() && IgnoredDir(name) {
 			continue
 		}
-		if Ignored(childRel) {
+		if IgnoredEntry(childRel, 0) {
 			continue
 		}
 		info, err := d.Info() // lstat semantics: symlinks are not followed
@@ -178,7 +178,7 @@ func (w *poll) run(s *scanner, interval time.Duration) {
 			return
 		case <-t.C:
 			for _, rel := range s.diff() {
-				w.add(rel)
+				w.add(rel, 0)
 			}
 			if s.resync {
 				w.markResync()

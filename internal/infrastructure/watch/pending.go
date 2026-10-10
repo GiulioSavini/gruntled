@@ -1,6 +1,7 @@
 package watch
 
 import (
+	"io/fs"
 	"path"
 	"sort"
 	"strings"
@@ -25,12 +26,13 @@ func newPending() *pending {
 	return &pending{set: map[string]struct{}{}, ready: make(chan struct{}, 1)}
 }
 
-// add records rel as dirty. It is the single entry for paths: ignored paths
-// are dropped; anything outside the contract (empty, ".", absolute, volume,
+// add records rel as dirty. It is the single entry for paths: paths that
+// IgnoredEntry(rel, typ) rejects are dropped (typ is the entry's type bits,
+// 0 for a regular file or a gone/unknown entry); anything outside the contract (empty, ".", absolute, volume,
 // backslash, ".." escape) becomes resync instead of being stored.
-func (p *pending) add(rel string) {
+func (p *pending) add(rel string, typ fs.FileMode) {
 	clean, ok := normalise(rel)
-	if ok && Ignored(clean) {
+	if ok && IgnoredEntry(clean, typ) {
 		return
 	}
 	p.mu.Lock()

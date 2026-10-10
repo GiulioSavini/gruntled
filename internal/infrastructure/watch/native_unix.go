@@ -110,14 +110,14 @@ func (n *native) addTree(dir string, emit bool) error {
 			return nil
 		}
 		rel := n.rel(p)
-		if p != dir && (Ignored(rel) || (d.IsDir() && IgnoredDir(d.Name()))) {
+		if p != dir && (IgnoredEntry(rel, 0) || (d.IsDir() && IgnoredDir(d.Name()))) {
 			if d.IsDir() {
 				return fs.SkipDir
 			}
 			return nil
 		}
 		if emit && p != dir {
-			n.add(rel)
+			n.add(rel, 0)
 		}
 		if !d.IsDir() {
 			return nil
@@ -165,7 +165,7 @@ func (n *native) loop(s *scanner) {
 			n.handleErr(err)
 		case <-t.C:
 			for _, rel := range s.diff() {
-				n.add(rel)
+				n.add(rel, 0)
 			}
 			if s.resync {
 				n.markResync()
@@ -181,10 +181,10 @@ func (n *native) handleEvent(ev fsnotify.Event) {
 	if dropEvent != nil && dropEvent(rel) {
 		return
 	}
-	if Ignored(rel) {
+	if IgnoredEntry(rel, 0) {
 		return
 	}
-	n.add(rel) // out-of-contract rel (".", "..") becomes resync here
+	n.add(rel, 0) // out-of-contract rel (".", "..") becomes resync here
 	if !ev.Has(fsnotify.Create) {
 		return
 	}

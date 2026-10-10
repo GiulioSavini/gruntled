@@ -104,7 +104,7 @@ func TestNativeIgnoredDirNotWatched(t *testing.T) {
 	defer mu.Unlock()
 	for _, d := range watched {
 		rel, _ := filepath.Rel(root, d)
-		if rel != "." && Ignored(filepath.ToSlash(rel)) {
+		if rel != "." && IgnoredEntry(filepath.ToSlash(rel), 0) {
 			t.Errorf("ignored directory %q was watched", d)
 		}
 	}
