@@ -22,6 +22,10 @@ const (
 	blastCheckVersion   = "Readers must check `version`; a v1 reader must reject version 2."
 	blastJSONPathNote   = "The JSON `source` and `via` keys are the unambiguous form of a path: text joins hops with ` -> `, which a directory name may itself contain."
 	blastTextTransitive = "  live/edge (distance 2, from module modules/vpc, path live/edge -> live/db)"
+	// Phase 14 (14-03): the edge rule in the blast intro and the lower-bound
+	// limitation.
+	blastEdgeRule   = "A dependent is reached only through a `dependency` block whose `enabled` is absent or literally `true` and whose `skip_outputs` is absent or literally `false`."
+	blastLowerBound = "`blast` Impacted is a lower bound: a non-literal `enabled` or `skip_outputs` and a `dependencies { paths }` entry stop propagation, and propagation is not gated on which outputs a dependent reads."
 )
 
 func readDoc(t *testing.T, path string) string {
@@ -108,7 +112,26 @@ func TestRuleRegistryDoc(t *testing.T) {
 		t.Errorf("docs/cli.md has no fenced block equal to blast -h:\n%s", usage)
 	}
 
+	folded := strings.Join(strings.Fields(doc), " ")
+	intro := folded[strings.Index(folded, "`gruntled blast` answers"):]
+	intro = intro[:strings.Index(intro, "gruntled never runs git")]
+	if strings.Contains(intro, "Only direct consumers are listed") || !strings.Contains(intro, blastEdgeRule) {
+		t.Errorf("blast intro must drop the one-hop wording and state %q:\n%s", blastEdgeRule, intro)
+	}
+	limits := strings.Join(strings.Fields(section(t, doc, "## Known limitations")), " ")
+	if strings.Contains(limits, "`blast` Impacted is one hop") || !strings.Contains(limits, blastLowerBound) {
+		t.Errorf("Known limitations must drop the one-hop bullet and state %q", blastLowerBound)
+	}
+
 	readme := readDoc(t, "../../README.md")
+	for _, para := range strings.Split(readme, "\n\n") {
+		if strings.HasPrefix(para, "`gruntled blast --base dir") {
+			p := strings.Join(strings.Fields(para), " ")
+			if !strings.Contains(p, "distance") || !strings.Contains(p, "path") || !strings.Contains(p, "--depth") {
+				t.Errorf("README blast paragraph does not mention distance, path and --depth: %q", p)
+			}
+		}
+	}
 	// Paragraph-scoped (blank-line separated, whitespace folded), so a
 	// reflow cannot split GRT004 and "no `Code` constant" across lines.
 	for _, para := range strings.Split(readme, "\n\n") {
