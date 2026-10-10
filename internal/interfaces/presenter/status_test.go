@@ -167,6 +167,8 @@ func TestSanitizeReason(t *testing.T) {
 		{"all control", "\x00\x1b\r\n\t\x7f", ""},
 		{"plain", "open a: no such file", "open a: no such file"},
 		{"unicode kept", "é ✓", "é ✓"},
+		{"format and separators", "a\u202eb\u200bc\u2028d", "a b c d"},
+		{"bidi isolate and bom", "\u2066x\u2069\ufeffy\u2029", "x y"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
