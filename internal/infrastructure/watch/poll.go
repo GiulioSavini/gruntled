@@ -46,43 +46,56 @@ func newScanner(root string) *scanner {
 	return s
 }
 
-// diff rescans, returns the repo-relative slash paths that were added,
-// removed or changed since the previous snapshot (plus directory paths for
-// added/removed directories) and replaces the snapshot. When the root scan
-// fails it returns nothing, sets resync and keeps the previous snapshot.
-func (s *scanner) diff() []string {
+// change is one scanner diff result: a repo-relative slash path and its
+// entry type bits (fs.ModeDir, fs.ModeSymlink, ..., 0 for a regular file).
+// The type comes from the current scan for added/changed paths and from the
+// previous snapshot for removed ones, so pending.add can apply the right
+// ignore rule (directories are never pattern-ignored).
+type change struct {
+	rel string
+	typ fs.FileMode
+}
+
+// diff rescans, returns the paths that were added, removed or changed since
+// the previous snapshot (plus directory paths for added/removed directories)
+// and replaces the snapshot. When the root scan fails it returns nothing,
+// sets resync and keeps the previous snapshot.
+func (s *scanner) diff() []change {
 	s.resync = false
 	cur, ok := s.scan()
 	if !ok {
 		s.resync = true
 		return nil
 	}
-	var out []string
+	var out []change
 	for rel, c := range cur {
 		p, existed := s.prev[rel]
 		switch {
 		case !existed:
-			out = append(out, rel)
+			out = append(out, change{rel, c.mode.Type()})
 		case p.isDir != c.isDir || p.mode.Type() != c.mode.Type():
-			out = append(out, rel)
+			out = append(out, change{rel, c.mode.Type()})
 		case c.isDir:
 			// A directory's own mtime moves when children change; the
 			// children are diffed individually, so nothing to report.
 		case p.size != c.size || p.mtime != c.mtime || p.mode != c.mode:
-			out = append(out, rel)
+			out = append(out, change{rel, c.mode.Type()})
 		}
 	}
-	for rel := range s.prev {
+	// s.prev only ever holds non-ignored entries, so a removed path keeps
+	// the type it had when it was accepted.
+	for rel, p := range s.prev {
 		if _, still := cur[rel]; !still {
-			out = append(out, rel)
+			out = append(out, change{rel, p.mode.Type()})
 		}
 	}
 	s.prev = cur
 	return out
 }
 
-// scan walks root without following symlinks, skipping ignored directories
-// and ignored files. ok is false only when root itself cannot be read; an
+// scan walks root without following symlinks, skipping every entry
+// IgnoredEntry rejects for its type: ignored-directory subtrees and editor
+// files, never a directory merely named like an editor file. ok is false only when root itself cannot be read; an
 // unreadable subdirectory keeps its previous entries (treated as unchanged
 // for this scan).
 func (s *scanner) scan() (map[string]entry, bool) {
@@ -104,10 +117,7 @@ func (s *scanner) walk(dir, rel string, snap map[string]entry) error {
 		if rel != "" {
 			childRel = rel + "/" + name
 		}
-		if d.IsDir() && IgnoredDir(name) {
-			continue
-		}
-		if IgnoredEntry(childRel, 0) {
+		if IgnoredEntry(childRel, d.Type()) {
 			continue
 		}
 		info, err := d.Info() // lstat semantics: symlinks are not followed
@@ -177,8 +187,8 @@ func (w *poll) run(s *scanner, interval time.Duration) {
 		case <-w.done:
 			return
 		case <-t.C:
-			for _, rel := range s.diff() {
-				w.add(rel, 0)
+			for _, c := range s.diff() {
+				w.add(c.rel, c.typ)
 			}
 			if s.resync {
 				w.markResync()

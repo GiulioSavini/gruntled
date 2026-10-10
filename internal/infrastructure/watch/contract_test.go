@@ -207,6 +207,11 @@ func runContract(t *testing.T, newWatcher func(root string) (Watcher, error)) {
 		if err := os.Symlink("u@h.1:1", abs(root, ".#terragrunt.hcl")); err != nil {
 			t.Skipf("symlinks unavailable: %v", err)
 		}
+		// Barrier: once the first sentinel is collected the watcher has
+		// observed the lock symlink while it existed (native events are
+		// ordered; a poll scan that sees the sentinel also sees the link).
+		writeFile(t, root, "s0.hcl", "s")
+		collect(t, c, func(s map[string]bool) bool { return s["s0.hcl"] }, "sentinel s0.hcl")
 		if err := os.Remove(abs(root, ".#terragrunt.hcl")); err != nil {
 			t.Fatal(err)
 		}

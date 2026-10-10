@@ -25,6 +25,11 @@ const DefaultSafetyNet = 30 * time.Second
 // reassigns it.
 var addWatch = func(fw *fsnotify.Watcher, dir string) error { return fw.Add(dir) }
 
+// lstatBeforeWatch is called on every directory below the walked root right
+// before addWatch, so a directory swapped for a symlink after WalkDir listed
+// it is not watched (10-sec#5). Test seam: production never reassigns it.
+var lstatBeforeWatch = os.Lstat
+
 // dropEvent, when non-nil, makes handleEvent discard events for matching
 // repo-relative paths. Test seam for the safety net; nil in production.
 var dropEvent func(rel string) bool
@@ -40,6 +45,13 @@ type native struct {
 	done   chan struct{}
 	wg     sync.WaitGroup
 	once   sync.Once
+
+	// patternDirs holds the repo-relative paths of the watched directories
+	// whose base name matches an editor file pattern (2024, x.tmp, ...).
+	// handleEvent uses it to keep classifying such a path as a directory
+	// after it is gone. Touched only by the constructor before the loop
+	// goroutine starts and by the loop goroutine afterwards: no mutex.
+	patternDirs map[string]struct{}
 }
 
 // NewNative returns a Watcher backed by the OS notification API. root must
@@ -73,7 +85,10 @@ func newNative(root string, safety time.Duration) (*native, error) {
 		}
 		return nil, err
 	}
-	n := &native{pending: newPending(), root: root, fw: fw, safety: safety, done: make(chan struct{})}
+	n := &native{
+		pending: newPending(), root: root, fw: fw, safety: safety, done: make(chan struct{}),
+		patternDirs: map[string]struct{}{},
+	}
 	if err := n.addTree(root, false); err != nil {
 		_ = fw.Close()
 		return nil, err
@@ -93,7 +108,10 @@ func isLimit(err error) bool {
 }
 
 // addTree watches dir and every non-ignored directory below it without
-// following symlinks. With emit, every path found is also marked dirty, so
+// following symlinks. Directories are judged by IgnoredEntry with their
+// type, so only .git/.terraform/.terragrunt-cache subtrees are skipped; a
+// directory named like an editor file is watched and recorded in
+// patternDirs (the subtree root dir included, the repo root excluded). With emit, every path found is also marked dirty, so
 // files created before the new directory's watch existed are not lost.
 // It returns an ErrWatchLimit-wrapped error on watch exhaustion, the error
 // when dir itself cannot be walked or watched, and ignores subdirectories
@@ -110,17 +128,25 @@ func (n *native) addTree(dir string, emit bool) error {
 			return nil
 		}
 		rel := n.rel(p)
-		if p != dir && (IgnoredEntry(rel, 0) || (d.IsDir() && IgnoredDir(d.Name()))) {
+		if p != dir && IgnoredEntry(rel, d.Type()) {
 			if d.IsDir() {
 				return fs.SkipDir
 			}
 			return nil
 		}
 		if emit && p != dir {
-			n.add(rel, 0)
+			n.add(rel, d.Type())
 		}
 		if !d.IsDir() {
 			return nil
+		}
+		if p != dir {
+			// 10-sec#5: never watch a path that is a symlink (or no longer
+			// a directory) at this point, even though WalkDir listed a dir.
+			fi, err := lstatBeforeWatch(p)
+			if err != nil || fi.Mode()&fs.ModeSymlink != 0 || !fi.IsDir() {
+				return fs.SkipDir
+			}
 		}
 		if err := addWatch(n.fw, p); err != nil {
 			if isLimit(err) {
@@ -131,8 +157,25 @@ func (n *native) addTree(dir string, emit bool) error {
 			}
 			return fs.SkipDir // vanished or unreadable; the safety net covers it
 		}
+		if rel != "." && editorPattern(rel) {
+			n.patternDirs[rel] = struct{}{}
+		}
 		return nil
 	})
+}
+
+// prunePatternDirs forgets rel and every recorded directory below it. Called
+// on every Remove/Rename; bounded by the number of recorded pattern dirs.
+func (n *native) prunePatternDirs(rel string) {
+	if len(n.patternDirs) == 0 {
+		return
+	}
+	prefix := rel + "/"
+	for k := range n.patternDirs {
+		if k == rel || strings.HasPrefix(k, prefix) {
+			delete(n.patternDirs, k)
+		}
+	}
 }
 
 // rel maps an absolute event path to the repo-relative slash form; paths
@@ -164,8 +207,8 @@ func (n *native) loop(s *scanner) {
 			}
 			n.handleErr(err)
 		case <-t.C:
-			for _, rel := range s.diff() {
-				n.add(rel, 0)
+			for _, c := range s.diff() {
+				n.add(c.rel, c.typ)
 			}
 			if s.resync {
 				n.markResync()
@@ -176,20 +219,51 @@ func (n *native) loop(s *scanner) {
 
 // handleEvent marks the event path dirty and, for a created (or renamed-in)
 // directory, starts watching its tree.
+//
+// Events carry no entry type. Paths under .git/.terraform/.terragrunt-cache
+// are dropped outright; a path whose base name matches an editor pattern is
+// classified (sec #37, over-approximation, never stale): a directory when it
+// is a recorded pattern dir OR Lstat says dir, else Lstat's type, else 0
+// (gone). Normal names pay no extra syscall.
 func (n *native) handleEvent(ev fsnotify.Event) {
 	rel := n.rel(ev.Name)
 	if dropEvent != nil && dropEvent(rel) {
 		return
 	}
-	if IgnoredEntry(rel, 0) {
+	if IgnoredEntry(rel, fs.ModeDir) { // component rule only
 		return
 	}
-	n.add(rel, 0) // out-of-contract rel (".", "..") becomes resync here
+	_, known := n.patternDirs[rel]
+	if ev.Has(fsnotify.Remove) || ev.Has(fsnotify.Rename) {
+		n.prunePatternDirs(rel)
+	}
+	var (
+		typ     fs.FileMode
+		fi      fs.FileInfo
+		lerr    error
+		statted bool
+	)
+	if editorPattern(rel) {
+		fi, lerr = os.Lstat(ev.Name)
+		statted = true
+		switch {
+		case known || (lerr == nil && fi.IsDir()):
+			typ = fs.ModeDir
+		case lerr == nil:
+			typ = fi.Mode().Type()
+		}
+	}
+	if IgnoredEntry(rel, typ) {
+		return
+	}
+	n.add(rel, typ) // out-of-contract rel (".", "..") becomes resync here
 	if !ev.Has(fsnotify.Create) {
 		return
 	}
-	fi, err := os.Lstat(ev.Name)
-	if err != nil || !fi.IsDir() {
+	if !statted {
+		fi, lerr = os.Lstat(ev.Name)
+	}
+	if lerr != nil || !fi.IsDir() {
 		return
 	}
 	if err := n.addTree(ev.Name, true); err != nil && !errors.Is(err, fs.ErrNotExist) {
