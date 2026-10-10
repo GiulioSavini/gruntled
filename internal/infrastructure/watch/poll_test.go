@@ -1,6 +1,7 @@
 package watch
 
 import (
+	"io/fs"
 	"os"
 	"reflect"
 	"sort"
@@ -27,6 +28,7 @@ func TestPollScannerDiff(t *testing.T) {
 	writeFile(t, root, "mod.hcl", "m")
 	writeFile(t, root, "gone/x.hcl", "x")
 	writeFile(t, root, ".terraform/p.tf", "p")
+	writeFile(t, root, "2024/f.hcl", "f")
 	s := newScanner(root)
 	if got := s.diff(); len(got) != 0 || s.resync {
 		t.Fatalf("diff on unchanged tree = %v resync=%v", got, s.resync)
@@ -39,14 +41,46 @@ func TestPollScannerDiff(t *testing.T) {
 	writeFile(t, root, "new/y.hcl", "y")
 	writeFile(t, root, ".terraform/q.tf", "q")
 	writeFile(t, root, "x.swp", "s")
-	got := s.diff()
-	sort.Strings(got)
-	want := []string{"gone", "gone/x.hcl", "mod.hcl", "new", "new/y.hcl"}
+	writeFile(t, root, "2024/f.hcl", "ff") // file inside a pattern-named dir
+	writeFile(t, root, "4913", "")         // vim probe: a regular file, ignored
+	got := rels(s.diff())
+	want := []string{"2024/f.hcl", "gone", "gone/x.hcl", "mod.hcl", "new", "new/y.hcl"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("diff = %v, want %v", got, want)
 	}
 	if got := s.diff(); len(got) != 0 {
 		t.Fatalf("diff after snapshot replaced = %v, want none", got)
+	}
+}
+
+// rels returns the sorted paths of a scanner diff.
+func rels(cs []change) []string {
+	out := make([]string, 0, len(cs))
+	for _, c := range cs {
+		out = append(out, c.rel)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// TestPollScannerDiffTypes: every change carries the entry type, taken from
+// the current scan for present paths and from the previous one for removed
+// paths, so pending.add applies the right ignore rule.
+func TestPollScannerDiffTypes(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "2024/f.hcl", "f")
+	s := newScanner(root)
+	if err := os.RemoveAll(abs(root, "2024")); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, root, "x.tmp/g.hcl", "g")
+	types := map[string]fs.FileMode{}
+	for _, c := range s.diff() {
+		types[c.rel] = c.typ
+	}
+	want := map[string]fs.FileMode{"2024": fs.ModeDir, "2024/f.hcl": 0, "x.tmp": fs.ModeDir, "x.tmp/g.hcl": 0}
+	if !reflect.DeepEqual(types, want) {
+		t.Fatalf("diff types = %v, want %v", types, want)
 	}
 }
 

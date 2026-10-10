@@ -131,6 +131,92 @@ func runContract(t *testing.T, newWatcher func(root string) (Watcher, error)) {
 		}
 	})
 
+	// Directories named like editor files are ordinary directories: only
+	// files are matched by the editor patterns (v0.3 audit BLOCKER).
+	patternDirs := []string{"2024", "live/4913", "x.tmp", "bak~", "#d#", ".#d"}
+
+	t.Run("edit inside pattern-named dirs", func(t *testing.T) {
+		root := t.TempDir()
+		for _, d := range patternDirs {
+			writeFile(t, root, d+"/f.hcl", "x")
+		}
+		c := start(t, root)
+		for _, d := range patternDirs {
+			writeFile(t, root, d+"/f.hcl", "xyz-longer")
+		}
+		collect(t, c, func(s map[string]bool) bool {
+			for _, d := range patternDirs {
+				if !s[d+"/f.hcl"] {
+					return false
+				}
+			}
+			return true
+		}, "every <pattern dir>/f.hcl edited")
+	})
+
+	t.Run("mkdir pattern-named dir", func(t *testing.T) {
+		root := t.TempDir()
+		c := start(t, root)
+		writeFile(t, root, "live/2024/terragrunt.hcl", "x")
+		collect(t, c, func(s map[string]bool) bool {
+			return s["live/2024/terragrunt.hcl"] || s["live/2024"] || s["live"]
+		}, "new pattern-named directory reported (dir or file path)")
+		c.reset()
+		writeFile(t, root, "live/2024/terragrunt.hcl", "xyz-longer")
+		collect(t, c, func(s map[string]bool) bool { return s["live/2024/terragrunt.hcl"] }, "edit inside new pattern-named directory")
+	})
+
+	under := func(s map[string]bool, dir string) bool {
+		for p := range s {
+			if p == dir || strings.HasPrefix(p, dir+"/") {
+				return true
+			}
+		}
+		return false
+	}
+
+	t.Run("rename pattern-named dir away", func(t *testing.T) {
+		root := t.TempDir()
+		writeFile(t, root, "2024/f.hcl", "x")
+		c := start(t, root)
+		if err := os.Rename(abs(root, "2024"), abs(root, "y")); err != nil {
+			t.Fatal(err)
+		}
+		collect(t, c, func(s map[string]bool) bool { return under(s, "2024") && under(s, "y") }, "old and new pattern-dir rename paths")
+	})
+
+	t.Run("mkdir pattern-named dir after start, then rename it away", func(t *testing.T) {
+		root := t.TempDir()
+		c := start(t, root)
+		if err := os.Mkdir(abs(root, "2024"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		writeFile(t, root, "2024/f.hcl", "x")
+		collect(t, c, func(s map[string]bool) bool { return s["2024/f.hcl"] }, "2024/f.hcl created in a runtime pattern-named dir")
+		c.reset()
+		if err := os.Rename(abs(root, "2024"), abs(root, "y")); err != nil {
+			t.Fatal(err)
+		}
+		collect(t, c, func(s map[string]bool) bool { return under(s, "2024") && under(s, "y") }, "old and new paths of the runtime pattern dir")
+	})
+
+	t.Run("emacs lock symlink", func(t *testing.T) {
+		root := t.TempDir()
+		writeFile(t, root, "terragrunt.hcl", "x")
+		c := start(t, root)
+		if err := os.Symlink("u@h.1:1", abs(root, ".#terragrunt.hcl")); err != nil {
+			t.Skipf("symlinks unavailable: %v", err)
+		}
+		if err := os.Remove(abs(root, ".#terragrunt.hcl")); err != nil {
+			t.Fatal(err)
+		}
+		writeFile(t, root, "s.hcl", "s")
+		collect(t, c, func(s map[string]bool) bool { return s["s.hcl"] }, "sentinel s.hcl")
+		if c.seen[".#terragrunt.hcl"] {
+			t.Errorf("Emacs lock symlink reached the dirty set: %s", c)
+		}
+	})
+
 	t.Run("no escapes", func(t *testing.T) {
 		root := t.TempDir()
 		writeFile(t, root, "a/b/c.hcl", "x")
