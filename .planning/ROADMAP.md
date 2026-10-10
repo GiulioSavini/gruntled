@@ -130,10 +130,14 @@ Plans:
   3. Every BLOCKER/HIGH/MEDIUM finding of the v0.3 cross-phase security audit is fixed with a test, or accepted with a documented reason in `12-SECURITY.md`
   4. `go test ./...`, `go vet ./...`, `scripts/check-architecture.sh` and CI on linux/macos/windows are green
 
-**Plans**: TBD
+**Plans**: 5 plans
 
 Plans:
-- [ ] TBD (planned by gruntled-planner)
+- [ ] 12-01-PLAN.md — watcher: editor patterns apply to files only (IgnoredEntry), poll/native/safety net, contract + daemon regression (wave 1)
+- [ ] 12-02-PLAN.md — parse cache tracks canonical path of symlink-reached files; evict and re-check by it (wave 1)
+- [ ] 12-03-PLAN.md — statusfile.Inside by file identity; refuse runtime dir inside the repo (wave 1)
+- [ ] 12-04-PLAN.md — presenter escapes terminal control/bidi runes on every text path; SanitizeReason Cf (wave 1)
+- [ ] 12-05-PLAN.md — rapid property: pattern-named dirs + symlinked includes; docs, DAEMON-04 wording; x/text v0.41.0; phase gate (wave 2)
 
 ## Progress
 
@@ -146,4 +150,4 @@ Plans:
 | 9. Blast Radius | v0.3 | 3/3 | Complete | 2026-10-08 |
 | 10. Watch Daemon & Status File | v0.3 | 7/7 | Complete | 2026-10-08 |
 | 11. Report, Single Instance & Release Proof | v0.3 | 7/7 | Complete | 2026-10-08 |
-| 12. Gap Closure — Watcher Dir Ignore & Audit Findings | v0.3 | 0/? | Planned | - |
+| 12. Gap Closure — Watcher Dir Ignore & Audit Findings | v0.3 | 0/5 | Planned | - |
