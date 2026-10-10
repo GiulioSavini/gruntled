@@ -44,7 +44,7 @@ PATH for every command: `export PATH=$HOME/.local/go/bin:$HOME/go/bin:$PATH`.
 | 2 | Variable type / declared output type (both sides) / sensitive flip -> reason; formatting, comments, order, optional defaults, .tf->.tf.json -> empty | `TestTypeSigGolden`, `TestTypeSigEqualsProperty`, `TestReadSurfaceMetamorphic`, `TestTypeChangeMatrix`, `blast_types.txtar` cases 4-11, 16 |
 | 3 | Never a diagnostic, never Broken, never exit code; --depth 1 equals v0.3 sets/exit | `TestTypeFactsNeverBroken`, `TestTypeFactsNeverChangeBrokenProperty`, `blast_types.txtar` case 14 (every case exit 0), `TestBlastDepth1MatchesV1` (extended normaliser, D-15-05) |
 | 4 | Ambiguous facts silent: duplicates with differing facts, override files, non-literal/unparseable, unknown either side; names unchanged | `TestReadSurfaceOverride`, `TestReadSurfaceDuplicates`, `TestTypeChangeMatrix` unknown rows, `TestSurfaceViewsUnchanged`, `TestSurfaceDiffNamesOnlyUnchanged`, `blast_types.txtar` cases 7, 9, 12, 13; compare-ref v0.3.0 N/N |
-| 5 | Hostile names escaped; 4 MiB type + 5,000-unit chain bounded; renderer never panics (fuzz in CI); six-target proof on first typeexpr import | `TestTextOutputsEscapeControls` (15-05), `TestBlastTextEscapesTypeChanges`, `TestBlastSizeBound`, `TestBlastTypeStringOncePerModule`, `TestTypeSigCapsuleAndDepth`, `FuzzTypeSig` (CI step), 15-02 Task 1 verify (check-architecture Step 9), `typeexpr-only-in-tfsurface` rule |
+| 5 | Hostile names escaped; 4 MiB type + 5,000-unit chain bounded; renderer never panics (fuzz in CI); six-target proof on first typeexpr import | `TestTypeSigJSONDeepString`, `TestTypeSigNativeDeepBounded`, `TestReadSurfaceJSONDepthBomb`, `check_json_type_bomb.txtar` (sec #245), `TestReadSurfacePanickingParser` (sec #246), `TestTextOutputsEscapeControls` (15-05, incl. invalid UTF-8), `TestBlastTextEscapesTypeChanges`, `TestBlastSizeBound`, `TestBlastTypeStringOncePerModule`, `TestTypeSigCapsuleAndDepth`, `FuzzTypeSig` (CI step), 15-02 Task 1 verify (check-architecture Step 9), `typeexpr-only-in-tfsurface` rule |
 
 ---
 
@@ -89,6 +89,9 @@ step of its own task.
 | Type change feeds Broken/HasErrors | `TestTypeFactsNeverBroken`, property | 15-03-SUMMARY |
 | Type string rendered per Impacted unit | `TestBlastTypeStringOncePerModule`, `TestBlastSizeBound` | 15-04/05-SUMMARY |
 | escapeTerm missing on a new field | `TestBlastTextEscapesTypeChanges`, e2e escape | 15-04/05-SUMMARY |
+| JSON type-string nesting cap removed | `TestTypeSigJSONDeepString` at 2,000 levels (the 400,000 case would be fatal, so mutate and run only the 2,000 case) and `TestReadSurfaceJSONDepthBomb` | 15-02-SUMMARY |
+| Recover widened to the whole reader or removed | `TestReadSurfacePanickingParser` | 15-02-SUMMARY |
+| Depth-1 normaliser over-deletes | per-case deletion counts in `TestBlastDepth1MatchesV1` | 15-04-SUMMARY |
 
 ---
 
@@ -97,7 +100,7 @@ step of its own task.
 | Behavior | Requirement | Why Manual | Test Instructions |
 |----------|-------------|------------|-------------------|
 | `-race` and the 30 s CI fuzz step | all, BLAST-07 | No local gcc; fuzz time budget | Confirm CI `check` job green including the FuzzTypeSig step |
-| RSS bound calibration | BLAST-11 | Machine-dependent | 15-05-SUMMARY records the measured Maxrss, machine info and the chosen bound (2×); confirm CI linux/macos runs pass |
+| RSS bound | BLAST-11 | Absolute numbers are machine-dependent | The bound is relative to an in-run control (no calibration); 15-05-SUMMARY logs absolute Maxrss and machine info; confirm CI linux/macos pass |
 
 ---
 

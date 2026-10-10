@@ -40,6 +40,18 @@ Input read as `variable`/`output` block → `b.Body.PartialContent({type, defaul
 
 Consequences:
 - Errors are always diagnostics (never panics) on these inputs; any error → the fact is **unknown**.
+- **Correction (sec #245, BLOCKER, reproduced by sec):** in a `.tf.json` file typeexpr parses the type
+  STRING with the recursive native parser, so the file's JSON depth (3) says nothing about the type's
+  depth. `CheckJSONDepth` does not cover it: 50,000 levels (300 KB) cost 1 GB / 10.8 s and 400,000
+  levels (2.4 MB) are a fatal stack overflow (unrecoverable). Mitigation verified [exp]: read the raw
+  string from `src[expr.Range()]` with `encoding/json` (never `expr.Value`, which parses a `${...}`
+  template natively) and reject by a linear byte scan of `(`/`[`/`{` nesting above
+  `2*maxTypeDepth+2` before typeexpr: 2,000 levels in 0.06 ms, 400,000 levels (2.4 MB) in ~11 ms.
+  Running `CheckNativeDepth` on the string also rejects it but took 3 s at 400,000 levels, so the
+  byte scan is used.
+- **Native `.tf` is bounded [exp]:** the whole-file `CheckNativeDepth` pre-scan counts parentheses
+  and braces of type expressions too: 999 nested `list(` pass and typeexpr takes 0.6 ms; 1,000 (and
+  `object({a=` × 1,000) are refused, so the file is never parsed (existing `module-file-too-deep`).
 - **Object attribute names are HCL identifiers only** (Unicode letters/digits, `_`, `-`); C0, C1,
   U+202E (Cf) and quoted keys are rejected by typeexpr itself, in both syntaxes. So SEC-01's
   "object attribute name containing C0, C1, U+202E" can never reach the renderer: such a type is
@@ -48,7 +60,7 @@ Consequences:
 - `typeexpr.TypeString` is lossy: `object({x=optional(string),y=number})` and
   `object({x=string,y=number})` both print `object({x=string,y=number})`; it **panics** on a
   capsule type. Do not use it.
-- Cost [exp]: a 4 MiB `.tf` with one `object({...})` of 110,373 `optional(list(string))` attributes:
+- Cost [exp] (native `.tf`): a 4 MiB `.tf` with one `object({...})` of 110,373 `optional(list(string))` attributes:
   `hclsyntax.ParseConfig` 0.88 s, typeexpr 0.10 s. A `list(` nested 900 deep (under the existing
   `MaxNestingDepth` 1000 pre-scan): typeexpr 0.16 ms, no stack problem.
 
@@ -62,6 +74,8 @@ Draft verified [exp]:
 - Draft outputs: `object({"x"=optional(string),"y"=number})` for both the `optional(string,"d")` and
   `optional(string)` forms; `object({"x"=string,"y"=number})` for the non-optional one (distinct).
 - Capsule or any unrecognised kind → `("", false)` (unknown), never a panic.
+- A narrow recover wraps only the typeexpr + render call in the reader (panic → unknown fact; sec
+  #246); FuzzTypeSig calls the unwrapped function so CI still sees a panic.
 - Bound: write into one `strings.Builder` passed down (linear output, no per-level string copies),
   depth cap `maxTypeDepth = 100` (deeper → unknown; real types nest < 10, the pre-scan already caps
   source nesting at 1000). Iteration over object attributes uses a sorted name slice (no map order).
@@ -143,12 +157,15 @@ Draft verified [exp]:
 
 ## 7. Size and security (BLAST-11, SEC-01)
 
+- Facts are read only from files that passed the size/depth pre-scan, AND every `.tf.json` type
+  string passes the separate nesting cap of section 1 (the file pre-scan alone does not bound it).
+
 - Output is O(units + edges + surface text): per-unit text tokens carry names only (as v0.3); type
   strings once per module in text and JSON. A test generates a 5,000-unit linear chain whose seed
   module has a ~4 MiB variable type that changes, runs the built binary (`benchBuildGruntled`
   pattern, `cmd/gruntled/bench_test.go:76`) and asserts stdout bytes < 2 × (input type bytes) +
   5,000 × per-line bound and peak RSS (`ProcessState.SysUsage()` `Maxrss`, linux/darwin) under a
-  bound set at 2× the measured value recorded in the SUMMARY.
+  bound relative to an in-run control (same chain, tiny type): RSS(big) <= RSS(control) + 64 × type bytes (sec #249b); byte bounds use the rendered old+new lengths read back from JSON.
 - Hostile names [exp]: native labels accept `\u` escapes (`variable "a\u001bb"` → label with ESC),
   JSON keys accept `\u001b\u202e`; invalid UTF-8 in a native file is a GRT100 parse error, in JSON it
   becomes U+FFFD. So hostile variable/output names do reach type-change tokens and the
