@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -16,6 +18,14 @@ import (
 // two Impacted units, one exercising every change-token group.
 func blastMixed(t *testing.T) impact.Result {
 	t.Helper()
+	vpc := vpcChange(t)
+	net := impact.SurfaceChange{
+		Module:           rp(t, "modules/net"),
+		AddedVariables:   []string{"c"},
+		RemovedVariables: []string{"a", "b"},
+		AddedOutputs:     []string{"e"},
+		RemovedOutputs:   []string{"d"},
+	}
 	return impact.Result{
 		Baseline: true,
 		Broken: []impact.BrokenUnit{
@@ -27,22 +37,37 @@ func blastMixed(t *testing.T) impact.Result {
 			}},
 		},
 		Impacted: []impact.ImpactedUnit{
-			{Unit: rp(t, "live/db"), Change: impact.SurfaceChange{
-				Module:           rp(t, "modules/vpc"),
-				AddedVariables:   []string{"name"},
-				RemovedVariables: []string{},
-				AddedOutputs:     []string{},
-				RemovedOutputs:   []string{"id"},
-			}},
-			{Unit: rp(t, "live/net"), Change: impact.SurfaceChange{
-				Module:           rp(t, "modules/net"),
-				AddedVariables:   []string{"c"},
-				RemovedVariables: []string{"a", "b"},
-				AddedOutputs:     []string{"e"},
-				RemovedOutputs:   []string{"d"},
-			}},
+			{Unit: rp(t, "live/db"), Change: vpc, Reach: impact.Reach{Distance: 1, Source: rp(t, "live/db")}},
+			{Unit: rp(t, "live/net"), Change: net, Reach: impact.Reach{Distance: 1, Source: rp(t, "live/net")}},
 		},
+		Changes: []impact.SurfaceChange{net, vpc},
 	}
+}
+
+// vpcChange is modules/vpc gaining variable name and losing output id.
+func vpcChange(t *testing.T) impact.SurfaceChange {
+	return impact.SurfaceChange{
+		Module:           rp(t, "modules/vpc"),
+		AddedVariables:   []string{"name"},
+		RemovedVariables: []string{},
+		AddedOutputs:     []string{},
+		RemovedOutputs:   []string{"id"},
+	}
+}
+
+// blastChain is blastMixed's Broken plus a transitive chain: live/a uses
+// modules/vpc (distance 1), live/b depends on live/a, live/c on live/b.
+func blastChain(t *testing.T) impact.Result {
+	t.Helper()
+	res := blastMixed(t)
+	vpc := vpcChange(t)
+	res.Impacted = []impact.ImpactedUnit{
+		{Unit: rp(t, "live/a"), Change: vpc, Reach: impact.Reach{Distance: 1, Source: rp(t, "live/a")}},
+		{Unit: rp(t, "live/b"), Change: vpc, Reach: impact.Reach{Distance: 2, Source: rp(t, "live/a"), Via: rp(t, "live/a")}},
+		{Unit: rp(t, "live/c"), Change: vpc, Reach: impact.Reach{Distance: 3, Source: rp(t, "live/a"), Via: rp(t, "live/b")}},
+	}
+	res.Changes = []impact.SurfaceChange{vpc}
+	return res
 }
 
 func renderBlastText(t *testing.T, res impact.Result, label string) string {
@@ -105,7 +130,7 @@ Broken (2):
 
 func TestBlastJSONGolden(t *testing.T) {
 	want := `{
-  "version": 1,
+  "version": 2,
   "kind": "blast",
   "baseline": true,
   "broken": [
@@ -118,7 +143,7 @@ func TestBlastJSONGolden(t *testing.T) {
           "file": "live/app/terragrunt.hcl",
           "line": 12,
           "column": 5,
-          "message": "dependency \"vpc\" output \"id\" is not declared by module \"modules/vpc\""
+          "message": "dependency \\"vpc\\" output \\"id\\" is not declared by module \\"modules/vpc\\""
         }
       ]
     },
@@ -138,8 +163,10 @@ func TestBlastJSONGolden(t *testing.T) {
   ],
   "impacted": [
     {
-      "unit": "live/db",
+      "unit": "live/a",
       "module": "modules/vpc",
+      "distance": 1,
+      "source": "live/a",
       "added_variables": [
         "name"
       ],
@@ -150,31 +177,137 @@ func TestBlastJSONGolden(t *testing.T) {
       ]
     },
     {
-      "unit": "live/net",
-      "module": "modules/net",
+      "unit": "live/b",
+      "module": "modules/vpc",
+      "distance": 2,
+      "source": "live/a",
+      "via": "live/a"
+    },
+    {
+      "unit": "live/c",
+      "module": "modules/vpc",
+      "distance": 3,
+      "source": "live/a",
+      "via": "live/b"
+    }
+  ],
+  "changes": [
+    {
+      "module": "modules/vpc",
       "added_variables": [
-        "c"
+        "name"
       ],
-      "removed_variables": [
-        "a",
-        "b"
-      ],
-      "added_outputs": [
-        "e"
-      ],
+      "removed_variables": [],
+      "added_outputs": [],
       "removed_outputs": [
-        "d"
+        "id"
       ]
     }
   ],
   "summary": {
     "broken": 2,
-    "impacted": 2
+    "impacted": 3
   }
 }
 `
-	if got := renderBlastJSON(t, blastMixed(t)); got != want {
+	if got := renderBlastJSON(t, blastChain(t)); got != want {
 		t.Errorf("BlastJSON =\n%s\nwant\n%s", got, want)
+	}
+}
+
+// TestBlastJSONV1KeysKeepType: every v1 key is still present with its v1
+// JSON type (sec #195). Nothing more is promised to a v1 reader: version is
+// 2, and readers must check it.
+func TestBlastJSONV1KeysKeepType(t *testing.T) {
+	var v map[string]any
+	if err := json.Unmarshal([]byte(renderBlastJSON(t, blastMixed(t))), &v); err != nil {
+		t.Fatal(err)
+	}
+	if v["version"] != float64(2) || v["kind"] != "blast" || v["baseline"] != true {
+		t.Fatalf("version/kind/baseline = %v/%v/%v", v["version"], v["kind"], v["baseline"])
+	}
+	for _, b := range v["broken"].([]any) {
+		m := b.(map[string]any)
+		if _, ok := m["unit"].(string); !ok {
+			t.Errorf("broken unit not a string: %v", m)
+		}
+		if _, ok := m["findings"].([]any); !ok {
+			t.Errorf("broken findings not a list: %v", m)
+		}
+	}
+	for _, i := range v["impacted"].([]any) {
+		m := i.(map[string]any)
+		for _, k := range []string{"unit", "module"} {
+			if _, ok := m[k].(string); !ok {
+				t.Errorf("impacted %s not a string: %v", k, m)
+			}
+		}
+		for _, k := range []string{"added_variables", "removed_variables", "added_outputs", "removed_outputs"} {
+			if _, ok := m[k].([]any); !ok {
+				t.Errorf("distance-1 impacted %s not a list: %v", k, m)
+			}
+		}
+	}
+	first := v["impacted"].([]any)[0].(map[string]any)
+	if !reflect.DeepEqual(first["added_variables"], []any{"name"}) || !reflect.DeepEqual(first["removed_outputs"], []any{"id"}) {
+		t.Errorf("distance-1 lists lost their v1 content: %v", first)
+	}
+	sum := v["summary"].(map[string]any)
+	if _, ok := sum["broken"].(float64); !ok {
+		t.Errorf("summary.broken not a number")
+	}
+	if _, ok := sum["impacted"].(float64); !ok {
+		t.Errorf("summary.impacted not a number")
+	}
+}
+
+func TestBlastJSONBrokenReach(t *testing.T) {
+	res := blastMixed(t)
+	res.Broken = append([]impact.BrokenUnit{{
+		Subject:  rp(t, "live/aa"),
+		Findings: []diagnostic.Diagnostic{unitDiag(t, "live/aa", "live/aa/terragrunt.hcl", 1, 1, "x")},
+		Reach:    impact.Reach{Distance: 2, Source: rp(t, "live/db"), Via: rp(t, "live/db")},
+	}}, res.Broken...)
+	var v map[string]any
+	if err := json.Unmarshal([]byte(renderBlastJSON(t, res)), &v); err != nil {
+		t.Fatal(err)
+	}
+	broken := v["broken"].([]any)
+	reached := broken[0].(map[string]any)
+	if reached["distance"] != float64(2) || reached["source"] != "live/db" || reached["via"] != "live/db" {
+		t.Errorf("reached Broken unit = %v", reached)
+	}
+	for _, b := range broken[1:] {
+		m := b.(map[string]any)
+		for _, k := range []string{"distance", "source", "via"} {
+			if _, ok := m[k]; ok {
+				t.Errorf("%v carries %q though it was not reached", m["unit"], k)
+			}
+		}
+	}
+}
+
+func TestBlastJSONLinear(t *testing.T) {
+	chain := func(n int) impact.Result {
+		vpc := vpcChange(t)
+		res := impact.Result{Baseline: true, Broken: []impact.BrokenUnit{}, Changes: []impact.SurfaceChange{vpc}}
+		for i := range n {
+			u := impact.ImpactedUnit{Unit: rp(t, "live/u"+strconv.Itoa(i)), Change: vpc, Reach: impact.Reach{Distance: i + 1, Source: rp(t, "live/u0")}}
+			if i > 0 {
+				u.Reach.Via = rp(t, "live/u"+strconv.Itoa(i-1))
+			}
+			res.Impacted = append(res.Impacted, u)
+		}
+		return res
+	}
+	b2, b4 := len(renderBlastJSON(t, chain(2000))), len(renderBlastJSON(t, chain(4000)))
+	// One transitive entry: braces, five keys and three paths of at most 15
+	// bytes, well under 250 bytes.
+	if b2 > 2000*250 {
+		t.Errorf("2,000-unit chain: %d bytes, over 250 per entry", b2)
+	}
+	if b4 > 2*b2+1024 {
+		t.Errorf("doubling the chain: %d -> %d bytes, not linear", b2, b4)
 	}
 }
 
@@ -185,6 +318,7 @@ type blastDecoded struct {
 	Note     *string         `json:"note"`
 	Broken   json.RawMessage `json:"broken"`
 	Impacted json.RawMessage `json:"impacted"`
+	Changes  json.RawMessage `json:"changes"`
 }
 
 func decodeBlast(t *testing.T, s string) blastDecoded {
@@ -193,8 +327,8 @@ func decodeBlast(t *testing.T, s string) blastDecoded {
 	if err := json.Unmarshal([]byte(s), &d); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if d.Version != 1 || d.Kind != "blast" {
-		t.Errorf("version/kind = %d/%q, want 1/blast", d.Version, d.Kind)
+	if d.Version != 2 || d.Kind != "blast" {
+		t.Errorf("version/kind = %d/%q, want 2/blast", d.Version, d.Kind)
 	}
 	if strings.Contains(s, "null") {
 		t.Errorf("output contains null:\n%s", s)
@@ -216,6 +350,10 @@ func TestBlastJSONNoBaseline(t *testing.T) {
 	if string(d.Impacted) != "[]" {
 		t.Errorf("impacted = %s, want []", d.Impacted)
 	}
+	res.Changes = nil
+	if d := decodeBlast(t, renderBlastJSON(t, res)); string(d.Changes) != "[]" {
+		t.Errorf("changes = %s, want []", d.Changes)
+	}
 }
 
 func TestBlastJSONBaselineHasNoNote(t *testing.T) {
@@ -226,15 +364,26 @@ func TestBlastJSONBaselineHasNoNote(t *testing.T) {
 }
 
 func TestBlastJSONNilListsNeverNull(t *testing.T) {
+	bare := impact.SurfaceChange{Module: rp(t, "modules/vpc"), RemovedOutputs: []string{"id"}}
 	res := impact.Result{
 		Baseline: true,
-		Impacted: []impact.ImpactedUnit{{Unit: rp(t, "live/db"), Change: impact.SurfaceChange{
-			Module: rp(t, "modules/vpc"), RemovedOutputs: []string{"id"},
-		}}},
+		Impacted: []impact.ImpactedUnit{
+			{Unit: rp(t, "live/db"), Change: bare, Reach: impact.Reach{Distance: 1, Source: rp(t, "live/db")}},
+			{Unit: rp(t, "live/far"), Change: bare, Reach: impact.Reach{Distance: 2, Source: rp(t, "live/db"), Via: rp(t, "live/db")}},
+		},
+		Changes: []impact.SurfaceChange{bare},
 	}
-	d := decodeBlast(t, renderBlastJSON(t, res))
+	out := renderBlastJSON(t, res)
+	d := decodeBlast(t, out)
 	if string(d.Broken) != "[]" {
 		t.Errorf("broken = %s, want []", d.Broken)
+	}
+	var v map[string]any
+	if err := json.Unmarshal([]byte(out), &v); err != nil {
+		t.Fatal(err)
+	}
+	if far := v["impacted"].([]any)[1].(map[string]any); len(far) != 5 {
+		t.Errorf("distance-2 entry has keys %v, want unit, module, distance, source, via only", far)
 	}
 	decodeBlast(t, renderBlastJSON(t, impact.Result{}))
 }
@@ -264,6 +413,13 @@ func TestBlastWriterErrorReturned(t *testing.T) {
 func blastCrafted(t *testing.T) impact.Result {
 	t.Helper()
 	unit := "live/" + crafted
+	ch := impact.SurfaceChange{
+		Module:           rp(t, "modules/"+crafted),
+		AddedVariables:   []string{"v" + crafted},
+		RemovedVariables: []string{},
+		AddedOutputs:     []string{},
+		RemovedOutputs:   []string{"o" + crafted},
+	}
 	return impact.Result{
 		Baseline: true,
 		Broken: []impact.BrokenUnit{
@@ -272,14 +428,10 @@ func blastCrafted(t *testing.T) impact.Result {
 			}},
 		},
 		Impacted: []impact.ImpactedUnit{
-			{Unit: rp(t, unit), Change: impact.SurfaceChange{
-				Module:           rp(t, "modules/"+crafted),
-				AddedVariables:   []string{"v" + crafted},
-				RemovedVariables: []string{},
-				AddedOutputs:     []string{},
-				RemovedOutputs:   []string{"o" + crafted},
-			}},
+			{Unit: rp(t, unit), Change: ch, Reach: impact.Reach{Distance: 1, Source: rp(t, unit)}},
+			{Unit: rp(t, "live/z"), Change: ch, Reach: impact.Reach{Distance: 2, Source: rp(t, unit), Via: rp(t, unit)}},
 		},
+		Changes: []impact.SurfaceChange{ch},
 	}
 }
 
@@ -305,6 +457,9 @@ func TestBlastJSONEscapesTerminalRunes(t *testing.T) {
 	assertJSONEscaped(t, out, jstring("broken", 0, "findings", 0, "message"), "bad "+crafted)
 	assertJSONEscaped(t, out, jstring("impacted", 0, "module"), "modules/"+crafted)
 	assertJSONEscaped(t, out, jstring("impacted", 0, "added_variables", 0), "v"+crafted)
+	assertJSONEscaped(t, out, jstring("impacted", 1, "source"), "live/"+crafted)
+	assertJSONEscaped(t, out, jstring("impacted", 1, "via"), "live/"+crafted)
+	assertJSONEscaped(t, out, jstring("changes", 0, "module"), "modules/"+crafted)
 }
 
 // blastGRT004 is a Broken GRT004 whose message carries crafted (raw ESC,
@@ -341,7 +496,7 @@ func TestBlastJSONGRT004(t *testing.T) {
 	if !bytes.Contains(out, []byte(`"code": "GRT004"`)) {
 		t.Errorf("BlastJSON lacks \"code\": \"GRT004\":\n%s", out)
 	}
-	if !bytes.Contains(out, []byte(`"version": 1`)) {
-		t.Errorf("BlastJSON is not version 1:\n%s", out)
+	if !bytes.Contains(out, []byte(`"version": 2`)) {
+		t.Errorf("BlastJSON is not version 2:\n%s", out)
 	}
 }
