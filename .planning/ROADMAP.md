@@ -101,9 +101,10 @@ Plans:
   4. An ambiguous fact reports nothing: a name declared in more than one kept file with differing facts, any Terraform override file, a non-literal or unparseable value, or an unknown fact on either side stays silent, while names stay known so `GRT001` and name-level Impacted are unchanged
   5. Hostile or huge input is safe and bounded: variable, output and object attribute names containing C0, C1, U+202E and invalid UTF-8 print escaped in `blast` text and JSON; a 4 MiB type expression and a 5,000-unit linear chain keep RSS and output size within the asserted bounds; the canonical type renderer never panics (fuzz test in CI); the six-target no-net/no-exec proof passes on the first commit that imports `hcl/v2/ext/typeexpr`
 
-**Plans**: 5 plans
+**Plans**: 6 plans
 
 Plans:
+- [ ] 15-00-PLAN.md — (wave 0, cherry-pickable onto v0.3.0) CheckNativeDepth counts nested %{if}/%{for} template blocks: closes the pre-existing stack-overflow crash (sec #261)
 - [ ] 15-01-PLAN.md — repograph declaration facts (names unchanged) + hclconv.LiteralBool, zero observable change
 - [ ] 15-02-PLAN.md — tfsurface: typeexpr + bounded canonical renderer (fuzz in CI), facts with override/duplicate rules, metamorphic proof, typeexpr-only rule + six-target proof
 - [ ] 15-03-PLAN.md — impact: TypeChange diff, type-only seeds, never Broken/exit (property)

@@ -44,7 +44,7 @@ PATH for every command: `export PATH=$HOME/.local/go/bin:$HOME/go/bin:$PATH`.
 | 2 | Variable type / declared output type (both sides) / sensitive flip -> reason; formatting, comments, order, optional defaults, .tf->.tf.json -> empty | `TestTypeSigGolden`, `TestTypeSigEqualsProperty`, `TestReadSurfaceMetamorphic`, `TestTypeChangeMatrix`, `blast_types.txtar` cases 4-11, 16 |
 | 3 | Never a diagnostic, never Broken, never exit code; --depth 1 equals v0.3 sets/exit | `TestTypeFactsNeverBroken`, `TestTypeFactsNeverChangeBrokenProperty`, `blast_types.txtar` case 14 (every case exit 0), `TestBlastDepth1MatchesV1` (extended normaliser, D-15-05) |
 | 4 | Ambiguous facts silent: duplicates with differing facts, override files, non-literal/unparseable, unknown either side; names unchanged | `TestReadSurfaceOverride`, `TestReadSurfaceDuplicates`, `TestTypeChangeMatrix` unknown rows, `TestSurfaceViewsUnchanged`, `TestSurfaceDiffNamesOnlyUnchanged`, `blast_types.txtar` cases 7, 9, 12, 13; compare-ref v0.3.0 N/N |
-| 5 | Hostile names escaped; 4 MiB type + 5,000-unit chain bounded; renderer never panics (fuzz in CI); six-target proof on first typeexpr import | `TestTypeSigJSONDeepString`, `TestTypeSigNativeDeepBounded`, `TestReadSurfaceJSONDepthBomb`, `check_json_type_bomb.txtar` (sec #245), `TestReadSurfacePanickingParser` (sec #246), `TestTextOutputsEscapeControls` (15-05, incl. invalid UTF-8), `TestBlastTextEscapesTypeChanges`, `TestBlastSizeBound`, `TestBlastTypeStringOncePerModule`, `TestTypeSigCapsuleAndDepth`, `FuzzTypeSig` (CI step), 15-02 Task 1 verify (check-architecture Step 9), `typeexpr-only-in-tfsurface` rule |
+| 5 | Hostile names escaped; 4 MiB type + 5,000-unit chain bounded; renderer never panics (fuzz in CI); six-target proof on first typeexpr import | `TestCheckNativeDepthTemplateControl`, `TestNestedTemplateDirectiveUnit/Module` (15-00, sec #261), `TestTypeSigJSONDeepString`, `TestTypeSigJSONLowBracketBombs`, `TestTypeSigNativeNestedIfDefault`, `TestJSONTypeStringExtraction`, `TestTypeSigNativeDeepBounded`, `TestReadSurfaceJSONDepthBomb`, `check_json_type_bomb.txtar` (sec #245), `TestReadSurfacePanickingParser` (sec #246), `TestTextOutputsEscapeControls` (15-05, incl. invalid UTF-8), `TestBlastTextEscapesTypeChanges`, `TestBlastSizeBound`, `TestBlastTypeStringOncePerModule`, `TestTypeSigCapsuleAndDepth`, `FuzzTypeSig` (CI step), 15-02 Task 1 verify (check-architecture Step 9), `typeexpr-only-in-tfsurface` rule |
 
 ---
 
@@ -52,6 +52,8 @@ PATH for every command: `export PATH=$HOME/.local/go/bin:$HOME/go/bin:$PATH`.
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
+| 15-00-01 | 00 | 0 | BLAST-07 (sec #261) | unit (pre-scan) | `go test -count=1 ./internal/infrastructure/hclconv/` | ✅ limits_test.go (extended) | ⬜ pending |
+| 15-00-02 | 00 | 0 | BLAST-07 (sec #261) | loader regression + byte gate | `go test -count=1 ./internal/infrastructure/... && bash scripts/compare-ref.sh v0.3.0` | ❌ W0 (terragrunt + tfsurface limits_regression_test.go) | ⬜ pending |
 | 15-01-01 | 01 | 1 | BLAST-06..08, 10 | unit | `go test -count=1 ./internal/domain/repograph/` | ✅ surface_test.go (extended) | ⬜ pending |
 | 15-01-02 | 01 | 1 | BLAST-08 | unit + byte gate | `go test -count=1 ./internal/infrastructure/... && bash scripts/compare-ref.sh v0.3.0` | ❌ W0 (hclconv/literal.go, literal_test.go) | ⬜ pending |
 | 15-02-01 | 02 | 2 | BLAST-07, SEC-01 | unit + property + fuzz + six-target | `go test -count=1 -run TestTypeSig ./internal/infrastructure/tfsurface/ && go test -run '^$' -fuzz FuzzTypeSig -fuzztime 20s ./internal/infrastructure/tfsurface/ && bash scripts/check-architecture.sh` | ❌ W0 (typesig.go, typesig_test.go) | ⬜ pending |
@@ -90,6 +92,8 @@ step of its own task.
 | Type string rendered per Impacted unit | `TestBlastTypeStringOncePerModule`, `TestBlastSizeBound` | 15-04/05-SUMMARY |
 | escapeTerm missing on a new field | `TestBlastTextEscapesTypeChanges`, e2e escape | 15-04/05-SUMMARY |
 | JSON type-string nesting cap removed | `TestTypeSigJSONDeepString` at 2,000 levels (the 400,000 case would be fatal, so mutate and run only the 2,000 case) and `TestReadSurfaceJSONDepthBomb` | 15-02-SUMMARY |
+| Control-block counter removed from CheckNativeDepth | `TestCheckNativeDepthTemplateControl` (1,001 levels; the 270k loader tests would be fatal under the mutation, so run only the small case) | 15-00-SUMMARY |
+| CheckNativeDepth on the decoded JSON type string skipped | `TestTypeSigJSONLowBracketBombs` (run the mutated build only on 10,000-sized inputs to avoid a fatal overflow) | 15-02-SUMMARY |
 | Recover widened to the whole reader or removed | `TestReadSurfacePanickingParser` | 15-02-SUMMARY |
 | Depth-1 normaliser over-deletes | per-case deletion counts in `TestBlastDepth1MatchesV1` | 15-04-SUMMARY |
 

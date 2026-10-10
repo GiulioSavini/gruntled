@@ -49,9 +49,22 @@ Consequences:
   `2*maxTypeDepth+2` before typeexpr: 2,000 levels in 0.06 ms, 400,000 levels (2.4 MB) in ~11 ms.
   Running `CheckNativeDepth` on the string also rejects it but took 3 s at 400,000 levels, so the
   byte scan is used.
-- **Native `.tf` is bounded [exp]:** the whole-file `CheckNativeDepth` pre-scan counts parentheses
-  and braces of type expressions too: 999 nested `list(` pass and typeexpr takes 0.6 ms; 1,000 (and
-  `object({a=` × 1,000) are refused, so the file is never parsed (existing `module-file-too-deep`).
+- **Correction 2 (sec #260, round 2):** the bracket byte scan alone is not enough. JSON type strings
+  with bracket nesting 0-4 still crash typeexpr: `!`×2M and `-`×2M (fatal stack overflow),
+  `a?b:`×300k (1 GB / 4.3 s), and a nested-`%{if}` `optional()` default ×300k (fatal). So the decoded
+  string must also pass `hclconv.CheckNativeDepth` (unary runs, pending ternaries, operator chains,
+  and template control blocks once 15-00 lands) before typeexpr; the byte scan stays as a cheap first
+  filter.
+- **Native `.tf` brackets are bounded [exp]:** the whole-file `CheckNativeDepth` pre-scan counts
+  parentheses and braces of type expressions: 999 nested `list(` pass and typeexpr takes 0.6 ms;
+  1,000 (and `object({a=` × 1,000) are refused (existing `module-file-too-deep`).
+- **Native `.tf` was NOT bounded for template directives (sec #260/#261):** each `%{...}` directive was
+  a balanced frame, so `%{if}` block nesting was never counted; a 4.05 MB `.tf` with a nested-if
+  `optional()` default passed the pre-scan and typeexpr's `defaultExpr.Value(nil)` recursed to a fatal
+  stack overflow. The same gap crashes v0.3.0 `check` on a terragrunt.hcl `config_path` (pre-existing,
+  #261). Fixed by 15-00 (count `%{if`/`%{for` until `%{endif`/`%{endfor`); prototype [exp]: the
+  4.05 MB file refused in 1.25 s, 50,000 sibling blocks and 990 nested pass.
+- The #246 recover cannot catch any of these: Go's stack overflow is fatal, not a panic.
 - **Object attribute names are HCL identifiers only** (Unicode letters/digits, `_`, `-`); C0, C1,
   U+202E (Cf) and quoted keys are rejected by typeexpr itself, in both syntaxes. So SEC-01's
   "object attribute name containing C0, C1, U+202E" can never reach the renderer: such a type is
@@ -193,3 +206,22 @@ linker symbol proof).
 | D-15-06 | JSON stays `"version": 2`; `changes[].type_changes` additive; Impacted entries unchanged. | v2 unreleased; additive anyway. |
 | D-15-07 | `Type changes` text section printed only when non-empty (unlike Broken/Impacted, which always print their header). | Keeps every existing golden without type changes byte-identical. |
 | D-15-08 | SEC-01 object-attribute-name case is proven as "rejected by typeexpr → unknown → silent" rather than "escaped", since such names cannot be parsed. | Observed behaviour; nothing to escape. |
+
+## 10. Recursion sources audit (orchestrator request, round 2) [exp]
+
+Each shape was built at > MaxNestingDepth (or > MaxExpressionChain for chains) and fed to the
+current `CheckNativeDepth`:
+
+| Shape | Result |
+|-------|--------|
+| function-call nesting `f(f(...))` ×1,200 | refused (paren frames) |
+| splat chain `a.*.b` ×20,000 | refused (chain cap: `.` and `*` links) |
+| index chain `a[0]` ×20,000 | refused (chain cap: `[` link) |
+| for-expression nesting `[for v in [for ...` ×1,200 | refused (bracket frames) |
+| parenthesised template `"${(((1)))}"` ×1,200 | refused (interp + paren frames) |
+| nested interpolation `"${"${...}"}"` ×600 | refused (quote + interp frames) |
+| unary runs, ternary chains, operator chains | refused (existing run/pending/chain rules) |
+| nested `%{if}` / `%{for}` blocks ×270,000 (quoted or heredoc) | **passed** -> fixed by 15-00 |
+
+No other escape found. Chains under the 10,000 cap recurse at most ~10,000 Go frames, which the
+growable goroutine stack handles (existing G17 design).
