@@ -1,0 +1,37 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-10-10T21:19:27.498Z",
+  "phase": "15",
+  "phase_name": "type-level-surface-facts",
+  "phase_dir": ".planning/phases/15-type-level-surface-facts",
+  "plan": 1,
+  "task": 2,
+  "total_tasks": 2,
+  "status": "paused",
+  "completed_tasks": [
+    {"id": 1, "name": "Surface declaration facts (names unchanged)", "status": "done", "commit": "8a5611a"},
+    {"id": 2, "name": "hclconv.LiteralBool and byte-identity gate", "status": "in_progress", "progress": "red test c6cb2d1 + refactor aa6dc6f (literalBool moved to hclconv.LiteralBool); executor was stopped while about to touch surface.go; byte-identity gate (full suite, check-architecture, compare-ref.sh v0.3.0 244/244) and 15-01-SUMMARY.md not done"}
+  ],
+  "remaining_tasks": [
+    {"id": 3, "name": "15-01 finish T2 + gate + docs(15-01): summary", "status": "not_started"},
+    {"id": 4, "name": "15-02 type renderer, fact extraction, typeexpr arch rule, JSON type-string guards (64 KiB cap, bracket scan, CheckNativeExprDepth)", "status": "not_started"},
+    {"id": 5, "name": "15-03 domain type-level diff (Impacted-only)", "status": "not_started"},
+    {"id": 6, "name": "15-04 JSON changes[].type_changes, text reason tokens + Type changes section, blast_types.txtar, docs", "status": "not_started"},
+    {"id": 7, "name": "15-05 SEC-01 escape e2e, BLAST-11 size/RSS bound, phase gate", "status": "not_started"},
+    {"id": 8, "name": "phase 15 close: sec code audit, gsd-verifier, phase.complete", "status": "not_started"},
+    {"id": 9, "name": "phase 16 daemon report --blast / rebase / IPC v2 (research-flagged), phase 17 corpus proof + milestone audit", "status": "not_started"}
+  ],
+  "blockers": [],
+  "async_jobs": [],
+  "human_actions_pending": [
+    {"action": "Decide whether to release v0.3.1 with only the 15-00 fix (commits c1440d7, dfe565b, 3279bec cherry-pick cleanly onto v0.3.0, tests green there). Tag is Giulio's.", "context": "Pre-existing v0.3.0 crash: ~4 MB terragrunt.hcl with nested %{if} -> stack overflow in check/watch", "blocking": false}
+  ],
+  "decisions": [
+    {"decision": "Pre-existing crash fixed in plan 15-00 as an isolated, cherry-pickable plan", "rationale": "possible v0.3.1", "phase": "15"},
+    {"decision": "D-15-01..08 accepted; BLAST-09 reworded (00c8eea)", "rationale": "see 15-RESEARCH.md section 6", "phase": "15"},
+    {"decision": "Phase 15 plans approved by sec after 4 rounds (bus #281)", "rationale": "rounds found and closed 3 reproduced crash bypasses before any code", "phase": "15"}
+  ],
+  "uncommitted_files": [],
+  "next_action": "Restart Claude Code inside ~/gruntled (agents gruntled-* load as real types), start the GUI (node .claude/agentbus/server.mjs), run /gsd-resume-work, then have the executor finish 15-01 Task 2 from aa6dc6f",
+  "context_notes": "Work runs through the 4-agent team on .claude/agentbus (planner, sec, executor; orchestrator = main session). Proceed autonomously through GSD gates, push to master allowed, no tags, no AI attribution. Executor lessons: no rapid/math/rand in domain/application tests (xorshift); no $WORK as regexp in txtar (windows); only plan-listed golden changes; -race only in CI (no gcc)."
+}

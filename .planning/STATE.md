@@ -5,7 +5,7 @@ milestone_name: Blast-aware Diagnostics
 current_phase: 15
 current_phase_name: Type-Level Surface Facts
 status: planning
-stopped_at: Phase 14 complete, ready to plan Phase 15
+stopped_at: "Phase 15 plan 15-01 Task 2 (paused, see phases/15-type-level-surface-facts/.continue-here.md)"
 last_updated: "2026-10-10T20:45:06.546Z"
 last_activity: 2026-10-10
 last_activity_desc: Phase 14 complete, transitioned to Phase 15
