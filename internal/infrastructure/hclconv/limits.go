@@ -106,7 +106,7 @@ func ReadFileLimited(fsys fs.FS, name string) ([]byte, error) {
 // CheckNativeDepth reports ErrNestingTooDeep when src's HCL native syntax
 // (.hcl, .tf, .tofu) would drive hclsyntax's recursive-descent parser, or
 // the recursive walks over the AST it builds, too deep (02-REVIEW G7,
-// G17). Three things add up to the depth it compares with
+// G17). Four things add up to the depth it compares with
 // MaxNestingDepth:
 //
 //   - bracket, quote, heredoc and template nesting: every open brace,
@@ -131,7 +131,18 @@ func ReadFileLimited(fsys fs.FS, name string) ([]byte, error) {
 //     `a?b:a?b:...1` every `:` is followed by another `?`, so a
 //     push-on-`?`/pop-on-`:` count stays at 1 while the parser recurses
 //     once per `?`, and a 4 MB else-chain killed the process with a fatal
-//     stack overflow.
+//     stack overflow;
+//   - open template control blocks: `%{if}` and `%{for}` stay open until
+//     their `%{endif}` / `%{endfor}`, and evaluating the template recurses
+//     once per open block (TemplateExpr -> ConditionalExpr / ForExpr). A
+//     4 MB file of nested `%{if}` killed check, report and watch with a
+//     fatal stack overflow (sec #261). The directive keyword is the first
+//     token after the `%{` (strip marker included) that is not a comment or
+//     a newline, so `%{/*c*/if`, `%{#c<NL>if` and `%{<NL>if` count too
+//     (sec #271). `endif` and `endfor` close one block (never below zero),
+//     `else` is neutral and anything else opens one, so a misread keyword
+//     can only over-count. `%%{` is a literal and never lexes as a
+//     directive.
 //
 // Separately, a frame whose chain count, the binary operators, `.` and `[`
 // since its last release point, exceeds MaxExpressionChain is refused too
@@ -164,12 +175,16 @@ func CheckNativeDepth(src []byte) error {
 	frames := []depthFrame{{open: hclsyntax.TokenNil, newlines: true}}
 	run := 0     // current run of unary operators
 	pending := 0 // pending `?` summed over every frame
+	ctl := 0     // open %{if}/%{for} template control blocks
 	for i, t := range toks {
 		top := &frames[len(frames)-1]
 		switch t.Type {
 		case hclsyntax.TokenOBrace, hclsyntax.TokenOBrack, hclsyntax.TokenOParen,
 			hclsyntax.TokenOQuote, hclsyntax.TokenOHeredoc,
 			hclsyntax.TokenTemplateInterp, hclsyntax.TokenTemplateControl:
+			if t.Type == hclsyntax.TokenTemplateControl {
+				ctl = controlDepth(ctl, toks[i+1:])
+			}
 			if t.Type == hclsyntax.TokenOBrack {
 				top.chain++ // x[a]: one postfix link of the enclosing frame
 				if top.chain > MaxExpressionChain {
@@ -227,7 +242,7 @@ func CheckNativeDepth(src []byte) error {
 		default:
 			run = 0
 		}
-		if len(frames)-1+run+pending > MaxNestingDepth {
+		if len(frames)-1+run+pending+ctl > MaxNestingDepth {
 			return ErrNestingTooDeep
 		}
 		if frames[len(frames)-1].chain > MaxExpressionChain {
@@ -235,6 +250,28 @@ func CheckNativeDepth(src []byte) error {
 		}
 	}
 	return nil
+}
+
+// controlDepth returns the open template control block count after the
+// directive whose tokens follow a TokenTemplateControl: endif/endfor close
+// one block (floored at zero), else is neutral, and any other keyword (if,
+// for, a misparse, nothing) opens one, so every doubt over-counts.
+func controlDepth(ctl int, rest hclsyntax.Tokens) int {
+	for _, t := range rest {
+		if t.Type == hclsyntax.TokenComment || t.Type == hclsyntax.TokenNewline {
+			continue
+		}
+		if t.Type == hclsyntax.TokenIdent {
+			switch string(t.Bytes) {
+			case "endif", "endfor":
+				return max(ctl-1, 0)
+			case "else":
+				return ctl
+			}
+		}
+		return ctl + 1
+	}
+	return ctl + 1
 }
 
 // depthFrame is one open bracket, quote, heredoc or template sequence in
