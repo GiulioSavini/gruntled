@@ -24,6 +24,11 @@ const (
 	CodeMissingDependencyTarget Code = "GRT002"
 	// CodeDependencyCycle means the enabled dependency edges form a cycle.
 	CodeDependencyCycle Code = "GRT003"
+	// CodeRemovedOutput means a dependency.X.outputs.Y reference names an
+	// output that the baseline's module declared and the current module no
+	// longer does. Only the blast comparison (two trees) produces it; check
+	// never does.
+	CodeRemovedOutput Code = "GRT004"
 	// CodeSyntaxError means the HCL being analyzed is invalid.
 	CodeSyntaxError Code = "GRT100"
 )

@@ -12,6 +12,8 @@
 //  6. the target module declares Y: silent.
 //  7. otherwise: GRT001 at SeverityError, attributed to the referencing unit.
 //
+// Rows 1-5 are resolveReference, shared with GRT004 (RemovedOutputs).
+//
 // mock_outputs never suppresses and never downgrades GRT001. When a mock
 // covers Y, apply silently uses the mock value instead of failing, which is
 // the worse variant of the same bug. Mock facts only select a message
@@ -40,42 +42,19 @@ const mockMaskSuffix = "; mock_outputs supplies it, so apply would silently use 
 func UnknownOutputs(g *repograph.RepositoryGraph) ([]diagnostic.Diagnostic, error) {
 	var out []diagnostic.Diagnostic
 	for _, ur := range g.References() {
-		unit, ok := g.Unit(ur.Unit)
-		if !ok {
-			continue
-		}
-		dep, ok := unit.Dependency(ur.Reference.Dependency())
-		if !ok { // row 1
-			continue
-		}
-		opts := dep.Options()
-		if opts.Enabled != repograph.TristateTrue { // row 2
-			continue
-		}
-		if opts.SkipOutputs != repograph.TristateFalse { // row 3
-			continue
-		}
-		target, ok := g.DependencyTarget(ur.Unit, dep.Name()) // row 4
-		if !ok {
-			continue
-		}
-		mod, ok := g.ModuleOf(target.Path()) // row 5
-		if !ok {
-			continue
-		}
-		surf, ok := mod.Surface()
+		r, ok := resolveReference(g, ur) // rows 1-5
 		if !ok {
 			continue
 		}
 		output := ur.Reference.Output()
-		if surf.HasOutput(output) { // row 6
+		if r.surface.HasOutput(output) { // row 6
 			continue
 		}
-		msg := "dependency " + strconv.Quote(dep.Name()) +
+		msg := "dependency " + strconv.Quote(r.dep.Name()) +
 			" output " + strconv.Quote(output) +
-			" is not declared by module " + strconv.Quote(mod.Path().String()) +
-			" (target unit " + strconv.Quote(target.Path().String()) + ")"
-		if mockMasksAtApply(opts, output, surf) {
+			" is not declared by module " + strconv.Quote(r.module.Path().String()) +
+			" (target unit " + strconv.Quote(r.target.Path().String()) + ")"
+		if mockMasksAtApply(r.dep.Options(), output, r.surface) {
 			msg += mockMaskSuffix
 		}
 		d, err := diagnostic.NewForUnit(diagnostic.CodeUnknownOutput, diagnostic.SeverityError, ur.Unit, ur.Reference.Pos(), msg)
@@ -85,6 +64,59 @@ func UnknownOutputs(g *repograph.RepositoryGraph) ([]diagnostic.Diagnostic, erro
 		out = append(out, d)
 	}
 	return out, nil
+}
+
+// resolution is a reference's dependency resolved through rows 1, 4 and 5.
+type resolution struct {
+	dep     repograph.Dependency
+	target  repograph.Unit
+	module  repograph.Module
+	surface repograph.Surface
+}
+
+// resolveDependency applies rows 1, 4 and 5 of the DIAG-03 table to unit's
+// dependency named dep: the block exists, resolves to a unit of g, whose
+// module and that module's surface are known. ok is false otherwise.
+func resolveDependency(g *repograph.RepositoryGraph, unit repograph.RepoPath, dep string) (resolution, bool) {
+	u, ok := g.Unit(unit)
+	if !ok {
+		return resolution{}, false
+	}
+	d, ok := u.Dependency(dep) // row 1
+	if !ok {
+		return resolution{}, false
+	}
+	target, ok := g.DependencyTarget(unit, d.Name()) // row 4
+	if !ok {
+		return resolution{}, false
+	}
+	mod, ok := g.ModuleOf(target.Path()) // row 5
+	if !ok {
+		return resolution{}, false
+	}
+	surf, ok := mod.Surface()
+	if !ok {
+		return resolution{}, false
+	}
+	return resolution{dep: d, target: target, module: mod, surface: surf}, true
+}
+
+// resolveReference applies rows 1-5: resolveDependency plus row 2 (enabled
+// literally true) and row 3 (skip_outputs literally false). Rows 1-5 are all
+// silent outcomes, so evaluating them in this order changes nothing.
+func resolveReference(g *repograph.RepositoryGraph, ur repograph.UnitReference) (resolution, bool) {
+	r, ok := resolveDependency(g, ur.Unit, ur.Reference.Dependency())
+	if !ok {
+		return resolution{}, false
+	}
+	opts := r.dep.Options()
+	if opts.Enabled != repograph.TristateTrue { // row 2
+		return resolution{}, false
+	}
+	if opts.SkipOutputs != repograph.TristateFalse { // row 3
+		return resolution{}, false
+	}
+	return r, true
 }
 
 // mockMasksAtApply reports whether apply would certainly return a mock value
