@@ -208,6 +208,7 @@ func runContract(t *testing.T, newWatcher func(root string) (Watcher, error)) {
 			// cannot watch (a dangling symlink, which is what an Emacs lock
 			// file is), so new files sorting after it get no Create event
 			// until the link is gone; the 30 s safety net covers them.
+			// Upstream: https://github.com/fsnotify/fsnotify/issues/787
 			// Documented in docs/cli.md (Known limitations).
 			t.Skip("kqueue: fsnotify stops dirChange at a dangling symlink")
 		}
