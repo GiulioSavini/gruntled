@@ -63,8 +63,24 @@ type instance struct {
 // acquireInstance takes the repository lock and starts publishing. When
 // another daemon holds the lock it prints where that daemon runs to stdout
 // and returns done with exitOK. It runs before the watcher and the initial
-// index start.
+// index start. A runtime directory inside the repository is refused with
+// exitUsage before anything is created: the report file rewritten after
+// every index would itself be a watched change.
 func acquireInstance(root, statusPath string, deps watchDeps, stdout, stderr io.Writer) (inst *instance, code int, done bool) {
+	rt, err := statusfile.Dir(root, deps.env)
+	if err != nil {
+		fmt.Fprintf(stderr, "gruntled: runtime directory for %s: %v\n", root, err)
+		return nil, exitFailure, true
+	}
+	inside, err := statusfile.Inside(root, rt)
+	if err != nil {
+		fmt.Fprintf(stderr, "gruntled: runtime directory for %s: %v\n", root, err)
+		return nil, exitFailure, true
+	}
+	if inside {
+		fmt.Fprintf(stderr, "gruntled: runtime directory %s is inside the repository %s; set XDG_RUNTIME_DIR (linux) or the user cache directory outside it\n", rt, root)
+		return nil, exitUsage, true
+	}
 	dir, err := statusfile.EnsureRepoDir(root, deps.env)
 	if err != nil {
 		fmt.Fprintf(stderr, "gruntled: runtime directory for %s: %v\n", root, err)
