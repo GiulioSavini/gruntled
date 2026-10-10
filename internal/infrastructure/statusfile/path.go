@@ -68,10 +68,15 @@ func Path(root string, env Env) (string, error) {
 	return filepath.Join(d, "status"), nil
 }
 
-// Inside reports whether p is root or lies under it, comparing both after
-// resolving symlinks (p through its deepest existing ancestor, so p itself
-// need not exist). Sibling directories sharing a prefix (/r/repo vs
-// /r/repo2) are not inside.
+// Inside reports whether p is root or lies under it. Identity, not
+// spelling: case variants and aliases (bind mounts, a case-insensitive
+// filesystem's other spellings) count as inside.
+//
+// The fast path compares both after resolving symlinks (p through its
+// deepest existing ancestor, so p itself need not exist). When that says
+// outside, every existing ancestor of p, p included, is compared with root
+// by os.SameFile. Sibling directories sharing a prefix (/r/repo vs
+// /r/repo2) are not inside. An ancestor that cannot be stat'ed is skipped.
 func Inside(root, p string) (bool, error) {
 	r, err := canonical(root)
 	if err != nil {
@@ -81,18 +86,41 @@ func Inside(root, p string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	if insideByName(r, q) {
+		return true, nil
+	}
+	rootFI, err := statFn(r)
+	if err != nil {
+		return false, err
+	}
+	abs, err := filepath.Abs(p)
+	if err != nil {
+		return false, err
+	}
+	for cur := abs; ; {
+		if fi, err := statFn(cur); err == nil && os.SameFile(fi, rootFI) {
+			return true, nil
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			return false, nil
+		}
+		cur = parent
+	}
+}
+
+// insideByName reports whether the canonical path q is r or under it,
+// comparing spellings only.
+func insideByName(r, q string) bool {
 	rel, err := filepath.Rel(r, q)
 	if err != nil {
 		// Different volumes on windows: not inside.
-		return false, nil
+		return false
 	}
 	if rel == "." {
-		return true, nil
+		return true
 	}
-	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
-		return false, nil
-	}
-	return true, nil
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel)
 }
 
 func base(env Env) string {
