@@ -74,6 +74,18 @@ reject link-chain $'-- f --\n-- _golden/symlinks --\nd -> .\nd/l -> ../x\n'
 # The target goes through a symlinked directory: lexically d/../x is x,
 # but d -> . makes it ../x.
 reject link-through-symlink $'-- f --\n-- _golden/symlinks --\nd -> .\nl -> d/../x\n'
+# Late link (sec #232): l is checked while d does not exist yet; d -> .
+# created afterwards makes l resolve to <dest>/../x.
+reject late-link $'-- f --\n-- _golden/symlinks --\nl -> d/../x\nd -> .\n'
+# The same, chained far enough to reach an absolute file: each d/.. is
+# lexically a no-op but climbs one real level once d -> . exists.
+chain=$(printf 'd/../%.0s' $(seq 40))
+reject late-link-etc "$(printf -- '-- f --\n-- _golden/symlinks --\nl -> %setc/hostname\nd -> .\n' "$chain")"
+# Duplicate link name onto a directory link: without -n, ln follows d and
+# writes <dest>/z -> ../z.
+reject duplicate-link $'-- f --\n-- _golden/symlinks --\nx/y/d -> ../..\nx/y/d -> ../z\n'
+# A link whose parent path goes through an existing symlink.
+reject link-under-link $'-- f --\n-- _golden/symlinks --\nd -> sub\nd/l -> f\n-- sub/g --\n'
 # Chain: link1 -> link2 -> outside.
 reject link-chain-outside $'-- f --\n-- _golden/symlinks --\nlink1 -> link2\nlink2 -> ../outside\n'
 
