@@ -586,7 +586,7 @@ func TestBlastTextPathThroughBroken(t *testing.T) {
 	if got, want := lineOf(t, out, "  live/c ("), "  live/c (distance 3, from module modules/vpc, path live/c -> live/b -> live/a)"; got != want {
 		t.Errorf("got %s\nwant %s", got, want)
 	}
-	if strings.Count(out, "  live/b") != 1 {
+	if strings.Count(out, "\n  live/b\n") != 1 || strings.Contains(out, "\n  live/b (") {
 		t.Errorf("live/b must be listed once, under Broken:\n%s", out)
 	}
 }
