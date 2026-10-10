@@ -215,6 +215,55 @@ func TestSockPathTooLong(t *testing.T) {
 	})
 }
 
+// TestWatchRuntimeDirInsideRepo: a runtime base inside the repository would
+// put the lock, socket and report file in the watched tree (the report
+// rewrite after every index is itself a change: endless reindex). watch
+// refuses with exit 2 before creating anything or starting a watcher.
+func TestWatchRuntimeDirInsideRepo(t *testing.T) {
+	for _, mode := range []struct {
+		name string
+		deps func(*testing.T) watchDeps
+	}{{"socket", testDeps}, {"report-file", windowsDeps}} {
+		t.Run(mode.name, func(t *testing.T) {
+			dir := repo(t, "vpc_id")
+			deps := mode.deps(t)
+			deps.env = envAt(filepath.Join(dir, "cache"))
+			root, _ := repoRuntime(t, dir, deps)
+			var watchers atomic.Int32
+			deps.newNative = func(string) (watch.Watcher, error) { watchers.Add(1); return nil, errors.New("no") }
+			deps.newPoll = func(string, time.Duration) (watch.Watcher, error) { watchers.Add(1); return nil, errors.New("no") }
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			var stdout, stderr bytes.Buffer
+			code := runWatchWith(ctx, []string{"--status-file", filepath.Join(t.TempDir(), "s"), dir}, &stdout, &stderr, deps)
+			if code != exitUsage {
+				t.Fatalf("exit %d, want %d; stderr:\n%s", code, exitUsage, stderr.String())
+			}
+			for _, w := range []string{"runtime directory", "inside the repository", root} {
+				if !strings.Contains(stderr.String(), w) {
+					t.Fatalf("stderr lacks %q:\n%s", w, stderr.String())
+				}
+			}
+			if watchers.Load() != 0 {
+				t.Fatal("watcher started despite the refusal")
+			}
+			if _, err := os.Stat(filepath.Join(dir, "cache")); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("runtime base created inside the repo: %v", err)
+			}
+			mustDo(t, filepath.WalkDir(dir, func(p string, _ os.DirEntry, err error) error {
+				if err != nil {
+					return err
+				}
+				switch filepath.Base(p) {
+				case ipc.LockName, ipc.SockName, ipc.DumpName:
+					t.Errorf("daemon state %s created inside the repo", p)
+				}
+				return nil
+			}))
+		})
+	}
+}
+
 func TestPrintStatusPathTakesNoLock(t *testing.T) {
 	dir := repo(t, "vpc_id")
 	deps := testDeps(t)
