@@ -15,14 +15,14 @@ import (
 // bidi/format runes must not reach the terminal.
 func TestWatchRunErrorSanitised(t *testing.T) {
 	var stderr bytes.Buffer
-	err := errors.New("initial index: open evil\x1b]0;pwned\x07name‮txt.hcl : permission denied")
+	err := errors.New("initial index: open evil\x1b]0;pwned\x07name\u202Etxt.hcl\u2028: permission denied")
 	printRunError(&stderr, err)
 
 	got := stderr.String()
 	if !strings.HasPrefix(got, "gruntled: ") || !strings.HasSuffix(got, "\n") {
 		t.Fatalf("stderr = %q, want one \"gruntled: ...\" line", got)
 	}
-	for _, bad := range []string{"\x1b", "\x07", "‮", " "} {
+	for _, bad := range []string{"\x1b", "\x07", "\u202E", "\u2028"} {
 		if strings.Contains(got, bad) {
 			t.Errorf("stderr %q contains %q", got, bad)
 		}
