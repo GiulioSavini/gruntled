@@ -4,6 +4,7 @@ import (
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 
 	"github.com/GiulioSavini/gruntled/internal/domain/repograph"
+	"github.com/GiulioSavini/gruntled/internal/infrastructure/hclconv"
 )
 
 // dependencyOptions reads the DIAG-03 facts a `dependency` block's own body
@@ -19,10 +20,10 @@ func dependencyOptions(body *hclsyntax.Body) repograph.DependencyOptions {
 	opts := repograph.DefaultDependencyOptions()
 
 	if attr, ok := body.Attributes["enabled"]; ok {
-		opts.Enabled = literalBool(attr.Expr)
+		opts.Enabled = hclconv.LiteralBool(attr.Expr)
 	}
 	if attr, ok := body.Attributes["skip_outputs"]; ok {
-		opts.SkipOutputs = literalBool(attr.Expr)
+		opts.SkipOutputs = hclconv.LiteralBool(attr.Expr)
 	}
 	opts.MockOutputs = mockOutputKeys(body)
 	opts.MockMergeWithState = mockMergeWithState(body)
@@ -88,7 +89,7 @@ func mockMergeWithState(body *hclsyntax.Body) repograph.Tristate {
 		return mergeStrategyState(s)
 	}
 	if attr, ok := body.Attributes["mock_outputs_merge_with_state"]; ok {
-		return literalBool(attr.Expr)
+		return hclconv.LiteralBool(attr.Expr)
 	}
 	return repograph.TristateFalse
 }

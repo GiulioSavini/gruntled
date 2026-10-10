@@ -6,8 +6,6 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
-
-	"github.com/GiulioSavini/gruntled/internal/domain/repograph"
 )
 
 // parseExpr parses src as a standalone hcl expression, failing the test on

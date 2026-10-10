@@ -6,8 +6,6 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/zclconf/go-cty/cty"
-
-	"github.com/GiulioSavini/gruntled/internal/domain/repograph"
 )
 
 // evalPath evaluates expr inside the closed EvalContext built from s:
@@ -66,16 +64,4 @@ func literalString(expr hcl.Expression) (string, bool) {
 		return "", false
 	}
 	return v.AsString(), true
-}
-
-// literalBool reads expr as a literal boolean (expr.Value(nil)):
-// TristateTrue or TristateFalse for a known, non-null cty.Bool, and
-// TristateUnknown for anything else (a reference, a string, null, or an
-// evaluation error).
-func literalBool(expr hcl.Expression) repograph.Tristate {
-	v, diags := expr.Value(nil)
-	if diags.HasErrors() || !v.IsWhollyKnown() || v.IsNull() || !v.Type().Equals(cty.Bool) {
-		return repograph.TristateUnknown
-	}
-	return repograph.TristateOf(v.True())
 }
