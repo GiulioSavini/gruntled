@@ -88,7 +88,15 @@ type blastSummary struct {
 //	  <subject>
 //	    file:line:col: CODE message
 //	Impacted (M):
-//	  <unit> (module <m>: -variable a, +variable b, -output c, +output d)
+//	  <unit> (distance 1, module <m>: -variable a, +variable b, -output c, +output d)
+//	  <unit> (distance <d>, from module <m>, path <unit> -> <hop> -> ... -> <source>)
+//
+// A distance-1 unit uses the changed module m. A unit at distance 2 or more
+// does not; the change reached it from m, and the path runs from the unit
+// back to the unit that instantiates m, following Via (through Broken units
+// too). A path of more than textPathMaxUnits units prints its first
+// textPathHead units, "... (<k> more) ->" and the source, so every line is
+// bounded.
 //
 // baselineLabel, like every path, message, module and name, is written
 // through escapeTerm, so nothing printed can carry a terminal control
@@ -132,19 +140,78 @@ func BlastText(w io.Writer, res impact.Result, baselineLabel string) error {
 		b.WriteString("Impacted (")
 		b.WriteString(strconv.Itoa(len(res.Impacted)))
 		b.WriteString("):\n")
+		reach := map[repograph.RepoPath]impact.Reach{}
+		for _, u := range res.Broken {
+			if u.Reach.Distance > 0 {
+				reach[u.Subject] = u.Reach
+			}
+		}
+		for _, u := range res.Impacted {
+			reach[u.Unit] = u.Reach
+		}
 		for _, u := range res.Impacted {
 			b.WriteString("  ")
 			b.WriteString(escapeTerm(u.Unit.String()))
-			b.WriteString(" (module ")
+			if u.Reach.Distance <= 1 {
+				b.WriteString(" (distance 1, module ")
+				b.WriteString(escapeTerm(u.Change.Module.String()))
+				b.WriteString(": ")
+				writeChangeTokens(&b, u.Change)
+				b.WriteString(")\n")
+				continue
+			}
+			b.WriteString(" (distance ")
+			b.WriteString(strconv.Itoa(u.Reach.Distance))
+			b.WriteString(", from module ")
 			b.WriteString(escapeTerm(u.Change.Module.String()))
-			b.WriteString(": ")
-			writeChangeTokens(&b, u.Change)
+			b.WriteString(", path ")
+			writePath(&b, u.Unit, u.Reach, reach)
 			b.WriteString(")\n")
 		}
 	}
 
 	_, err := w.Write(b.Bytes())
 	return err
+}
+
+// textPathMaxUnits is the longest path printed in full; longer paths print
+// the first textPathHead units, "... (<k> more) ->", then the source.
+const textPathMaxUnits, textPathHead = 6, 4
+
+// writePath writes the path from unit back to its source by following Via
+// through reach (Impacted and traversed Broken units): every unit when the
+// path has at most textPathMaxUnits units, else the first textPathHead,
+// "... (<k> more)" and the source. The walk takes at most Distance steps
+// and ends at the source even if a Via is missing, so a malformed chain
+// cannot loop.
+func writePath(b *bytes.Buffer, unit repograph.RepoPath, r impact.Reach, reach map[repograph.RepoPath]impact.Reach) {
+	limit := r.Distance
+	if r.Distance > textPathMaxUnits {
+		limit = textPathHead
+	}
+	hops := []repograph.RepoPath{unit}
+	cur := unit
+	for len(hops) < limit {
+		next := reach[cur].Via
+		if next.IsZero() || next == r.Source {
+			break
+		}
+		hops = append(hops, next)
+		cur = next
+	}
+	for i, hop := range hops {
+		if i > 0 {
+			b.WriteString(" -> ")
+		}
+		b.WriteString(escapeTerm(hop.String()))
+	}
+	if r.Distance > textPathMaxUnits {
+		b.WriteString(" -> ... (")
+		b.WriteString(strconv.Itoa(r.Distance - textPathHead - 1))
+		b.WriteString(" more)")
+	}
+	b.WriteString(" -> ")
+	b.WriteString(escapeTerm(r.Source.String()))
 }
 
 // writeChangeTokens writes c's names as "-variable x, +variable y,
