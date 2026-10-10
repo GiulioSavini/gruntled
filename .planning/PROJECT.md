@@ -2,7 +2,7 @@
 
 > *Terragrunt, but gruntled.*
 
-## Current State: v0.3 shipped 2026-10-10 (tag v0.3.0 pending)
+## Current State: v0.3 shipped 2026-10-10 (v0.3.0 released)
 
 `gruntled check` reports `GRT001`, `GRT002`, `GRT003` and `GRT100` in text, JSON or SARIF;
 `gruntled graph --json` prints the repository graph. `gruntled watch` keeps an in-memory index
@@ -11,10 +11,17 @@ one-line status file outside the repository; `gruntled report` returns the daemo
 byte-identical to `check`; `gruntled blast --base <dir>` separates Broken from Impacted units.
 Installable from tagged GitHub releases, as a pre-commit hook, or via the CI recipes in `docs/ci.md`.
 
-## Next Milestone: not started
+## Current Milestone: v0.4 Blast-aware Diagnostics
 
-Candidates (see `milestones/v0.3-REQUIREMENTS.md`, Future Requirements): `GRT004`-`GRT006`,
-`report --blast` from the daemon's baseline, transitive Impacted. Start with `/gsd-new-milestone`.
+**Goal:** Use the difference against a baseline, not only the current tree: the daemon answers
+blast on every save, impact follows the graph past one hop and through type changes, and a
+removed output that is still referenced becomes an error that names its consumers.
+
+**Target features:**
+- `GRT004`: output present in the baseline, removed from the module, still referenced downstream
+- `report --blast` from the daemon's in-memory baseline, plus a `rebase` command to move it
+- Transitive Impacted, with the path that connects each unit to the change
+- Type-level surface changes (new required variable, variable or output type changed)
 
 ## What This Is
 
@@ -66,12 +73,16 @@ is built on top of that one answer being correct and trustworthy.
 
 ### Active
 
-**v0.4 candidates** (detailed in `milestones/v0.3-REQUIREMENTS.md`, Future Requirements)
+**v0.4 Blast-aware Diagnostics** (REQ-IDs in `REQUIREMENTS.md`)
 
-- [ ] `GRT004`: output removed from a module but still referenced downstream (MORE-03; pairs with blast's baseline)
-- [ ] `GRT005`: `inputs` key matching no `variable` (MORE-04)
-- [ ] `GRT006`: `variable` without default that no unit sets (MORE-05)
-- [ ] Daemon follow-ups: `report --blast` from the in-memory baseline, transitive Impacted, type-level surface changes
+- [ ] `GRT004`: output removed from a module but still referenced downstream (MORE-03)
+- [ ] `report --blast` from the daemon's in-memory baseline, `rebase` command
+- [ ] Transitive Impacted with connecting path
+- [ ] Type-level surface changes in blast
+
+**Deferred:** `GRT005` (MORE-04) and `GRT006` (MORE-05) overlap `terragrunt hcl validate --inputs`
+and carry include-merge false-positive risk; `report` over AF_UNIX on windows needs a scoped `net`
+exception to the six-target proof.
 
 ### Out of Scope
 
@@ -237,5 +248,22 @@ files are parsed once and shared from day one, so `gruntled check` should alread
 `terragrunt hcl validate` on the corpus. This was not true under the abandoned
 import-the-library plan.
 
+## Evolution
+
+This document evolves at phase transitions and milestone boundaries.
+
+**After each phase transition** (via `/gsd-transition`):
+1. Requirements invalidated? → Move to Out of Scope with reason
+2. Requirements validated? → Move to Validated with phase reference
+3. New requirements emerged? → Add to Active
+4. Decisions to log? → Add to Key Decisions
+5. "What This Is" still accurate? → Update if drifted
+
+**After each milestone** (via `/gsd-complete-milestone`):
+1. Full review of all sections
+2. Core Value check — still the right priority?
+3. Audit Out of Scope — reasons still valid?
+4. Update Context with current state
+
 ---
-*Last updated: 2026-10-10 after v0.3 milestone*
+*Last updated: 2026-10-10 after starting v0.4 milestone*
