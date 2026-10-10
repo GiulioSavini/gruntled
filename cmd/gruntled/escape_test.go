@@ -33,6 +33,12 @@ const (
 	// U+202E of producer as the 6-byte literal \u202e (sec #134), so this is
 	// what both blast text and the decoded blast JSON carry.
 	rmGRT004 = `dependency "vpc" output "old" was removed from module "v\u202ep" (target unit "v\u202ep")`
+	// deepUnit is clean and depends on c1Unit, which reads the producer: in
+	// blast it is Impacted at distance 3 through crafted hops (sec #194).
+	// Its config_path spells c1Unit with HCL escapes, so its own file holds
+	// no raw control bytes and it never turns config-unknown (sec #208).
+	deepUnit = "deep"
+	deepHCL  = "dependency \"c\" {\n  config_path = \"../c\\u009b2Jd\\u007fe\"\n}\n"
 )
 
 // consumerOf is a unit that reads output ref of the producer unit.
@@ -57,6 +63,8 @@ func craftedRepo(t *testing.T, dir string, ok bool) {
 		c1Unit + "/main.tf":          "variable \"id\" {}\n",
 		rmUnit + "/terragrunt.hcl":   consumerOf("old"),
 		rmUnit + "/main.tf":          "variable \"id\" {}\n",
+		deepUnit + "/terragrunt.hcl": deepHCL,
+		deepUnit + "/main.tf":        "# reads no output\n",
 	}
 	if ok {
 		files[producer+"/main.tf"] = "output \"vpc_id\" { value = \"x\" }\noutput \"old\" { value = \"y\" }\n"
@@ -159,13 +167,17 @@ func TestTextOutputsEscapeControls(t *testing.T) {
 			"  " + escUnitText + "/terragrunt.hcl\n",
 			"  " + `c\u009b2Jd\x7fe` + "\n",
 			"  " + `r\u202el` + "\n",
-			`  v\u202ep (module v\u202ep: -output old)` + "\n",
+			`  v\u202ep (distance 1, module v\u202ep: -output old)` + "\n",
+			`  deep (distance 3, from module v\u202ep, path deep -> c\u009b2Jd\x7fe -> v\u202ep)` + "\n",
 			"  " + rmUnit + "\n",
 			"    " + rmUnit + "/terragrunt.hcl:4:17: GRT004 " + rmGRT004 + "\n",
 		} {
 			if !strings.Contains(out, want) {
 				t.Errorf("blast stdout lacks %q:\n%s", want, out)
 			}
+		}
+		if strings.Contains(out, "\n  "+deepUnit+"\n") || strings.Contains(out, deepUnit+"/terragrunt.hcl:") {
+			t.Errorf("deep must be Impacted, not Broken:\n%s", out)
 		}
 		if strings.Contains(out, rmUnit+"/terragrunt.hcl:4:17: GRT001") {
 			t.Errorf("blast reports both codes at the rm site:\n%s", out)
@@ -205,7 +217,11 @@ func TestTextOutputsEscapeControls(t *testing.T) {
 					return m["unit"] == rmUnit && anyItem(m, "findings", func(f map[string]any) bool {
 						return f["code"] == "GRT004" && f["message"] == rmGRT004
 					}) && !anyItem(m, "findings", func(f map[string]any) bool { return f["code"] == "GRT001" })
-				})
+				}) &&
+				anyItem(v, "impacted", func(m map[string]any) bool {
+					return m["unit"] == deepUnit && m["distance"] == float64(3) && m["via"] == c1Unit && m["source"] == producer && m["module"] == producer
+				}) &&
+				!anyItem(v, "broken", func(m map[string]any) bool { return m["unit"] == deepUnit })
 		}},
 	}
 	for _, r := range jsonRuns {

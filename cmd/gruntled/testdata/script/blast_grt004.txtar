@@ -16,15 +16,15 @@ stdout -count=2 'GRT004'
 stdout '^    live/app/terragrunt.hcl:8:7: GRT004 dependency "db" output "id" was removed from module "modules/vpc" \(target unit "live/db"\)$'
 stdout '^    live/app/terragrunt.hcl:9:7: GRT004 dependency "db" output "id" was removed from module "modules/vpc" \(target unit "live/db"\)$'
 ! stdout GRT001
-stdout '^  live/db \(module modules/vpc: -output id\)$'
+stdout '^  live/db \(distance 1, module modules/vpc: -output id\)$'
 ! stdout '^/'
 ! stdout '[A-Za-z]:\\'
 ! stderr .
 
-# case 10: the same comparison as JSON: two GRT004 findings, schema version 1,
+# case 10: the same comparison as JSON: two GRT004 findings, schema version 2,
 # no GRT001.
 exec gruntled-exit 1 blast --base base1 --format json cur1
-stdout '"version": 1'
+stdout '"version": 2'
 stdout -count=2 '"code": "GRT004"'
 ! stdout GRT001
 ! stderr .
@@ -42,7 +42,8 @@ exec gruntled-exit 0 blast --base base2 cur2
 stdout '^Broken \(0\):$'
 stdout '^Impacted \(2\):$'
 stdout -count=1 '^  live/app'
-stdout '^  live/db \(module modules/vpc: -output name\)$'
+stdout '^  live/app \(distance 2, from module modules/vpc, path live/app -> live/db\)$'
+stdout '^  live/db \(distance 1, module modules/vpc: -output name\)$'
 ! stdout 'GRT00'
 ! stderr .
 

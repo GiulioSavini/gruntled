@@ -8,8 +8,8 @@ stdout '^  live/app$'
 stdout '^    live/app/terragrunt.hcl:7:\d+: GRT004 dependency "db" output "id" was removed from module "modules/vpc" \(target unit "live/db"\)'
 ! stdout GRT001
 stdout '^Impacted \(3\):$'
-stdout '^  live/cache \(module modules/vpc: \+variable name, -output id\)$'
-stdout '^  live/db \(module modules/vpc: \+variable name, -output id\)$'
+stdout '^  live/cache \(distance 1, module modules/vpc: \+variable name, -output id\)$'
+stdout '^  live/db \(distance 1, module modules/vpc: \+variable name, -output id\)$'
 # Broken and Impacted are disjoint: live/app is listed once, under Broken
 stdout -count=1 '^  live/app'
 ! stdout '^  live/app \(module'
@@ -17,6 +17,7 @@ stdout -count=1 '^  live/app'
 # change reaches it transitively and it is Impacted; live/other only uses
 # modules/other and depends on nothing that changed, so it is not
 stdout -count=1 '^  live/edge'
+stdout '^  live/edge \(distance 2, from module modules/vpc, path live/edge -> live/db\)$'
 ! stdout 'live/other'
 # the GRT100 present in both trees is not new
 ! stdout 'GRT100'
@@ -34,6 +35,10 @@ stdout '"impacted": \[\n\s+\{\n\s+"unit": "live/cache",\n\s+"module": "modules/v
 ! stdout '"impacted": \[[\s\S]*"unit": "live/app"'
 stdout '"added_variables": \[\n\s+"name"\n\s+\]'
 stdout '"removed_outputs": \[\n\s+"id"\n\s+\]'
+stdout '"version": 2'
+stdout '"changes": \[\n\s+\{\n\s+"module": "modules/vpc"'
+# a transitive entry carries distance, source and via, and no name lists
+stdout '"unit": "live/edge",\n\s+"module": "modules/vpc",\n\s+"distance": 2,\n\s+"source": "live/db",\n\s+"via": "live/db"\n\s+\}'
 stdout '"summary": \{\n\s+"broken": 1,\n\s+"impacted": 3\n\s+\}'
 ! stderr .
 

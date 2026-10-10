@@ -16,6 +16,12 @@ const (
 	grt004Message = `dependency "<label>" output "<Y>" was removed from module "<module>" (target unit "<target>")`
 	blastJSONNote = "New code values can appear without a version bump: since GRT004, a removed output is reported as GRT004 where earlier versions said GRT001. Gate on severity, not on a code list."
 	blastExample  = `GRT004 dependency "db" output "id" was removed from module "modules/vpc" (target unit "live/db")`
+	// Phase 14 (sec #195, #197a): what impacted[].module means, the version
+	// check readers owe, and why JSON is the unambiguous path form.
+	blastModuleMeaning  = "the changed module whose change reached this unit; for distance 1 it is also the unit's own module"
+	blastCheckVersion   = "Readers must check `version`; a v1 reader must reject version 2."
+	blastJSONPathNote   = "The JSON `source` and `via` keys are the unambiguous form of a path: text joins hops with ` -> `, which a directory name may itself contain."
+	blastTextTransitive = "  live/edge (distance 2, from module modules/vpc, path live/edge -> live/db)"
 )
 
 func readDoc(t *testing.T, path string) string {
@@ -74,8 +80,21 @@ func TestRuleRegistryDoc(t *testing.T) {
 		t.Error("Blast text example still shows GRT001 for the removed output")
 	}
 
-	if !strings.Contains(strings.Join(strings.Fields(section(t, doc, "### Blast JSON")), " "), blastJSONNote) {
-		t.Errorf("Blast JSON lacks the sentence %q", blastJSONNote)
+	bj := strings.Join(strings.Fields(section(t, doc, "### Blast JSON")), " ")
+	for _, want := range []string{blastJSONNote, blastModuleMeaning, blastCheckVersion} {
+		if !strings.Contains(bj, want) {
+			t.Errorf("Blast JSON lacks %q", want)
+		}
+	}
+	if !strings.Contains(bj, "this is version 2") {
+		t.Error("Blast JSON does not say this is version 2")
+	}
+	btFolded := strings.Join(strings.Fields(bt), " ")
+	if !strings.Contains(btFolded, blastJSONPathNote) {
+		t.Errorf("Blast text lacks %q", blastJSONPathNote)
+	}
+	if !strings.Contains(bt, "\n"+blastTextTransitive+"\n") {
+		t.Errorf("Blast text example lacks the transitive line %q", blastTextTransitive)
 	}
 
 	_, usage, code := runCLI(t, "blast", "-h")
