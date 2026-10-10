@@ -26,6 +26,13 @@ const (
 	producer = "v\u202ep"
 	// escBase is the --base directory name; it clears the screen raw.
 	escBase = "base\x1b[2Jx"
+	// rmUnit reads producer's output "old", which only the baseline
+	// declares: blast reports it as GRT004 with producer in the message.
+	rmUnit = "rm"
+	// rmGRT004 is that GRT004's message. strconv.Quote already writes the
+	// U+202E of producer as the 6-byte literal \u202e (sec #134), so this is
+	// what both blast text and the decoded blast JSON carry.
+	rmGRT004 = `dependency "vpc" output "old" was removed from module "v\u202ep" (target unit "v\u202ep")`
 )
 
 // consumerOf is a unit that reads output ref of the producer unit.
@@ -34,9 +41,10 @@ func consumerOf(ref string) string {
 }
 
 // craftedRepo writes a repository with a GRT100 unit at escUnit and GRT001
-// consumers at bidiUnit and c1Unit. ok writes the clean variant used as a
-// blast baseline: every unit parses and resolves, and the producer
-// declares one more output, so its unit is Impacted against it.
+// consumers at bidiUnit, c1Unit and rmUnit. ok writes the clean variant used
+// as a blast baseline: every unit parses and resolves, and the producer
+// declares one more output ("old", which rmUnit reads), so its unit is
+// Impacted against it and rmUnit's finding is a GRT004 in blast.
 func craftedRepo(t *testing.T, dir string, ok bool) {
 	t.Helper()
 	files := map[string]string{
@@ -47,6 +55,8 @@ func craftedRepo(t *testing.T, dir string, ok bool) {
 		bidiUnit + "/main.tf":        "variable \"id\" {}\n",
 		c1Unit + "/terragrunt.hcl":   consumerOf("vpc_idd"),
 		c1Unit + "/main.tf":          "variable \"id\" {}\n",
+		rmUnit + "/terragrunt.hcl":   consumerOf("old"),
+		rmUnit + "/main.tf":          "variable \"id\" {}\n",
 	}
 	if ok {
 		files[producer+"/main.tf"] = "output \"vpc_id\" { value = \"x\" }\noutput \"old\" { value = \"y\" }\n"
@@ -92,10 +102,15 @@ func TestTextOutputsEscapeControls(t *testing.T) {
 		t.Fatalf("check: exit %d, stderr:\n%s", code, checkErr)
 	}
 	assertNoRawControls(t, "check", check)
+	if strings.Contains(check, "GRT004") {
+		t.Errorf("check stdout holds GRT004:\n%s", check)
+	}
 	for _, want := range []string{
 		escUnitText + "/terragrunt.hcl:",
 		`r\u202el/terragrunt.hcl:`,
 		`c\u009b2Jd\x7fe/terragrunt.hcl:`,
+		// check never emits GRT004: the removed output is a GRT001 here
+		rmUnit + `/terragrunt.hcl:4:17: GRT001 dependency "vpc" output "old" is not declared by module "v\u202ep" (target unit "v\u202ep")`,
 	} {
 		if !strings.Contains(check, want) {
 			t.Errorf("check stdout lacks %q:\n%s", want, check)
@@ -145,10 +160,15 @@ func TestTextOutputsEscapeControls(t *testing.T) {
 			"  " + `c\u009b2Jd\x7fe` + "\n",
 			"  " + `r\u202el` + "\n",
 			`  v\u202ep (module v\u202ep: -output old)` + "\n",
+			"  " + rmUnit + "\n",
+			"    " + rmUnit + "/terragrunt.hcl:4:17: GRT004 " + rmGRT004 + "\n",
 		} {
 			if !strings.Contains(out, want) {
 				t.Errorf("blast stdout lacks %q:\n%s", want, out)
 			}
+		}
+		if strings.Contains(out, rmUnit+"/terragrunt.hcl:4:17: GRT001") {
+			t.Errorf("blast reports both codes at the rm site:\n%s", out)
 		}
 	})
 
@@ -180,7 +200,12 @@ func TestTextOutputsEscapeControls(t *testing.T) {
 		}},
 		{"blast json", []string{"blast", "--format", "json", "--base", base, dir}, exitFindings, func(v any) bool {
 			return anyItem(v, "broken", func(m map[string]any) bool { return m["unit"] == c1Unit }) &&
-				anyItem(v, "impacted", func(m map[string]any) bool { return m["unit"] == producer && m["module"] == producer })
+				anyItem(v, "impacted", func(m map[string]any) bool { return m["unit"] == producer && m["module"] == producer }) &&
+				anyItem(v, "broken", func(m map[string]any) bool {
+					return m["unit"] == rmUnit && anyItem(m, "findings", func(f map[string]any) bool {
+						return f["code"] == "GRT004" && f["message"] == rmGRT004
+					}) && !anyItem(m, "findings", func(f map[string]any) bool { return f["code"] == "GRT001" })
+				})
 		}},
 	}
 	for _, r := range jsonRuns {
