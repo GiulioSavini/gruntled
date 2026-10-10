@@ -1,0 +1,391 @@
+# Transitive Impacted end to end (BLAST-03/04/05). In every pair, modules/m
+# loses output "gone" and live/a uses modules/m (distance 1). Other units use
+# modules/app. Dependencies read no output unless the case says so.
+
+# case 1 (BLAST-03, BLAST-04): chain a <- b <- c, distances 1, 2, 3 with the
+# path from the unit back to live/a.
+exec gruntled-exit 0 blast --base base1 cur1
+stdout '^Broken \(0\):$'
+stdout '^  live/a \(distance 1, module modules/m: -output gone\)$'
+stdout '^  live/b \(distance 2, from module modules/m, path live/b -> live/a\)$'
+stdout '^  live/c \(distance 3, from module modules/m, path live/c -> live/b -> live/a\)$'
+! stdout '^/'
+! stdout '[A-Za-z]:\\'
+! stderr .
+
+# case 2 (BLAST-03 edge rule): dependents of live/a through enabled = false,
+# skip_outputs = true, a non-literal enabled, a non-literal skip_outputs and
+# a dependencies { paths } entry are not reached.
+exec gruntled-exit 0 blast --base base1 cur1
+stdout '^Impacted \(3\):$'
+! stdout 'live/e1'
+! stdout 'live/e2'
+! stdout 'live/e3'
+! stdout 'live/e4'
+! stdout 'live/p'
+! stderr .
+
+# case 6 (BLAST-05): --depth 2 keeps distances 1 and 2.
+exec gruntled-exit 0 blast --base base1 --depth 2 cur1
+stdout '^Impacted \(2\):$'
+stdout '^  live/a \(distance 1, '
+stdout '^  live/b \(distance 2, '
+! stdout 'live/c'
+! stderr .
+
+# case 7 (BLAST-04 JSON): version 2, changes[], the via chain c -> b -> a.
+exec gruntled-exit 0 blast --base base1 --format json cur1
+stdout '"version": 2'
+stdout '"changes": \[\n\s+\{\n\s+"module": "modules/m",'
+stdout '"unit": "live/b",\n\s+"module": "modules/m",\n\s+"distance": 2,\n\s+"source": "live/a",\n\s+"via": "live/a"\n'
+stdout '"unit": "live/c",\n\s+"module": "modules/m",\n\s+"distance": 3,\n\s+"source": "live/a",\n\s+"via": "live/b"\n'
+! stderr .
+
+# case 3: live/b reads the removed output (GRT004, Broken). It is traversed
+# but listed only under Broken; live/c is reached through it.
+exec gruntled-exit 1 blast --base base3 cur3
+stdout '^Broken \(1\):$'
+stdout '^  live/b$'
+stdout 'GRT004 dependency "a" output "gone"'
+! stdout '^  live/b \('
+stdout '^  live/c \(distance 3, from module modules/m, path live/c -> live/b -> live/a\)$'
+! stderr .
+
+# case 4: cycle b <-> c and a self-loop on c terminate; each unit once. The
+# GRT003 is in both trees, so it is not new.
+exec gruntled-exit 0 blast --base base4 cur4
+stdout '^Broken \(0\):$'
+stdout -count=1 '^  live/b '
+stdout -count=1 '^  live/c '
+stdout '^  live/b \(distance 2, from module modules/m, path live/b -> live/a\)$'
+stdout '^  live/c \(distance 3, from module modules/m, path live/c -> live/b -> live/a\)$'
+! stderr .
+
+# case 5: diamond d -> {b, c} -> a: distance 3 through the smaller of b, c.
+exec gruntled-exit 0 blast --base base5 cur5
+stdout '^  live/d \(distance 3, from module modules/m, path live/d -> live/b -> live/a\)$'
+! stderr .
+-- base1/live/a/terragrunt.hcl --
+terraform {
+  source = "../../modules/m"
+}
+-- base1/live/b/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "a" {
+  config_path = "../a"
+}
+-- base1/live/c/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "b" {
+  config_path = "../b"
+}
+-- base1/live/e1/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "a" {
+  config_path = "../a"
+  enabled = false
+}
+-- base1/live/e2/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "a" {
+  config_path = "../a"
+  skip_outputs = true
+}
+-- base1/live/e3/terragrunt.hcl --
+locals {
+  on = true
+}
+terraform {
+  source = "../../modules/app"
+}
+dependency "a" {
+  config_path = "../a"
+  enabled = local.on
+}
+-- base1/live/e4/terragrunt.hcl --
+locals {
+  skip = false
+}
+terraform {
+  source = "../../modules/app"
+}
+dependency "a" {
+  config_path = "../a"
+  skip_outputs = local.skip
+}
+-- base1/live/p/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependencies {
+  paths = ["../a"]
+}
+-- base1/modules/app/main.tf --
+variable "v" {
+  default = ""
+}
+-- base1/modules/m/main.tf --
+output "id" { value = "x" }
+output "gone" { value = "y" }
+-- base3/live/a/terragrunt.hcl --
+terraform {
+  source = "../../modules/m"
+}
+-- base3/live/b/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "a" {
+  config_path = "../a"
+}
+inputs = {
+  v = dependency.a.outputs.gone
+}
+-- base3/live/c/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "b" {
+  config_path = "../b"
+}
+-- base3/modules/app/main.tf --
+variable "v" {
+  default = ""
+}
+-- base3/modules/m/main.tf --
+output "id" { value = "x" }
+output "gone" { value = "y" }
+-- base4/live/a/terragrunt.hcl --
+terraform {
+  source = "../../modules/m"
+}
+-- base4/live/b/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "a" {
+  config_path = "../a"
+}
+dependency "c" {
+  config_path = "../c"
+}
+-- base4/live/c/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "b" {
+  config_path = "../b"
+}
+dependency "self" {
+  config_path = "../c"
+}
+-- base4/modules/app/main.tf --
+variable "v" {
+  default = ""
+}
+-- base4/modules/m/main.tf --
+output "id" { value = "x" }
+output "gone" { value = "y" }
+-- base5/live/a/terragrunt.hcl --
+terraform {
+  source = "../../modules/m"
+}
+-- base5/live/b/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "a" {
+  config_path = "../a"
+}
+-- base5/live/c/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "a" {
+  config_path = "../a"
+}
+-- base5/live/d/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "c" {
+  config_path = "../c"
+}
+dependency "b" {
+  config_path = "../b"
+}
+-- base5/modules/app/main.tf --
+variable "v" {
+  default = ""
+}
+-- base5/modules/m/main.tf --
+output "id" { value = "x" }
+output "gone" { value = "y" }
+-- cur1/live/a/terragrunt.hcl --
+terraform {
+  source = "../../modules/m"
+}
+-- cur1/live/b/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "a" {
+  config_path = "../a"
+}
+-- cur1/live/c/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "b" {
+  config_path = "../b"
+}
+-- cur1/live/e1/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "a" {
+  config_path = "../a"
+  enabled = false
+}
+-- cur1/live/e2/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "a" {
+  config_path = "../a"
+  skip_outputs = true
+}
+-- cur1/live/e3/terragrunt.hcl --
+locals {
+  on = true
+}
+terraform {
+  source = "../../modules/app"
+}
+dependency "a" {
+  config_path = "../a"
+  enabled = local.on
+}
+-- cur1/live/e4/terragrunt.hcl --
+locals {
+  skip = false
+}
+terraform {
+  source = "../../modules/app"
+}
+dependency "a" {
+  config_path = "../a"
+  skip_outputs = local.skip
+}
+-- cur1/live/p/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependencies {
+  paths = ["../a"]
+}
+-- cur1/modules/app/main.tf --
+variable "v" {
+  default = ""
+}
+-- cur1/modules/m/main.tf --
+output "id" { value = "x" }
+-- cur3/live/a/terragrunt.hcl --
+terraform {
+  source = "../../modules/m"
+}
+-- cur3/live/b/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "a" {
+  config_path = "../a"
+}
+inputs = {
+  v = dependency.a.outputs.gone
+}
+-- cur3/live/c/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "b" {
+  config_path = "../b"
+}
+-- cur3/modules/app/main.tf --
+variable "v" {
+  default = ""
+}
+-- cur3/modules/m/main.tf --
+output "id" { value = "x" }
+-- cur4/live/a/terragrunt.hcl --
+terraform {
+  source = "../../modules/m"
+}
+-- cur4/live/b/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "a" {
+  config_path = "../a"
+}
+dependency "c" {
+  config_path = "../c"
+}
+-- cur4/live/c/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "b" {
+  config_path = "../b"
+}
+dependency "self" {
+  config_path = "../c"
+}
+-- cur4/modules/app/main.tf --
+variable "v" {
+  default = ""
+}
+-- cur4/modules/m/main.tf --
+output "id" { value = "x" }
+-- cur5/live/a/terragrunt.hcl --
+terraform {
+  source = "../../modules/m"
+}
+-- cur5/live/b/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "a" {
+  config_path = "../a"
+}
+-- cur5/live/c/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "a" {
+  config_path = "../a"
+}
+-- cur5/live/d/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "c" {
+  config_path = "../c"
+}
+dependency "b" {
+  config_path = "../b"
+}
+-- cur5/modules/app/main.tf --
+variable "v" {
+  default = ""
+}
+-- cur5/modules/m/main.tf --
+output "id" { value = "x" }
