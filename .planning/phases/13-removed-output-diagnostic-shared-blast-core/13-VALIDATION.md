@@ -1,9 +1,9 @@
 ---
 phase: 13
 slug: removed-output-diagnostic-shared-blast-core
-status: draft
+status: validated
 nyquist_compliant: true
-wave_0_complete: false
+wave_0_complete: true
 created: 2026-10-10
 ---
 
@@ -51,15 +51,15 @@ PATH for every command: `export PATH=$HOME/.local/go/bin:$HOME/go/bin:$PATH`.
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 13-01-01 | 01 | 1 | MORE-03 | unit + goldens (refactor pin) | `go test -count=1 ./internal/domain/diagnostic/ ./internal/domain/analysis/ && go test -count=1 -run 'Golden\|TestScripts\|Corpus\|Denis\|Sarif\|Graph' ./cmd/gruntled/ && git diff --exit-code v0.3.0 -- cmd/gruntled/testdata` | ✅ grt001_test.go (rows hoisted), diagnostic_test.go | ⬜ pending |
-| 13-01-02 | 01 | 1 | MORE-03 | unit matrix + parity + necessity (mutation) | `go test -count=1 -run 'TestRemovedOutputs\|TestDIAG03' -v ./internal/domain/analysis/` | ❌ W0 (grt004.go, grt004_test.go, grt004_internal_test.go) | ⬜ pending |
-| 13-01-03 | 01 | 1 | MORE-03 | unit + property (rapid) | `go test -count=1 -run 'TestSupersede' -v ./internal/domain/analysis/` | ❌ W0 (grt004_test.go extended) | ⬜ pending |
-| 13-02-01 | 02 | 2 | MORE-03 | unit + property (rapid, oracle) | `go test -count=1 -v -run 'TestBetween\|TestBlast\|TestError' ./internal/application/blasting/` | ❌ W0 (between_property_test.go) | ⬜ pending |
-| 13-02-02 | 02 | 2 | MORE-03 | testscript e2e + presenter unit | `go test -count=1 -run 'TestScripts/blast' ./cmd/gruntled/ && go test -count=1 -run 'Blast' ./internal/interfaces/presenter/` | ❌ W0 (blast_grt004.txtar) | ⬜ pending |
-| 13-02-03 | 02 | 2 | MORE-03 | e2e escape | `go test -count=1 -run 'TestTextOutputsEscapeControls' ./cmd/gruntled/` | ✅ escape_test.go (extended) | ⬜ pending |
-| 13-03-01 | 03 | 3 | MORE-07 | e2e (check, report daemon, graph, status) | `go test -count=1 -run 'TestNoGRT004OutsideBlast\|TestCheckCannotProduceGRT004' ./cmd/gruntled/` | ❌ W0 (more07_test.go) | ⬜ pending |
-| 13-03-02 | 03 | 3 | MORE-03, MORE-07 (docs) | doc guard | `go test -count=1 -run 'TestRuleRegistryDoc\|TestSARIFDoc\|TestHelpMatchesDocs\|TestReadme\|TestCIDoc\|TestValidationDoc\|TestScripts/usage' ./cmd/gruntled/` | ❌ W0 (rules_doc_test.go) | ⬜ pending |
-| 13-03-03 | 03 | 3 | MORE-07 | gate + byte compare | full suite + `git diff --exit-code v0.3.0 -- <goldens>` + `bash scripts/compare-ref.sh v0.3.0` + `bash scripts/build-release.sh v0.0.0-ci <sha> $(mktemp -d)` + `git diff --exit-code go.mod go.sum` | ❌ W0 (scripts/compare-ref.sh) | ⬜ pending |
+| 13-01-01 | 01 | 1 | MORE-03 | unit + goldens (refactor pin) | `go test -count=1 ./internal/domain/diagnostic/ ./internal/domain/analysis/ && go test -count=1 -run 'Golden\|TestScripts\|Corpus\|Denis\|Sarif\|Graph' ./cmd/gruntled/ && git diff --exit-code v0.3.0 -- cmd/gruntled/testdata` | ✅ grt001_test.go (rows hoisted), diagnostic_test.go | ✅ green |
+| 13-01-02 | 01 | 1 | MORE-03 | unit matrix + parity + necessity (mutation) | `go test -count=1 -run 'TestRemovedOutputs\|TestDIAG03' -v ./internal/domain/analysis/` | ✅ grt004.go, grt004_test.go, grt004_internal_test.go (created) | ✅ green |
+| 13-01-03 | 01 | 1 | MORE-03 | unit + property (rapid) | `go test -count=1 -run 'TestSupersede' -v ./internal/domain/analysis/` | ✅ grt004_test.go extended (created) | ✅ green |
+| 13-02-01 | 02 | 2 | MORE-03 | unit + property (rapid, oracle) | `go test -count=1 -v -run 'TestBetween\|TestBlast\|TestError' ./internal/application/blasting/` | ✅ between_property_test.go (created) | ✅ green |
+| 13-02-02 | 02 | 2 | MORE-03 | testscript e2e + presenter unit | `go test -count=1 -run 'TestScripts/blast' ./cmd/gruntled/ && go test -count=1 -run 'Blast' ./internal/interfaces/presenter/` | ✅ blast_grt004.txtar (created) | ✅ green |
+| 13-02-03 | 02 | 2 | MORE-03 | e2e escape | `go test -count=1 -run 'TestTextOutputsEscapeControls' ./cmd/gruntled/` | ✅ escape_test.go (extended) | ✅ green |
+| 13-03-01 | 03 | 3 | MORE-07 | e2e (check, report daemon, graph, status) | `go test -count=1 -run 'TestNoGRT004OutsideBlast\|TestCheckCannotProduceGRT004' ./cmd/gruntled/` | ✅ more07_test.go (created) | ✅ green |
+| 13-03-02 | 03 | 3 | MORE-03, MORE-07 (docs) | doc guard | `go test -count=1 -run 'TestRuleRegistryDoc\|TestSARIFDoc\|TestHelpMatchesDocs\|TestReadme\|TestCIDoc\|TestValidationDoc\|TestScripts/usage' ./cmd/gruntled/` | ✅ rules_doc_test.go (created) | ✅ green |
+| 13-03-03 | 03 | 3 | MORE-07 | gate + byte compare | full suite + `git diff --exit-code v0.3.0 -- <goldens>` + `bash scripts/compare-ref.sh v0.3.0` + `bash scripts/build-release.sh v0.0.0-ci <sha> $(mktemp -d)` + `git diff --exit-code go.mod go.sum` | ✅ scripts/compare-ref.sh (created) | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -104,4 +104,4 @@ task, so no separate Wave 0 plan is needed.
 - [x] Feedback latency < 15s
 - [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending (draft at plan time; set to validated after execution)
+**Approval:** validated 2026-10-10 by gsd-verifier (every per-task command re-run green at 307e83d, code identical to 8a6dd48; CI run 38064624899 at 8a6dd48 green on linux -race, macos and windows). See 13-VERIFICATION.md.
