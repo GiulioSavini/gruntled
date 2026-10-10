@@ -90,10 +90,15 @@ func TestRuleRegistryDoc(t *testing.T) {
 	}
 
 	readme := readDoc(t, "../../README.md")
-	for _, l := range strings.Split(readme, "\n") {
-		if strings.Contains(l, "GRT004") && strings.Contains(l, "no `Code` constant") {
-			t.Errorf("README line still calls GRT004 unimplemented: %q", l)
+	// Paragraph-scoped (blank-line separated, whitespace folded), so a
+	// reflow cannot split GRT004 and "no `Code` constant" across lines.
+	for _, para := range strings.Split(readme, "\n\n") {
+		p := strings.Join(strings.Fields(para), " ")
+		if strings.Contains(p, "GRT004") && strings.Contains(p, "no `Code` constant") {
+			t.Errorf("README paragraph still calls GRT004 unimplemented: %q", p)
 		}
+	}
+	for _, l := range strings.Split(readme, "\n") {
 		if strings.Contains(l, "`GRT004`-`GRT006`") {
 			t.Errorf("README line still lists GRT004 as later: %q", l)
 		}
