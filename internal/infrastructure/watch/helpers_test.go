@@ -101,3 +101,18 @@ func writeFile(t *testing.T, root, rel, content string) {
 }
 
 func abs(root, rel string) string { return filepath.Join(root, filepath.FromSlash(rel)) }
+
+// removeAll removes rel under root. On windows a concurrent poll scan can hold
+// a directory handle for a moment and make the delete fail with a sharing
+// violation; retry briefly instead of failing the test.
+func removeAll(t *testing.T, root, rel string) {
+	t.Helper()
+	var err error
+	for i := 0; i < 20; i++ {
+		if err = os.RemoveAll(abs(root, rel)); err == nil {
+			return
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	t.Fatal(err)
+}

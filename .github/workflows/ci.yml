@@ -38,6 +38,10 @@ jobs:
       - name: vet
         run: go vet ./...
       - name: staticcheck
+        # staticcheck v0.8.1 cannot read go1.27.2 export data (version 5);
+        # drop the pin once a staticcheck release supports it.
+        env:
+          GOTOOLCHAIN: go1.27.1
         run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.1 ./...
       - name: govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...

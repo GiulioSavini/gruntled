@@ -2,6 +2,7 @@ package watch
 
 import (
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -83,9 +84,7 @@ func runContract(t *testing.T, newWatcher func(root string) (Watcher, error)) {
 		root := t.TempDir()
 		writeFile(t, root, "d/e/f.hcl", "x")
 		c := start(t, root)
-		if err := os.RemoveAll(abs(root, "d")); err != nil {
-			t.Fatal(err)
-		}
+		removeAll(t, root, "d")
 		collect(t, c, func(s map[string]bool) bool {
 			return s["d"] || s["d/e"] || s["d/e/f.hcl"]
 		}, "removed directory tree reported")
@@ -204,6 +203,14 @@ func runContract(t *testing.T, newWatcher func(root string) (Watcher, error)) {
 		root := t.TempDir()
 		writeFile(t, root, "terragrunt.hcl", "x")
 		c := start(t, root)
+		if _, isPoll := c.w.(*poll); !isPoll && runtime.GOOS == "darwin" {
+			// fsnotify v1.10.1 kqueue dirChange returns on the first entry it
+			// cannot watch (a dangling symlink, which is what an Emacs lock
+			// file is), so new files sorting after it get no Create event
+			// until the link is gone; the 30 s safety net covers them.
+			// Documented in docs/cli.md (Known limitations).
+			t.Skip("kqueue: fsnotify stops dirChange at a dangling symlink")
+		}
 		if err := os.Symlink("u@h.1:1", abs(root, ".#terragrunt.hcl")); err != nil {
 			t.Skipf("symlinks unavailable: %v", err)
 		}
