@@ -37,33 +37,44 @@ is), so the fix is purely "which rule applies to which entry type".
 // the dirty set. typ is the entry's type bits (fi.Mode().Type() / d.Type()):
 // fs.ModeDir, fs.ModeSymlink, ..., or 0 for a regular file or an unknown/gone entry.
 // Ignored-directory components (.git, .terraform, .terragrunt-cache) apply to every
-// entry; editor swap/backup/probe patterns apply only when typ has neither
-// fs.ModeDir nor fs.ModeSymlink.
+// entry; directories are never pattern-ignored; symlinks only by the Emacs lock
+// rule (".#" prefix); every other entry by all editor patterns.
 func IgnoredEntry(rel string, typ fs.FileMode) bool
 func IgnoredDir(name string) bool // unchanged
 ```
 
 `Ignored` is removed (only in-package callers) so nothing can keep calling the type-blind rule.
-`pending.add(rel, typ)` filters with `IgnoredEntry`. Symlinks are never pattern-ignored: editors
-create regular files, and a symlink the Loader may read through must reach Invalidate.
+`pending.add(rel, typ)` filters with `IgnoredEntry`. Symlinks are pattern-ignored only by the `.#`
+rule: Emacs creates its lock file `.#name` as a dangling symlink (target `user@host.pid:boot`) when a
+buffer is first modified and removes it on save, so without that rule every edit session would cost
+a reindex (sec #36). Any other symlink (e.g. a link named `2024` to a directory) the Loader may read
+through must reach Invalidate.
 
 fsnotify events do not carry the entry type. `handleEvent` keeps today's cost for normal names and
-pays an `os.Lstat` only when the base name matches an editor pattern. When the path is gone
-(Remove/Rename) Lstat fails; the adapter then consults a set of the *pattern-named* directories it
-installed watches on (`patternDirs map[string]struct{}`, owned by the event goroutine; filled by
-`addTree`, pruned with descendants when such a dir disappears). Known → `fs.ModeDir` (reported,
-Loader prefix-evicts); unknown → 0 (a vanished vim probe `4913` stays ignored, contract "vim-style
-save" unchanged).
+pays an `os.Lstat` only when the base name matches an editor pattern. It also consults a set of the
+*pattern-named* directories it installed watches on (`patternDirs map[string]struct{}`, owned by the
+event goroutine; filled by `addTree`, subtree root included when addTree runs from handleEvent for a
+runtime-created dir). typ = `fs.ModeDir` when rel is in the set OR Lstat says dir (over-approximation,
+never stale: a recorded dir moved out and replaced by a same-named file before the event is handled
+is still reported, sec #37); otherwise Lstat's type, or 0 when gone (a vanished vim probe `4913`
+stays ignored, contract "vim-style save" unchanged). Any Remove/Rename prunes rel and every key under
+rel/ from the set.
 
 Carried INFO 10-sec#5 fits here at no cost: `addTree` Lstats `p` right before `addWatch` (p != dir)
 and skips it when it is a symlink or no longer a directory.
 
 **Rapid test layer.** `TestIncrementalEqualsFull` (internal/infrastructure/terragrunt/incremental_test.go)
 drives the Loader with a model-built dirty set over `fstest.MapFS`; it never runs a watcher. It can
-still close the seam that broke: route the model's dirty set through `watch.IgnoredEntry` (file
-paths with typ 0, dirsOnly directory paths with `fs.ModeDir`) and add pattern-named directories
-(`2024`, `x.tmp`, `bak~`) to the alphabet. With the old type-blind rule the dirsOnly rename of
-`2024` is dropped and the property fails; with the new one it holds. `terragrunt` (test) → `watch`
+still close the seam that broke, but only if it models the adapters' *subtree* skip, not just a
+per-path filter: the BLOCKER lived in poll.go walk / native addTree returning SkipDir for `2024`,
+so `2024/terragrunt.hcl` was never seen, while its own base name matches nothing (sec #35). The
+model drops a dirty path p when `IgnoredEntry(p, typ)` OR some proper ancestor a has
+`IgnoredEntry(a, fs.ModeDir)` (file paths typ 0, dirsOnly directory paths `fs.ModeDir`), and adds
+pattern-named directories (`2024`, `x.tmp`) to the alphabet. With the old type-blind rule the
+ancestor term drops every edit under `2024/`, so "write 2024/terragrunt.hcl, reindex, change it so
+the output differs, reindex" diverges from a fresh load; with the new rule it holds. (A per-path
+filter alone, or a dirsOnly rename of `2024`, passes on the old rule too: discovery simply loses the
+2024 units and the new name is a cache miss.) `terragrunt` (test) → `watch`
 is allowed (infrastructure → infrastructure) and has no cycle (`go list -deps ./internal/infrastructure/watch`
 reaches no terragrunt package). The real-FS staleness (dirs never walked) is covered by the
 contract suite (native + poll) and a cmd-level parity test.
@@ -115,8 +126,12 @@ the temp FS is case-insensitive (macos, windows CI) and skips elsewhere.
 
 Text paths that print repo-controlled strings: `presenter.Text` (check, report snapshot text, watch
 stdout via watch.go:248) and `presenter.BlastText` (incl. the verbatim `--base` label at blast.go:79).
-`presenter.Summary` prints counts only and `presenter.Graph`/JSON/SARIF are JSON-escaped, so they need
-nothing. `SanitizeReason` maps `unicode.IsControl` to space but lets Cf (bidi overrides U+202A–202E,
+`presenter.Summary` prints counts only. `presenter.Graph`/JSON/SARIF/BlastJSON go through
+encoding/json, which escapes only < 0x20, quote, backslash, U+2028/2029 and invalid UTF-8: DEL, C1
+(U+0080–U+009F; U+009B is CSI to xterm-family terminals) and every Cf rune are emitted raw (sec #38).
+They get a lossless post-pass (`escapeJSON`) that rewrites those runes as `\uXXXX` inside the
+encoder buffer; the runes can only occur inside JSON strings, so the decoded value is identical and
+output for normal names is byte-identical. `SanitizeReason` maps `unicode.IsControl` to space but lets Cf (bidi overrides U+202A–202E,
 U+2066–2069, zero-width U+200B–200F, U+FEFF), Zl U+2028 and Zp U+2029 through.
 
 **Design.** One helper in the presenter (stdlib only, allowed by the interfaces allowlist):
@@ -141,3 +156,16 @@ Needs the module proxy; if offline, the executor reports a blocker instead of ve
 | 11-sec#4 Windows runtime dir: no owner/ACL check | documented in docs/cli.md Guarantees (12-05); accepted, relies on per-user %LocalAppData% ACL |
 | EventIndexing only published for the initial index | accepted/deferred: cosmetic (status shows the previous result during a reindex, then the new one); no correctness impact |
 | DAEMON-04 wording ("windows report reads the status file") | REQUIREMENTS.md wording aligned to shipped behaviour (report file under the lock) in 12-05 |
+
+## Plan-review dispositions (sec #35–#42, revision round 1)
+
+| Finding | Disposition |
+|---------|-------------|
+| #35 MEDIUM rapid model cannot see the subtree skip | fixed in 12-05 T1: dirty filter models entry + ancestor-dir skip; fixed 2024/x.tmp tail; permanent TestIncrementalModelDetectsTypeBlindIgnore; shrunk mutation sequence in SUMMARY |
+| #36 LOW Emacs lock files are dangling symlinks | fixed in 12-01: `.#` rule also applies to symlinks; contract "emacs lock symlink" |
+| #37 LOW handleEvent Lstat overrides patternDirs | fixed in 12-01 T2: ModeDir when recorded OR Lstat dir; root recorded; prefix prune on Remove/Rename; contract + TestNativePatternDirReplacedByFile |
+| #38 LOW JSON outputs carry DEL/C1/Cf raw | fixed in 12-04: escapeJSON post-pass on JSON/SARIF/graph/blast JSON with round-trip unit + fuzz test |
+| #39 LOW tidy gate always fails after go get | fixed in 12-05 T3: cmp against pre-tidy copies; go list -m and Step 9 tail quoted |
+| #40 INFO canon/read race | accepted: T-12-02-5 |
+| #41 INFO SameFile false positive / slow automount | accepted: T-12-03-6 (fails closed) |
+| #42 INFO display-only rune classes; watch.go:185 raw %v | accepted: T-12-04-8; watch.go:185 through SanitizeReason in 12-05 T2 (T-12-05-7) |

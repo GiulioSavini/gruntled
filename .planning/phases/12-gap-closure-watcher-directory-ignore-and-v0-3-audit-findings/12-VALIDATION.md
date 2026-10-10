@@ -38,9 +38,9 @@ created: 2026-10-10
 
 | # | Phase success criterion (ROADMAP) | Proven by |
 |---|-----------------------------------|-----------|
-| 1 | Editor patterns apply only to files; `live/2024/` walked, watched (native, `--poll`), edits reindexed | `TestIgnoredEntry`; contract sub-tests "edit inside pattern-named dirs", "mkdir pattern-named dir", "rename pattern-named dir away" on `TestWatcherContractPoll` + `TestWatcherContractNative`; `TestNativePatternDirWatched`, `TestNativePatternDirSafetyNet`; contract "vim-style save" still green (patterns still apply to files) |
-| 2 | Regression test reproduces the stale-daemon case on native and poll; rapid test generates dir names matching file ignore patterns | `TestWatchPatternDirParity/{poll,native}` (red on HEAD); `TestIncrementalEqualsFull` with `2024`/`x.tmp` dirs and watcher-filtered dirty set, counters `patternDirRenames > 0`, `linkedIncludes > 0`; `TestIncrementalModelNonVacuous` fixed tail |
-| 3 | Every BLOCKER/HIGH/MEDIUM sec finding fixed with a test or accepted in `12-SECURITY.md` | MEDIUM symlink alias: `TestAliasCacheTargetEditRealFS`, `TestAliasCacheDirLinkRealFS`, `TestAliasCacheRetargetChain`, `TestAliasCacheMapFS` (red on HEAD). LOWs too: `TestWatchRuntimeDirInsideRepo`, `TestDirInsideCaseVariant` + internal seam test, `TestEscapeTerm`/`FuzzEscapeTerm`/`TestTextOutputsEscapeControls`. Accepted INFO items listed for 12-SECURITY.md (sec writes it at `/gsd-secure-phase 12`) |
+| 1 | Editor patterns apply only to files; `live/2024/` walked, watched (native, `--poll`), edits reindexed | `TestIgnoredEntry`; contract sub-tests "edit inside pattern-named dirs", "mkdir pattern-named dir", "rename pattern-named dir away", "mkdir pattern-named dir after start, then rename it away", "emacs lock symlink" on `TestWatcherContractPoll` + `TestWatcherContractNative`; `TestNativePatternDirWatched`, `TestNativePatternDirSafetyNet`, `TestNativePatternDirReplacedByFile`; contract "vim-style save" still green (patterns still apply to files) |
+| 2 | Regression test reproduces the stale-daemon case on native and poll; rapid test generates dir names matching file ignore patterns | `TestWatchPatternDirParity/{poll,native}` (red on HEAD); `TestIncrementalEqualsFull` with `2024`/`x.tmp` dirs and a dirty filter modelling entry + ancestor-dir skip, counters `patternDirRenames > 0`, `linkedIncludes > 0`; `TestIncrementalModelNonVacuous` fixed tail (write `<dir>/terragrunt.hcl`, reindex, change output, reindex for `2024` and `x.tmp`); `TestIncrementalModelDetectsTypeBlindIgnore` (type-blind predicate makes the tail fail); shrunk mutation sequence pasted in 12-05-SUMMARY |
+| 3 | Every BLOCKER/HIGH/MEDIUM sec finding fixed with a test or accepted in `12-SECURITY.md` | MEDIUM symlink alias: `TestAliasCacheTargetEditRealFS`, `TestAliasCacheDirLinkRealFS`, `TestAliasCacheRetargetChain`, `TestAliasCacheMapFS` (red on HEAD). LOWs too: `TestWatchRuntimeDirInsideRepo`, `TestDirInsideCaseVariant` + internal seam test, `TestEscapeTerm`/`FuzzEscapeTerm`/`TestEscapeJSONRoundTrip`/`FuzzEscapeJSON`/`TestTextOutputsEscapeControls` (text and JSON paths). Accepted INFO items listed for 12-SECURITY.md (sec writes it at `/gsd-secure-phase 12`) |
 | 4 | `go test ./...`, `go vet ./...`, `scripts/check-architecture.sh`, CI linux/macos/windows green | 12-05 Task 3 gate (incl. six-target build and govulncheck) + CI run after push |
 
 ---
@@ -56,12 +56,12 @@ created: 2026-10-10
 | 12-02-02 | 02 | 1 | DAEMON-02 | unit + goldens | `go test -count=1 ./internal/infrastructure/terragrunt/ && go test -count=1 -run 'Golden\|TestScripts\|Corpus\|E2E' ./cmd/gruntled/` | ✅ | ⬜ pending |
 | 12-03-01 | 03 | 1 | DAEMON-03 | unit (seam + case-insensitive host) | `go test -count=1 ./internal/infrastructure/statusfile/` | ❌ W0 (inside_internal_test.go) | ⬜ pending |
 | 12-03-02 | 03 | 1 | DAEMON-05 | integration | `go test -count=1 -run 'TestWatchRuntimeDirInsideRepo\|TestWatchDumpMode\|TestPrintStatusPathTakesNoLock' ./cmd/gruntled/` | ✅ instance_test.go (extended) | ⬜ pending |
-| 12-04-01 | 04 | 1 | DAEMON-04 | unit + fuzz | `go test -count=1 -run 'Escape\|Sanitize' ./internal/interfaces/presenter/ && go test -run '^$' -fuzz FuzzEscapeTerm -fuzztime 10s ./internal/interfaces/presenter/` | ❌ W0 (escape_test.go) | ⬜ pending |
-| 12-04-02 | 04 | 1 | DAEMON-04, BLAST-01 | unit + goldens | `go test -count=1 ./internal/interfaces/presenter/ && go test -count=1 -run 'Golden\|TestScripts\|Blast' ./cmd/gruntled/` | ✅ | ⬜ pending |
-| 12-04-03 | 04 | 1 | DAEMON-04, BLAST-01 | e2e (check, watch, report, blast) + docs | `go test -count=1 -run 'TestTextOutputsEscapeControls\|TestHelpMatchesDocs' ./cmd/gruntled/` | ❌ W0 (cmd/gruntled/escape_test.go) | ⬜ pending |
-| 12-05-01 | 05 | 2 | DAEMON-02 | property (rapid) | `go test -count=1 -run 'TestIncrementalEqualsFull\|TestIncrementalModelNonVacuous' -v ./internal/infrastructure/terragrunt/` | ✅ incremental_test.go (extended) | ⬜ pending |
-| 12-05-02 | 05 | 2 | DAEMON-01, DAEMON-04 (docs) | doc guard | `go test -count=1 -run 'TestHelpMatchesDocs\|TestReadme\|Doc' ./cmd/gruntled/` | ✅ | ⬜ pending |
-| 12-05-03 | 05 | 2 | all | gate | full suite + `bash scripts/build-release.sh` + `~/go/bin/govulncheck ./...` + `go mod tidy && git diff --exit-code go.mod go.sum` | ✅ | ⬜ pending |
+| 12-04-01 | 04 | 1 | DAEMON-04 | unit + fuzz | `go test -count=1 -run 'Escape\|Sanitize' ./internal/interfaces/presenter/ && go test -run '^$' -fuzz FuzzEscapeTerm -fuzztime 10s ./internal/interfaces/presenter/ && go test -run '^$' -fuzz FuzzEscapeJSON -fuzztime 10s ./internal/interfaces/presenter/` | ❌ W0 (escape_test.go) | ⬜ pending |
+| 12-04-02 | 04 | 1 | DAEMON-04, BLAST-01 | unit (text + JSON encoders) + goldens | `go test -count=1 ./internal/interfaces/presenter/ && go test -count=1 -run 'Golden\|TestScripts\|Blast' ./cmd/gruntled/` | ✅ | ⬜ pending |
+| 12-04-03 | 04 | 1 | DAEMON-04, BLAST-01 | e2e (check, watch, report, blast; check json/sarif, graph --json, blast json) + docs | `go test -count=1 -run 'TestTextOutputsEscapeControls\|TestHelpMatchesDocs' ./cmd/gruntled/` | ❌ W0 (cmd/gruntled/escape_test.go) | ⬜ pending |
+| 12-05-01 | 05 | 2 | DAEMON-02 | property (rapid) | `go test -count=1 -run 'TestIncrementalEqualsFull\|TestIncrementalModelNonVacuous\|TestIncrementalModelDetectsTypeBlindIgnore' -v ./internal/infrastructure/terragrunt/` | ✅ incremental_test.go (extended) | ⬜ pending |
+| 12-05-02 | 05 | 2 | DAEMON-01, DAEMON-04 (docs) | doc guard + stderr sanitise | `go test -count=1 -run 'TestHelpMatchesDocs\|TestReadme\|Doc\|TestWatch' ./cmd/gruntled/` | ❌ W0 (watch_stderr_test.go) | ⬜ pending |
+| 12-05-03 | 05 | 2 | all | gate | full suite + `bash scripts/build-release.sh` + `~/go/bin/govulncheck ./...` + `go list -m golang.org/x/text` + `cp go.mod go.sum $T/ && go mod tidy && cmp go.mod $T/go.mod && cmp go.sum $T/go.sum` | ✅ | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -92,4 +92,4 @@ step of its own task, so no separate Wave 0 plan is needed.
 - [x] Feedback latency < 15s
 - [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending (planner draft 2026-10-10)
+**Approval:** pending (planner draft 2026-10-10, revised after sec plan-review #35–#42)
