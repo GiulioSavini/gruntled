@@ -62,7 +62,12 @@ See `milestones/v0.3-ROADMAP.md`.
   2. `GRT004` only reclassifies an existing `GRT001`: for the same two trees the Broken units and the number of findings per unit equal what v0.3.0 `blast` printed, no site ever shows both codes, and removing an output that nothing references adds no finding
   3. Wherever a precondition fails the site behaves exactly as `check` does in v0.3.0: a reference added in the same change, a dependency re-pointed to another module, a module unknown on either side, or an output the baseline surface did not declare keeps `GRT001`; `enabled = false`, `skip_outputs = true` or a non-literal value for either stays silent; `mock_outputs` never suppresses the error
   4. `check` (text, JSON, SARIF), plain `report`, `graph --json` and the status file never print `GRT004` and stay byte-identical to v0.3.0 on pinned goldens
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 13-01-PLAN.md — domain: CodeRemovedOutput, shared resolveReference extraction, RemovedOutputs (precondition matrix, DIAG-03 parity, necessity test), SupersedeUnknownOutputs
+- [ ] 13-02-PLAN.md — blasting.Between shared core, Blast delegates, reclassification property vs v0.3, blast_grt004 testscript, escape e2e
+- [ ] 13-03-PLAN.md — MORE-07 pins (check/report/graph/status never GRT004, v0.3.0 byte identity), usage/docs/README with doc-sync test, phase gate
 
 ### Phase 14: Transitive Impact with Paths
 
