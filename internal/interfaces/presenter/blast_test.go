@@ -143,7 +143,7 @@ func TestBlastJSONGolden(t *testing.T) {
           "file": "live/app/terragrunt.hcl",
           "line": 12,
           "column": 5,
-          "message": "dependency \\"vpc\\" output \\"id\\" is not declared by module \\"modules/vpc\\""
+          "message": "dependency \"vpc\" output \"id\" is not declared by module \"modules/vpc\""
         }
       ]
     },
@@ -306,7 +306,9 @@ func TestBlastJSONLinear(t *testing.T) {
 	if b2 > 2000*250 {
 		t.Errorf("2,000-unit chain: %d bytes, over 250 per entry", b2)
 	}
-	if b4 > 2*b2+1024 {
+	// Doubling the chain may add one digit to each of an entry's three
+	// paths; anything beyond that is superlinear.
+	if b4 > 2*b2+3*4000 {
 		t.Errorf("doubling the chain: %d -> %d bytes, not linear", b2, b4)
 	}
 }
