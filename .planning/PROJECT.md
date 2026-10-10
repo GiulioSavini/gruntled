@@ -2,21 +2,19 @@
 
 > *Terragrunt, but gruntled.*
 
-## Current State: v0.2.0 shipped 2026-10-08
+## Current State: v0.3 shipped 2026-10-10 (tag v0.3.0 pending)
 
 `gruntled check` reports `GRT001`, `GRT002`, `GRT003` and `GRT100` in text, JSON or SARIF;
-`gruntled graph --json` prints the repository graph. Installable from the tagged `v0.2.0` GitHub
-release (static binaries for 6 targets plus checksums), as a pre-commit hook, or via the
-GitHub Actions / GitLab CI recipes in `docs/ci.md`.
+`gruntled graph --json` prints the repository graph. `gruntled watch` keeps an in-memory index
+current on every save (fsnotify, or stat polling with `--poll` and on windows) and writes a
+one-line status file outside the repository; `gruntled report` returns the daemon's diagnostics,
+byte-identical to `check`; `gruntled blast --base <dir>` separates Broken from Impacted units.
+Installable from tagged GitHub releases, as a pre-commit hook, or via the CI recipes in `docs/ci.md`.
 
-## Current Milestone: v0.3 Watch & Blast
+## Next Milestone: not started
 
-**Goal:** Turn the one-shot `check` into live feedback: a daemon that keeps the graph current on every save, and a `blast` command that tells Broken apart from Impacted for a change.
-
-**Target features:**
-- `gruntled watch`: in-memory index, incremental reindex equal to a full rescan, one-line status file, single instance
-- `gruntled report`: query the running daemon over a unix socket
-- `gruntled blast <path>`: Broken vs Impacted, where Impacted means the module's `variable`/`output` surface changed
+Candidates (see `milestones/v0.3-REQUIREMENTS.md`, Future Requirements): `GRT004`-`GRT006`,
+`report --blast` from the daemon's baseline, transitive Impacted. Start with `/gsd-new-milestone`.
 
 ## What This Is
 
@@ -57,17 +55,23 @@ is built on top of that one answer being correct and trustworthy.
 - ✓ INT-04 GitHub Actions and GitLab CI recipes, GitHub recipe run in own CI — v0.2
 - ✓ REL-01 static binaries for linux/darwin/windows on amd64/arm64 with checksums, tagged release — v0.2
 - ✓ REL-02 `gruntled --version` with build-time injected version and commit — v0.2
+- ✓ DAEMON-01 `gruntled watch`: full index, then incremental reindex after a save (~150 ms debounce), ignore rules, new/deleted dirs — v0.3
+- ✓ DAEMON-02 incremental reindex == full rescan, rapid stateful property (incl. editor-pattern dirs and symlinked includes) — v0.3
+- ✓ DAEMON-03 atomic one-line status file at a per-repository path outside the repository — v0.3
+- ✓ DAEMON-04 `gruntled report` in text/json/sarif matching `check` (unix socket; report file on windows) — v0.3
+- ✓ DAEMON-05 single instance per repository, crash-safe lock and stale socket recovery — v0.3
+- ✓ DAEMON-06 six-target no-net/no-exec proof with watcher and socket linked — v0.3
+- ✓ BLAST-01 `gruntled blast --base`: disjoint sorted Broken/Impacted, text and json, "no baseline" label — v0.3
+- ✓ BLAST-02 one-hop Impacted on `variable`/`output` name changes; pre-existing findings never Broken — v0.3
 
 ### Active
 
-**v0.3 candidates** (detailed IDs in `milestones/v0.2-REQUIREMENTS.md`, Future Requirements)
+**v0.4 candidates** (detailed in `milestones/v0.3-REQUIREMENTS.md`, Future Requirements)
 
-- [ ] `gruntled watch`: daemon with in-memory incremental reindexing, status file, `gruntled report` (DAEMON-01..05)
-- [ ] `gruntled blast`: Broken vs Impacted (BLAST-01..02)
-
-**Later**
-
-- [ ] `GRT004`-`GRT006` (MORE-03..05; `GRT004` needs a diff and belongs with blast)
+- [ ] `GRT004`: output removed from a module but still referenced downstream (MORE-03; pairs with blast's baseline)
+- [ ] `GRT005`: `inputs` key matching no `variable` (MORE-04)
+- [ ] `GRT006`: `variable` without default that no unit sets (MORE-05)
+- [ ] Daemon follow-ups: `report --blast` from the in-memory baseline, transitive Impacted, type-level surface changes
 
 ### Out of Scope
 
@@ -92,10 +96,15 @@ is built on top of that one answer being correct and trustworthy.
 
 ## Context
 
-**Shipped state (v0.2.0, 2026-10-08):** ~25.9k lines of Go (~17.9k of them tests). Go 1.27,
-`hashicorp/hcl/v2`, stdlib `flag`. CI: architecture rules, `go test -race`, SARIF schema check,
-SARIF upload proof, release packaging dry run and `recipe-check`; tag-triggered `release.yml`.
-Repository public on GitHub since Phase 6 (needed for code scanning without GHAS).
+**Shipped state (v0.3, 2026-10-10):** ~37.9k lines of Go (~25.9k of them tests). Go 1.27,
+`hashicorp/hcl/v2`, `fsnotify` (not on windows), stdlib `flag`, raw-syscall AF_UNIX (no `net`).
+CI: architecture rules and the six-target no-net/no-exec proof, `go test -race` on linux plus
+test jobs on macOS and Windows, staticcheck, govulncheck, SARIF schema/upload proofs, release
+packaging dry run and `recipe-check`; tag-triggered `release.yml`.
+Known limitations (documented): darwin native watcher late by ≤30 s after a dangling symlink
+(fsnotify#787), 64 MiB report response cap, Windows runtime dir relies on `%LocalAppData%` ACLs.
+Work is run by a four-agent team (orchestrator, planner, executor, sec) on GSD Core, talking on
+`.claude/agentbus` with a local GUI.
 
 **The problem is parsing, not the cloud.** Terragrunt documents O(n²) complexity in
 `locals` evaluation and the fact that `include` files are re-evaluated in the context
@@ -151,8 +160,8 @@ error — this needs an explicit, tested decision.
 ## Constraints
 
 - **Tech stack**: Go 1.27. `hashicorp/hcl/v2`, stdlib `flag` (not cobra: cobra/pflag
-  link `net` into the binary, which breaks the static no-network proof). `fsnotify` when
-  the daemon arrives. No cloud SDKs.
+  link `net` into the binary, which breaks the static no-network proof). `fsnotify` for the
+  daemon (not linked on windows). No cloud SDKs.
 - **Scope**: Terragrunt only. `.tf` parsing limited to module surface extraction.
 - **No external processes, no network** at runtime. If the imported Terragrunt library
   would execute `run_cmd` or read the environment, that path must be disabled and the
@@ -193,6 +202,13 @@ error — this needs an explicit, tested decision.
 | `--version` from ldflags only, `ReadBuildInfo` fallback dropped | Local `go build` stamps a VCS pseudo-version that broke the `dev (none)` contract; `go install @tag` therefore prints `dev (none)`, documented | ⚠️ Revisit (go install users see no version) |
 | `recipe-check` CI job proves `docs/ci.md` recipes | Docs that are executed cannot drift; `TestCIDoc` guards the pins | ✓ Good (installs from checkout, not `@tag`) |
 | Empty `config_path` matches terragrunt per case | Block `""` unresolved and silent; `dependencies.paths` entry `""` is a `GRT003` self-loop, as terragrunt v1.1.6 does | ✓ Good |
+| Watch daemon never forks or daemonises; run under tmux/systemd/`&` | fork/exec breaks the no-exec guarantee | ✓ Good (v0.3) |
+| `report` over raw-syscall AF_UNIX, report file on windows | `net` would break the no-net proof; windows reads a dump only while the daemon's lock is held | ✓ Good (v0.3) |
+| Blast baseline from `--base <dir>`, not git | No external process or go-git; CI uses `git worktree` | ✓ Good (v0.3) |
+| Editor-file ignore patterns apply to files only | Directories like `2024/` were never watched and the daemon went stale (v0.3 audit BLOCKER) | ✓ Good (phase 12) |
+| Parse cache keyed by path but validated by canonical path | Files reached through symlinks went stale when the target changed (v0.3 audit MEDIUM) | ✓ Good (phase 12) |
+| Escape control/bidi runes in every text and JSON output | Repository names could drive the user's terminal | ✓ Good (phase 12) |
+| Cross-phase milestone audit with an independent sec agent before closing | Per-phase verifications all passed while a BLOCKER and a MEDIUM existed between phases | ✓ Good (v0.3) |
 | stdlib flag instead of cobra for v0.1 | One subcommand. cobra/pflag link `net`, `net/url` and `net/netip` plus `text/template`, while the stdlib keeps `binary-no-net-no-exec` a one-line CI proof. Revisit when v2 adds several subcommands | ✓ Locked (Phase 3) |
 
 ## Success Criteria for v0.1
@@ -222,4 +238,4 @@ files are parsed once and shared from day one, so `gruntled check` should alread
 import-the-library plan.
 
 ---
-*Last updated: 2026-10-08 after starting milestone v0.3*
+*Last updated: 2026-10-10 after v0.3 milestone*

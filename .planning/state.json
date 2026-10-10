@@ -37,6 +37,11 @@
       "number": "11",
       "name": "Report, Single Instance & Release Proof",
       "status": "complete"
+    },
+    {
+      "number": "12",
+      "name": "Gap Closure — Watcher Dir Ignore & Audit Findings",
+      "status": "complete"
     }
   ],
   "next": {
@@ -44,5 +49,5 @@
     "label": "Show progress",
     "reason": "Unsure of state — showing progress"
   },
-  "updated_at": "2026-10-10T08:23:19.357Z"
+  "updated_at": "2026-10-10T11:11:02.527Z"
 }
