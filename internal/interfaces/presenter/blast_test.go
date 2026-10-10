@@ -258,3 +258,51 @@ func TestBlastWriterErrorReturned(t *testing.T) {
 		t.Errorf("BlastJSON err = %v, want boom", err)
 	}
 }
+
+// blastCrafted carries crafted in every repo-controlled field BlastText
+// and BlastJSON print.
+func blastCrafted(t *testing.T) impact.Result {
+	t.Helper()
+	unit := "live/" + crafted
+	return impact.Result{
+		Baseline: true,
+		Broken: []impact.BrokenUnit{
+			{Subject: rp(t, unit), Findings: []diagnostic.Diagnostic{
+				unitDiag(t, unit, unit+"/terragrunt.hcl", 2, 3, "bad "+crafted),
+			}},
+		},
+		Impacted: []impact.ImpactedUnit{
+			{Unit: rp(t, unit), Change: impact.SurfaceChange{
+				Module:           rp(t, "modules/"+crafted),
+				AddedVariables:   []string{"v" + crafted},
+				RemovedVariables: []string{},
+				AddedOutputs:     []string{},
+				RemovedOutputs:   []string{"o" + crafted},
+			}},
+		},
+	}
+}
+
+func TestBlastTextEscapesControls(t *testing.T) {
+	got := renderBlastText(t, blastCrafted(t), "base\x1b[2J"+crafted)
+	assertTerminalSafe(t, []byte(got))
+	unit := "live/" + craftedTerm
+	want := `baseline: base\x1b[2J` + craftedTerm + `
+Broken (1):
+  ` + unit + `
+    ` + unit + `/terragrunt.hcl:2:3: GRT001 bad ` + craftedTerm + `
+Impacted (1):
+  ` + unit + ` (module modules/` + craftedTerm + `: +variable v` + craftedTerm + `, -output o` + craftedTerm + `)
+`
+	if got != want {
+		t.Errorf("BlastText =\n%q\nwant\n%q", got, want)
+	}
+}
+
+func TestBlastJSONEscapesTerminalRunes(t *testing.T) {
+	out := []byte(renderBlastJSON(t, blastCrafted(t)))
+	assertJSONEscaped(t, out, jstring("broken", 0, "unit"), "live/"+crafted)
+	assertJSONEscaped(t, out, jstring("broken", 0, "findings", 0, "message"), "bad "+crafted)
+	assertJSONEscaped(t, out, jstring("impacted", 0, "module"), "modules/"+crafted)
+	assertJSONEscaped(t, out, jstring("impacted", 0, "added_variables", 0), "v"+crafted)
+}

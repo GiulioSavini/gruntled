@@ -2,10 +2,13 @@ package presenter_test
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"io"
 	"strings"
 	"testing"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/GiulioSavini/gruntled/internal/domain/diagnostic"
 	"github.com/GiulioSavini/gruntled/internal/domain/repograph"
@@ -341,4 +344,155 @@ func TestWriterErrorsAreReturned(t *testing.T) {
 			}
 		})
 	}
+}
+
+// crafted holds an OSC title sequence (ESC ... BEL), a C1 CSI (U+009B),
+// DEL and a bidi override (U+202E): a repo-controlled name that must never
+// reach a terminal raw.
+const crafted = "c\x1b]0;X\x07\u009b2Jd\x7fe\u202ef"
+
+// craftedTerm is crafted as escapeTerm writes it.
+const craftedTerm = `c\x1b]0;X\x07\u009b2Jd\x7fe\u202ef`
+
+// assertTerminalSafe fails when out holds a byte or rune a terminal could
+// act on: a C0 control other than '\n', DEL, invalid UTF-8, a C1 control,
+// a format (Cf) rune or U+2028/U+2029.
+func assertTerminalSafe(t *testing.T, out []byte) {
+	t.Helper()
+	if !utf8.Valid(out) {
+		t.Fatalf("output is not valid UTF-8:\n%q", out)
+	}
+	for _, r := range string(out) {
+		if r == '\n' {
+			continue
+		}
+		if r < 0x20 || (r >= 0x7f && r <= 0x9f) || r == 0x2028 || r == 0x2029 || unicode.Is(unicode.Cf, r) {
+			t.Fatalf("output holds raw %U:\n%q", r, out)
+		}
+	}
+}
+
+func TestTextEscapesControls(t *testing.T) {
+	unit := "live/" + crafted
+	file := unit + "/terragrunt.hcl"
+	set := diagnostic.NewSet(
+		unitDiag(t, unit, file, 3, 1, "bad "+crafted+"\nsecond line"),
+		fileDiag(t, file, 1, 1, crafted),
+	)
+	var b bytes.Buffer
+	if err := presenter.Text(&b, set); err != nil {
+		t.Fatalf("Text: %v", err)
+	}
+	got := b.String()
+	assertTerminalSafe(t, b.Bytes())
+	if n := strings.Count(got, "\n"); n != 2 {
+		t.Fatalf("Text wrote %d lines, want 2:\n%q", n, got)
+	}
+	wantFile := "live/" + craftedTerm + "/terragrunt.hcl"
+	for _, want := range []string{
+		wantFile + ":1:1: GRT100 " + craftedTerm + "\n",
+		wantFile + ":3:1: GRT001 bad " + craftedTerm + `\x0asecond line (unit live/` + craftedTerm + ")\n",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("Text output lacks %q:\n%q", want, got)
+		}
+	}
+}
+
+// craftedGraph has one config-unknown unit and one unknown module whose
+// paths and reasons carry crafted.
+func craftedGraph(t *testing.T) *repograph.RepositoryGraph {
+	t.Helper()
+	u, err := repograph.NewConfigUnknownUnit(rp(t, "live/"+crafted), "reason "+crafted)
+	if err != nil {
+		t.Fatalf("NewConfigUnknownUnit: %v", err)
+	}
+	m, err := repograph.NewUnknownModule(rp(t, "modules/"+crafted), "reason "+crafted)
+	if err != nil {
+		t.Fatalf("NewUnknownModule: %v", err)
+	}
+	g, err := repograph.NewRepositoryGraph([]repograph.Unit{u}, []repograph.Module{m})
+	if err != nil {
+		t.Fatalf("NewRepositoryGraph: %v", err)
+	}
+	return g
+}
+
+// assertJSONEscaped checks a JSON document holding crafted: no raw byte a
+// terminal acts on, the runes encoding/json leaves raw written as \uXXXX,
+// and want decoded back exactly by get.
+func assertJSONEscaped(t *testing.T, out []byte, get func(any) string, want string) {
+	t.Helper()
+	assertTerminalSafe(t, out)
+	for _, esc := range []string{`\u009b`, `\u007f`, `\u202e`, `\u001b`, `\u0007`} {
+		if !bytes.Contains(out, []byte(esc)) {
+			t.Errorf("output lacks %s:\n%s", esc, out)
+		}
+	}
+	var v any
+	if err := json.Unmarshal(out, &v); err != nil {
+		t.Fatalf("Unmarshal: %v\n%s", err, out)
+	}
+	if got := get(v); got != want {
+		t.Fatalf("decoded %q, want %q", got, want)
+	}
+}
+
+// jpath walks a decoded JSON value by object keys and array indexes.
+func jpath(v any, keys ...any) any {
+	for _, k := range keys {
+		switch k := k.(type) {
+		case string:
+			m, _ := v.(map[string]any)
+			v = m[k]
+		case int:
+			a, _ := v.([]any)
+			if k >= len(a) {
+				return nil
+			}
+			v = a[k]
+		}
+	}
+	return v
+}
+
+func jstring(keys ...any) func(any) string {
+	return func(v any) string {
+		s, _ := jpath(v, keys...).(string)
+		return s
+	}
+}
+
+func craftedSet(t *testing.T) diagnostic.Set {
+	t.Helper()
+	unit := "live/" + crafted
+	return diagnostic.NewSet(unitDiag(t, unit, unit+"/terragrunt.hcl", 3, 1, "bad "+crafted))
+}
+
+func TestJSONEscapesTerminalRunes(t *testing.T) {
+	var b bytes.Buffer
+	if err := presenter.JSON(&b, craftedGraph(t), craftedSet(t)); err != nil {
+		t.Fatalf("JSON: %v", err)
+	}
+	assertJSONEscaped(t, b.Bytes(), jstring("diagnostics", 0, "file"), "live/"+crafted+"/terragrunt.hcl")
+	assertJSONEscaped(t, b.Bytes(), jstring("unknown_units", 0, "path"), "live/"+crafted)
+	assertJSONEscaped(t, b.Bytes(), jstring("diagnostics", 0, "message"), "bad "+crafted)
+}
+
+func TestSARIFEscapesTerminalRunes(t *testing.T) {
+	var b bytes.Buffer
+	if err := presenter.SARIF(&b, craftedGraph(t), craftedSet(t), presenter.ToolInfo{Version: "dev"}); err != nil {
+		t.Fatalf("SARIF: %v", err)
+	}
+	assertJSONEscaped(t, b.Bytes(), jstring("runs", 0, "results", 0, "message", "text"),
+		"bad "+crafted+" (unit live/"+crafted+")")
+}
+
+func TestGraphEscapesTerminalRunes(t *testing.T) {
+	var b bytes.Buffer
+	if err := presenter.Graph(&b, craftedGraph(t)); err != nil {
+		t.Fatalf("Graph: %v", err)
+	}
+	assertJSONEscaped(t, b.Bytes(), jstring("units", 0, "path"), "live/"+crafted)
+	assertJSONEscaped(t, b.Bytes(), jstring("modules", 0, "reason"), "reason "+crafted)
 }
