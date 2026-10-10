@@ -138,3 +138,212 @@ func TestRemovedOutputsDeterministic(t *testing.T) {
 		}
 	}
 }
+
+func mustDiag(t *testing.T, code diagnostic.Code, unit string, pos repograph.Position, msg string) diagnostic.Diagnostic {
+	t.Helper()
+	var d diagnostic.Diagnostic
+	var err error
+	if unit == "" {
+		d, err = diagnostic.New(code, diagnostic.SeverityError, pos, msg)
+	} else {
+		d, err = diagnostic.NewForUnit(code, diagnostic.SeverityError, repograph.MustRepoPath(unit), pos, msg)
+	}
+	if err != nil {
+		t.Fatalf("diagnostic: %v", err)
+	}
+	return d
+}
+
+func TestSupersedeUnknownOutputs(t *testing.T) {
+	tg := repograph.MustRepoPath("live/app/terragrunt.hcl")
+	root := repograph.MustRepoPath("live/app/root.hcl")
+	p7 := mustPos(t, tg, 7, 20)
+	p9 := mustPos(t, tg, 9, 20)
+	r7 := mustPos(t, root, 7, 20)
+	g001 := func(unit string, p repograph.Position) diagnostic.Diagnostic {
+		return mustDiag(t, diagnostic.CodeUnknownOutput, unit, p, "dependency \"vpc\" output \"id\" is not declared")
+	}
+	g004 := func(unit string, p repograph.Position, msg string) diagnostic.Diagnostic {
+		return mustDiag(t, diagnostic.CodeRemovedOutput, unit, p, msg)
+	}
+	others := []diagnostic.Diagnostic{
+		mustDiag(t, diagnostic.CodeMissingDependencyTarget, "live/app", p7, "missing target"),
+		mustDiag(t, diagnostic.CodeDependencyCycle, "live/app", p7, "cycle"),
+		mustDiag(t, diagnostic.CodeSyntaxError, "", p7, "syntax"),
+	}
+	type row struct {
+		name    string
+		cur     []diagnostic.Diagnostic
+		removed []diagnostic.Diagnostic
+		want    []diagnostic.Diagnostic // nil means Equal(cur)
+	}
+	rows := []row{
+		{name: "one GRT001 replaced",
+			cur:     []diagnostic.Diagnostic{g001("live/app", p7)},
+			removed: []diagnostic.Diagnostic{g004("live/app", p7, "removed")},
+			want:    []diagnostic.Diagnostic{g004("live/app", p7, "removed")}},
+		{name: "only the GRT001 at the same Pos is replaced",
+			cur:     []diagnostic.Diagnostic{g001("live/app", p7), g001("live/app", p9)},
+			removed: []diagnostic.Diagnostic{g004("live/app", p9, "removed")},
+			want:    []diagnostic.Diagnostic{g001("live/app", p7), g004("live/app", p9, "removed")}},
+		{name: "message never matched; other unit kept",
+			cur:     []diagnostic.Diagnostic{g001("live/app", p7), g001("live/other", p7)},
+			removed: []diagnostic.Diagnostic{g004("live/app", p7, "zzz totally unrelated text")},
+			want:    []diagnostic.Diagnostic{g004("live/app", p7, "zzz totally unrelated text"), g001("live/other", p7)}},
+		{name: "other codes never replaced, unmatched GRT004 dropped",
+			cur:     others,
+			removed: []diagnostic.Diagnostic{g004("live/app", p7, "removed")}},
+		{name: "removed nil", cur: []diagnostic.Diagnostic{g001("live/app", p7)}},
+		{name: "removed empty", cur: []diagnostic.Diagnostic{g001("live/app", p7)}, removed: []diagnostic.Diagnostic{}},
+		{name: "same line:col in another file of the unit",
+			cur:     []diagnostic.Diagnostic{g001("live/app", p7)},
+			removed: []diagnostic.Diagnostic{g004("live/app", r7, "removed")}},
+	}
+	for _, r := range rows {
+		t.Run(r.name, func(t *testing.T) {
+			cur := diagnostic.NewSet(r.cur...)
+			got := analysis.SupersedeUnknownOutputs(cur, r.removed)
+			want := cur
+			if r.want != nil {
+				want = diagnostic.NewSet(r.want...)
+			}
+			if !got.Equal(want) {
+				t.Errorf("SupersedeUnknownOutputs =\n  %v\nwant\n  %v", got.All(), want.All())
+			}
+			if got.Len() != cur.Len() {
+				t.Errorf("Len = %d, want %d", got.Len(), cur.Len())
+			}
+		})
+	}
+}
+
+// xorshift is a fixed pseudo-random sequence: the domain's tests may not
+// import math/rand or rapid (check-architecture domain-stdlib-allowlist),
+// so the property below is driven by this deterministic generator.
+type xorshift uint64
+
+func (x *xorshift) intn(n int) int {
+	*x ^= *x << 13
+	*x ^= *x >> 7
+	*x ^= *x << 17
+	return int(uint64(*x) % uint64(n))
+}
+
+type siteID struct {
+	unit    repograph.RepoPath
+	hasUnit bool
+	pos     repograph.Position
+}
+
+func siteOf(d diagnostic.Diagnostic) siteID {
+	u, ok := d.Unit()
+	return siteID{unit: u, hasUnit: ok, pos: d.Pos()}
+}
+
+// TestSupersedeNeverAddsProperty: for random cur sets (at most one GRT001
+// per (Unit, Pos), the References invariant) and random GRT004 lists (at
+// most one per (Unit, Pos)), Supersede keeps Len and the (Unit, Pos)
+// multiset, keeps every non-GRT001, and puts a GRT004 exactly where a
+// GRT001 was.
+func TestSupersedeNeverAddsProperty(t *testing.T) {
+	units := []string{"live/a", "live/b"}
+	files := []repograph.RepoPath{repograph.MustRepoPath("live/a/terragrunt.hcl"), repograph.MustRepoPath("live/_common/vpc.hcl")}
+	msgs := []string{"m1", "m2", "dependency \"vpc\" output \"id\""}
+	var positions []repograph.Position
+	for _, f := range files {
+		for _, line := range []int{7, 9} {
+			for _, col := range []int{1, 20} {
+				positions = append(positions, mustPos(t, f, line, col))
+			}
+		}
+	}
+	rng := xorshift(0x9e3779b97f4a7c15)
+	replacedRuns, droppedRuns := 0, 0
+	const cases = 3000
+	for range cases {
+		var curDs, removed []diagnostic.Diagnostic
+		grt001At := map[siteID]bool{}
+		for _, u := range units {
+			for _, p := range positions {
+				id := siteID{unit: repograph.MustRepoPath(u), hasUnit: true, pos: p}
+				if rng.intn(2) == 0 {
+					curDs = append(curDs, mustDiag(t, diagnostic.CodeUnknownOutput, u, p, msgs[rng.intn(len(msgs))]))
+					grt001At[id] = true
+				}
+				if rng.intn(4) == 0 {
+					curDs = append(curDs, mustDiag(t, diagnostic.CodeMissingDependencyTarget, u, p, msgs[rng.intn(len(msgs))]))
+				}
+				if rng.intn(3) == 0 {
+					removed = append(removed, mustDiag(t, diagnostic.CodeRemovedOutput, u, p, msgs[rng.intn(len(msgs))]))
+				}
+			}
+		}
+		for _, p := range positions {
+			if rng.intn(4) == 0 {
+				curDs = append(curDs, mustDiag(t, diagnostic.CodeSyntaxError, "", p, msgs[rng.intn(len(msgs))]))
+			}
+		}
+		// Shuffle removed so its order is not the generation order.
+		for i := len(removed) - 1; i > 0; i-- {
+			j := rng.intn(i + 1)
+			removed[i], removed[j] = removed[j], removed[i]
+		}
+
+		cur := diagnostic.NewSet(curDs...)
+		got := analysis.SupersedeUnknownOutputs(cur, removed)
+
+		if got.Len() != cur.Len() {
+			t.Fatalf("Len = %d, want %d", got.Len(), cur.Len())
+		}
+		count := func(s diagnostic.Set) map[siteID]int {
+			m := map[siteID]int{}
+			for _, d := range s.All() {
+				m[siteOf(d)]++
+			}
+			return m
+		}
+		if !reflect.DeepEqual(count(got), count(cur)) {
+			t.Fatalf("(Unit, Pos) multiset changed:\n got %v\n cur %v", got.All(), cur.All())
+		}
+		gotKeys := map[diagnostic.Key]bool{}
+		for _, d := range got.All() {
+			gotKeys[d.Key()] = true
+		}
+		for _, d := range cur.All() {
+			if d.Code() != diagnostic.CodeUnknownOutput && !gotKeys[d.Key()] {
+				t.Fatalf("non-GRT001 %v lost", d)
+			}
+		}
+		wantReplaced, dropped := 0, 0
+		for _, d := range removed {
+			if grt001At[siteOf(d)] {
+				wantReplaced++
+			} else {
+				dropped++
+			}
+		}
+		gotReplaced := 0
+		for _, d := range got.All() {
+			if d.Code() != diagnostic.CodeRemovedOutput {
+				continue
+			}
+			gotReplaced++
+			if !grt001At[siteOf(d)] {
+				t.Fatalf("GRT004 %v sits where cur has no GRT001", d)
+			}
+		}
+		if gotReplaced != wantReplaced {
+			t.Fatalf("GRT004 in result = %d, want %d", gotReplaced, wantReplaced)
+		}
+		if wantReplaced > 0 {
+			replacedRuns++
+		}
+		if dropped > 0 {
+			droppedRuns++
+		}
+	}
+	if replacedRuns == 0 || droppedRuns == 0 {
+		t.Fatalf("vacuous: %d runs with a replacement, %d with a dropped GRT004 (of %d)", replacedRuns, droppedRuns, cases)
+	}
+	t.Logf("%d cases: %d with >=1 replacement, %d with >=1 dropped GRT004", cases, replacedRuns, droppedRuns)
+}
