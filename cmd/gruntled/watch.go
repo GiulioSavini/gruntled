@@ -182,10 +182,17 @@ func runWatchWith(ctx context.Context, args []string, stdout, stderr io.Writer, 
 		MaxWait: deps.maxWait,
 	})
 	if err != nil {
-		fmt.Fprintf(stderr, "gruntled: %v\n", err)
+		printRunError(stderr, err)
 		return exitFailure
 	}
 	return exitOK
+}
+
+// printRunError prints the error watch.Run returned (today only an
+// initial-index root walk error) as one stderr line, with terminal
+// controls and format runes neutralised (sec #42, defence in depth).
+func printRunError(stderr io.Writer, err error) {
+	fmt.Fprintf(stderr, "gruntled: %s\n", presenter.SanitizeReason(err.Error()))
 }
 
 // openWatcher picks the backend: polling when asked or on windows, else
