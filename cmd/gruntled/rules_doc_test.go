@@ -1,0 +1,116 @@
+package main
+
+// TestRuleRegistryDoc keeps the rule registry in step everywhere a user
+// reads codes: the GRT004 section of docs/cli.md, Reserved codes, the SARIF
+// table (no GRT004 rule), the Blast text example, the Blast JSON code-value
+// note, the blast usage mirror and README's code table.
+
+import (
+	"os"
+	"strings"
+	"testing"
+)
+
+const (
+	grt004Heading = "### GRT004: dependency output removed (error, blast only)"
+	grt004Message = `dependency "<label>" output "<Y>" was removed from module "<module>" (target unit "<target>")`
+	blastJSONNote = "New code values can appear without a version bump: since GRT004, a removed output is reported as GRT004 where earlier versions said GRT001. Gate on severity, not on a code list."
+	blastExample  = `GRT004 dependency "db" output "id" was removed from module "modules/vpc" (target unit "live/db")`
+)
+
+func readDoc(t *testing.T, path string) string {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return strings.ReplaceAll(string(b), "\r\n", "\n")
+}
+
+// section returns the text after the exact heading line up to the next
+// heading of the same or a higher level.
+func section(t *testing.T, doc, heading string) string {
+	t.Helper()
+	_, rest, ok := strings.Cut(doc, "\n"+heading+"\n")
+	if !ok {
+		t.Fatalf("no %q heading", heading)
+	}
+	level := heading[:strings.Index(heading, " ")+1] // "## " or "### "
+	end := len(rest)
+	for _, h := range []string{"\n## ", "\n" + level} {
+		if i := strings.Index(rest, h); i >= 0 && i < end {
+			end = i
+		}
+	}
+	return rest[:end]
+}
+
+func TestRuleRegistryDoc(t *testing.T) {
+	doc := readDoc(t, "../../docs/cli.md")
+
+	diags := section(t, doc, "## Diagnostics")
+	if !strings.Contains(diags, "\n"+grt004Heading+"\n") {
+		t.Errorf("## Diagnostics lacks the line %q", grt004Heading)
+	}
+	g4 := section(t, doc, grt004Heading)
+	if !strings.Contains(g4, "\n"+grt004Message+"\n") {
+		t.Errorf("GRT004 section lacks the message line %q", grt004Message)
+	}
+
+	reserved := section(t, doc, "### Reserved codes")
+	if !strings.Contains(reserved, "GRT005") || !strings.Contains(reserved, "GRT006") || strings.Contains(reserved, "GRT004") {
+		t.Errorf("Reserved codes must name GRT005 and GRT006 and not GRT004:\n%s", reserved)
+	}
+
+	if strings.Contains(section(t, doc, "### SARIF"), "GRT004") {
+		t.Error("the SARIF section mentions GRT004: blast has no SARIF output and GRT004 has no rule")
+	}
+
+	bt := section(t, doc, "### Blast text")
+	if !strings.Contains(bt, blastExample) {
+		t.Errorf("Blast text example lacks %q", blastExample)
+	}
+	if strings.Contains(bt, `GRT001 dependency "db" output "id"`) {
+		t.Error("Blast text example still shows GRT001 for the removed output")
+	}
+
+	if !strings.Contains(strings.Join(strings.Fields(section(t, doc, "### Blast JSON")), " "), blastJSONNote) {
+		t.Errorf("Blast JSON lacks the sentence %q", blastJSONNote)
+	}
+
+	_, usage, code := runCLI(t, "blast", "-h")
+	if code != exitOK {
+		t.Fatalf("blast -h: exit %d", code)
+	}
+	if !strings.Contains(usage, "GRT004") {
+		t.Errorf("blast usage does not mention GRT004:\n%s", usage)
+	}
+	if !strings.Contains(doc, "```\n"+usage+"```\n") {
+		t.Errorf("docs/cli.md has no fenced block equal to blast -h:\n%s", usage)
+	}
+
+	readme := readDoc(t, "../../README.md")
+	for _, l := range strings.Split(readme, "\n") {
+		if strings.Contains(l, "GRT004") && strings.Contains(l, "no `Code` constant") {
+			t.Errorf("README line still calls GRT004 unimplemented: %q", l)
+		}
+		if strings.Contains(l, "`GRT004`-`GRT006`") {
+			t.Errorf("README line still lists GRT004 as later: %q", l)
+		}
+		if strings.HasPrefix(l, "All four are emitted by `gruntled check`") {
+			t.Errorf("README still says every defined code comes from check: %q", l)
+		}
+	}
+	var row string
+	for _, l := range strings.Split(readme, "\n") {
+		if strings.HasPrefix(l, "| `GRT004` | `CodeRemovedOutput` |") {
+			row = l
+		}
+	}
+	if !strings.Contains(row, "blast") {
+		t.Errorf("README code table lacks a blast-only GRT004 row (got %q)", row)
+	}
+	if !strings.Contains(readme, "`GRT005`-`GRT006`") {
+		t.Error("README Later line does not say GRT005-GRT006")
+	}
+}
