@@ -58,6 +58,40 @@ exec gruntled-exit 2 blast clean --base
 stderr 'flag needs an argument'
 ! stdout .
 
+# blast 2: --depth must be a decimal integer >= 1 with no sign and no
+# leading zero; an explicitly empty value and a missing value are errors too
+exec gruntled-exit 2 blast --base clean --depth 0 broken
+stderr 'invalid --depth "0" \(want an integer >= 1\)'
+stderr '^usage: gruntled blast '
+! stdout .
+exec gruntled-exit 2 blast --base clean --depth -1 broken
+stderr 'invalid --depth "-1" \(want an integer >= 1\)'
+stderr '^usage: gruntled blast '
+! stdout .
+exec gruntled-exit 2 blast --base clean --depth +2 broken
+stderr 'invalid --depth "\+2" \(want an integer >= 1\)'
+stderr '^usage: gruntled blast '
+! stdout .
+exec gruntled-exit 2 blast --base clean --depth 02 broken
+stderr 'invalid --depth "02" \(want an integer >= 1\)'
+stderr '^usage: gruntled blast '
+! stdout .
+exec gruntled-exit 2 blast --base clean --depth x broken
+stderr 'invalid --depth "x" \(want an integer >= 1\)'
+stderr '^usage: gruntled blast '
+! stdout .
+exec gruntled-exit 2 blast --base clean --depth 1.5 broken
+stderr 'invalid --depth "1\.5" \(want an integer >= 1\)'
+stderr '^usage: gruntled blast '
+! stdout .
+exec gruntled-exit 2 blast --base clean --depth '' broken
+stderr 'invalid --depth "" \(want an integer >= 1\)'
+stderr '^usage: gruntled blast '
+! stdout .
+exec gruntled-exit 2 blast clean --depth
+stderr 'flag needs an argument'
+! stdout .
+
 # blast 3: path or base cannot be opened; never a silent fallback
 exec gruntled-exit 3 blast --base clean missing/
 stderr 'cannot open repository'
