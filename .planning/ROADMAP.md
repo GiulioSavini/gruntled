@@ -80,7 +80,12 @@ Plans:
   3. Cycles, self-loops and diamonds terminate; each unit appears once, at its minimum distance, with the path that is smallest under `RepoPath.Compare` at the first differing hop, identical for any input or map order (proven against a brute-force oracle on random graphs with shuffled input)
   4. `blast --depth N` limits propagation (default unlimited); `--depth 1` with only name-level changes yields the v0.3 Impacted set; `--depth 0`, a negative or a non-integer value exits 2
   5. JSON carries `schema_version` 2 with additive fields only (distance, source and `via` = predecessor, so size is linear in chain length); text prints the full path up to a fixed hop count and elides the rest deterministically (the 5,000-unit size bound is proven in Phase 15 under BLAST-11)
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 14-01-PLAN.md — domain: restricted reverse-edge BFS (Reach distance/source/via), Compute transitive, Result.Changes, WithMaxDistance, independent brute-force oracle
+- [ ] 14-02-PLAN.md — presenter: blast JSON version 2 (changes[], distance/source/via, linear), text distance + elided path, escaping, goldens moved to v2
+- [ ] 14-03-PLAN.md — CLI --depth, e2e transitive fixtures, synthrepo cone, --depth 1 snapshot equivalence, docs/README pins, phase gate
 
 ### Phase 15: Type-Level Surface Facts
 
