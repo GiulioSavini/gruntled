@@ -17,8 +17,8 @@ stdout '^    live/app/terragrunt.hcl:8:7: GRT004 dependency "db" output "id" was
 stdout '^    live/app/terragrunt.hcl:9:7: GRT004 dependency "db" output "id" was removed from module "modules/vpc" \(target unit "live/db"\)$'
 ! stdout GRT001
 stdout '^  live/db \(module modules/vpc: -output id\)$'
-! stdout $WORK
 ! stdout '^/'
+! stdout '[A-Za-z]:\\'
 ! stderr .
 
 # case 10: the same comparison as JSON: two GRT004 findings, schema version 1,
