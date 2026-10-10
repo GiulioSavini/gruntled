@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/GiulioSavini/gruntled/internal/domain/diagnostic"
 	"github.com/GiulioSavini/gruntled/internal/domain/impact"
+	"github.com/GiulioSavini/gruntled/internal/domain/repograph"
 	"github.com/GiulioSavini/gruntled/internal/interfaces/presenter"
 )
 
@@ -95,11 +97,12 @@ Broken (2):
     live/app/terragrunt.hcl:12:5: GRT001 dependency "vpc" output "id" is not declared by module "modules/vpc"
   live/x/terragrunt.hcl
     live/x/terragrunt.hcl:3:1: GRT100 Argument or block definition required
-Impacted (2):
-  live/db (module modules/vpc: +variable name, -output id)
-  live/net (module modules/net: -variable a, -variable b, +variable c, -output d, +output e)
+Impacted (3):
+  live/a (distance 1, module modules/vpc: +variable name, -output id)
+  live/b (distance 2, from module modules/vpc, path live/b -> live/a)
+  live/c (distance 3, from module modules/vpc, path live/c -> live/b -> live/a)
 `
-	if got := renderBlastText(t, blastMixed(t), "../base"); got != want {
+	if got := renderBlastText(t, blastChain(t), "../base"); got != want {
 		t.Errorf("BlastText =\n%s\nwant\n%s", got, want)
 	}
 }
@@ -445,8 +448,9 @@ func TestBlastTextEscapesControls(t *testing.T) {
 Broken (1):
   ` + unit + `
     ` + unit + `/terragrunt.hcl:2:3: GRT001 bad ` + craftedTerm + `
-Impacted (1):
-  ` + unit + ` (module modules/` + craftedTerm + `: +variable v` + craftedTerm + `, -output o` + craftedTerm + `)
+Impacted (2):
+  ` + unit + ` (distance 1, module modules/` + craftedTerm + `: +variable v` + craftedTerm + `, -output o` + craftedTerm + `)
+  live/z (distance 2, from module modules/` + craftedTerm + `, path live/z -> ` + unit + `)
 `
 	if got != want {
 		t.Errorf("BlastText =\n%q\nwant\n%q", got, want)
@@ -500,5 +504,128 @@ func TestBlastJSONGRT004(t *testing.T) {
 	}
 	if !bytes.Contains(out, []byte(`"version": 2`)) {
 		t.Errorf("BlastJSON is not version 2:\n%s", out)
+	}
+}
+
+// textChain is a chain u1 <- u2 <- ... <- un (u1 uses modules/vpc), with the
+// Impacted entries given in order.
+func textChain(t *testing.T, n int, order []int) impact.Result {
+	t.Helper()
+	vpc := vpcChange(t)
+	name := func(i int) repograph.RepoPath { return rp(t, "u"+strconv.Itoa(i)) }
+	res := impact.Result{Baseline: true, Broken: []impact.BrokenUnit{}, Changes: []impact.SurfaceChange{vpc}}
+	for _, i := range order {
+		re := impact.Reach{Distance: i, Source: name(1)}
+		if i > 1 {
+			re.Via = name(i - 1)
+		}
+		res.Impacted = append(res.Impacted, impact.ImpactedUnit{Unit: name(i), Change: vpc, Reach: re})
+	}
+	return res
+}
+
+func lineOf(t *testing.T, out, prefix string) string {
+	t.Helper()
+	for _, l := range strings.Split(out, "\n") {
+		if strings.HasPrefix(l, prefix) {
+			return l
+		}
+	}
+	t.Fatalf("no line starting %q in:\n%s", prefix, out)
+	return ""
+}
+
+func TestBlastTextPathElision(t *testing.T) {
+	order := func(n int) []int {
+		out := make([]int, n)
+		for i := range out {
+			out[i] = i + 1
+		}
+		return out
+	}
+	cases := []struct {
+		n    int
+		want string
+	}{
+		{6, "  u6 (distance 6, from module modules/vpc, path u6 -> u5 -> u4 -> u3 -> u2 -> u1)"},
+		{7, "  u7 (distance 7, from module modules/vpc, path u7 -> u6 -> u5 -> u4 -> ... (2 more) -> u1)"},
+		{50, "  u50 (distance 50, from module modules/vpc, path u50 -> u49 -> u48 -> u47 -> ... (45 more) -> u1)"},
+	}
+	for _, c := range cases {
+		out := renderBlastText(t, textChain(t, c.n, order(c.n)), "b")
+		if got := lineOf(t, out, "  u"+strconv.Itoa(c.n)+" ("); got != c.want {
+			t.Errorf("chain %d:\n got %s\nwant %s", c.n, got, c.want)
+		}
+		if again := renderBlastText(t, textChain(t, c.n, order(c.n)), "b"); again != out {
+			t.Errorf("chain %d: not deterministic", c.n)
+		}
+		rev := order(c.n)
+		slices.Reverse(rev)
+		if got := lineOf(t, renderBlastText(t, textChain(t, c.n, rev), "b"), "  u"+strconv.Itoa(c.n)+" ("); got != c.want {
+			t.Errorf("chain %d, Impacted given in reverse: %s", c.n, got)
+		}
+	}
+}
+
+func TestBlastTextPathThroughBroken(t *testing.T) {
+	vpc := vpcChange(t)
+	res := impact.Result{
+		Baseline: true,
+		Broken: []impact.BrokenUnit{{
+			Subject:  rp(t, "live/b"),
+			Findings: []diagnostic.Diagnostic{unitDiag(t, "live/b", "live/b/terragrunt.hcl", 1, 1, "x")},
+			Reach:    impact.Reach{Distance: 2, Source: rp(t, "live/a"), Via: rp(t, "live/a")},
+		}},
+		Impacted: []impact.ImpactedUnit{
+			{Unit: rp(t, "live/a"), Change: vpc, Reach: impact.Reach{Distance: 1, Source: rp(t, "live/a")}},
+			{Unit: rp(t, "live/c"), Change: vpc, Reach: impact.Reach{Distance: 3, Source: rp(t, "live/a"), Via: rp(t, "live/b")}},
+		},
+		Changes: []impact.SurfaceChange{vpc},
+	}
+	out := renderBlastText(t, res, "b")
+	if got, want := lineOf(t, out, "  live/c ("), "  live/c (distance 3, from module modules/vpc, path live/c -> live/b -> live/a)"; got != want {
+		t.Errorf("got %s\nwant %s", got, want)
+	}
+	if strings.Count(out, "  live/b") != 1 {
+		t.Errorf("live/b must be listed once, under Broken:\n%s", out)
+	}
+}
+
+// TestBlastTextMalformedVia: a Via chain that loops (Compute never builds
+// one) still terminates, after at most Distance steps.
+func TestBlastTextMalformedVia(t *testing.T) {
+	vpc := vpcChange(t)
+	res := impact.Result{
+		Baseline: true,
+		Broken:   []impact.BrokenUnit{},
+		Impacted: []impact.ImpactedUnit{
+			{Unit: rp(t, "x"), Change: vpc, Reach: impact.Reach{Distance: 9, Source: rp(t, "s"), Via: rp(t, "y")}},
+			{Unit: rp(t, "y"), Change: vpc, Reach: impact.Reach{Distance: 9, Source: rp(t, "s"), Via: rp(t, "x")}},
+		},
+		Changes: []impact.SurfaceChange{vpc},
+	}
+	out := renderBlastText(t, res, "b")
+	if got := lineOf(t, out, "  x ("); !strings.HasSuffix(got, "-> s)") {
+		t.Errorf("malformed chain line %q does not end at the source", got)
+	}
+}
+
+func TestBlastTextLinear(t *testing.T) {
+	order := func(n int) []int {
+		out := make([]int, n)
+		for i := range out {
+			out[i] = i + 1
+		}
+		return out
+	}
+	b2 := renderBlastText(t, textChain(t, 2000, order(2000)), "b")
+	b4 := renderBlastText(t, textChain(t, 4000, order(4000)), "b")
+	for _, l := range strings.Split(b2, "\n") {
+		if n := strings.Count(l, " -> "); n > 5 {
+			t.Fatalf("line with %d hops: %s", n, l)
+		}
+	}
+	if len(b4) > 2*len(b2)+6*4000 {
+		t.Errorf("doubling the chain: %d -> %d bytes, not linear", len(b2), len(b4))
 	}
 }
