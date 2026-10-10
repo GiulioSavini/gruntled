@@ -58,8 +58,8 @@ step when either Report has no graph (GRT001 kept, conservative); `shortBase` te
 
 | # | Severity | Ref | Finding | Disposition |
 |---|----------|-----|---------|-------------|
-| F1 | INFO | `cmd/gruntled/rules_doc_test.go:93` | README guard is line-scoped: a paragraph naming GRT004 with "no `Code` constant" on a later line passes (mutation M15 survived). README is correct today and the GRT004 table row is still asserted. | Optional: check blank-line-separated paragraphs instead of lines |
-| F2 | INFO | `scripts/compare-ref.sh:56` | `extract()` interpolates txtar member names into `system("mkdir -p ...")`, accepts absolute/`..` names and symlink targets; `<ref>` goes to `git worktree add` without `rev-parse --verify --end-of-options`. Inputs are the working tree's own testdata and a maintainer-typed ref; not run in CI. | Accepted; optional hardening: reject `^/`, `..`, quote/`$`/backtick names, verify the ref first |
+| F1 | INFO | `cmd/gruntled/rules_doc_test.go:93` | README guard is line-scoped: a paragraph naming GRT004 with "no `Code` constant" on a later line passes (mutation M15 survived). README is correct today and the GRT004 table row is still asserted. | Fixed in ddfbf2d: paragraph-scoped check, M15 now fails (`rules_doc_test.go:93-100`) |
+| F2 | INFO | `scripts/compare-ref.sh:56` | `extract()` interpolates txtar member names into `system("mkdir -p ...")`, accepts absolute/`..` names and symlink targets; `<ref>` goes to `git worktree add` without `rev-parse --verify --end-of-options`. Inputs are the working tree's own testdata and a maintainer-typed ref; not run in CI. | Fixed in f4b1e1f: ref verified with `rev-parse --verify --end-of-options`, `safe_rel` and `inside_after_link` reject unsafe names and links, no shell built from names; 244/244 unchanged |
 | F3 | INFO | `cmd/gruntled/testdata/script/blast_grt004.txtar:20` | T-13-02-4 assertion is `! stdout '^/'` + drive-letter (text, case 1) instead of the planned `\$WORK\|^/`. Mitigation holds structurally (RepoPath) and by exact-message asserts. | No action |
 
 ## Re-checks requested by the orchestrator
