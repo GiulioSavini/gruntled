@@ -45,7 +45,7 @@ See `milestones/v0.3-ROADMAP.md`.
 **Milestone Goal:** Use the difference against a baseline, not only the current tree: the daemon answers blast on every save, impact follows the graph past one hop and through type changes, and a removed output that is still referenced becomes an error that names its consumers.
 
 - [x] **Phase 13: Removed-Output Diagnostic & Shared Blast Core** - `GRT004` replaces `GRT001` at every reference to an output the change removed; `check` stays byte-identical to v0.3.0 (completed 2026-10-10)
-- [ ] **Phase 14: Transitive Impact with Paths** - Impacted follows dependents past one hop, with a distance, one connecting path and `--depth`
+- [x] **Phase 14: Transitive Impact with Paths** - Impacted follows dependents past one hop, with a distance, one connecting path and `--depth` (completed 2026-10-10)
 - [ ] **Phase 15: Type-Level Surface Facts** - New required variables and variable/output type or `sensitive` changes put instantiating units in Impacted, never in Broken
 - [ ] **Phase 16: Daemon Baseline, `report --blast` & `rebase`** - The daemon answers blast against its in-memory baseline over IPC v2, and the baseline moves only on `rebase`
 - [ ] **Phase 17: Corpus Mutation Proof & Cross-Phase Audit** - No noise and 100% mutation catch on the three corpora, plus an independent audit across phase boundaries
@@ -82,12 +82,12 @@ Plans:
   4. `blast --depth N` limits propagation (default unlimited); `--depth 1` with only name-level changes yields the v0.3 Impacted set; `--depth 0`, a negative or a non-integer value exits 2
   5. JSON carries `"version": 2` (existing key, D-14-01) with additive fields only (distance, source and `via` = predecessor, so size is linear in chain length); text prints the full path up to a fixed hop count and elides the rest deterministically (the 5,000-unit size bound is proven in Phase 15 under BLAST-11)
 
-**Plans**: 3 plans
+**Plans**: 3/3 plans complete
 
 Plans:
-- [ ] 14-01-PLAN.md — domain: restricted reverse-edge BFS (Reach distance/source/via), Compute transitive, Result.Changes, WithMaxDistance, independent brute-force oracle
-- [ ] 14-02-PLAN.md — presenter: blast JSON version 2 (changes[], distance/source/via, linear), text distance + elided path, escaping, goldens moved to v2
-- [ ] 14-03-PLAN.md — CLI --depth, e2e transitive fixtures, synthrepo cone, --depth 1 snapshot equivalence, docs/README pins, phase gate
+- [x] 14-01-PLAN.md — domain: restricted reverse-edge BFS (Reach distance/source/via), Compute transitive, Result.Changes, WithMaxDistance, independent brute-force oracle
+- [x] 14-02-PLAN.md — presenter: blast JSON version 2 (changes[], distance/source/via, linear), text distance + elided path, escaping, goldens moved to v2
+- [x] 14-03-PLAN.md — CLI --depth, e2e transitive fixtures, synthrepo cone, --depth 1 snapshot equivalence, docs/README pins, phase gate
 
 ### Phase 15: Type-Level Surface Facts
 
@@ -109,6 +109,7 @@ Plans:
 - [ ] 15-03-PLAN.md — impact: TypeChange diff, type-only seeds, never Broken/exit (property)
 - [ ] 15-04-PLAN.md — presenter type_changes/tokens/Type changes section, blast_types e2e, depth-1 normaliser, docs
 - [ ] 15-05-PLAN.md — SEC-01 e2e escape, BLAST-11 5,000-unit + 4 MiB bound on the built binary, README, phase gate
+
 **Research flag**: yes — spike before planning: `typeexpr` over `.tf.json` string form and legacy bare `list`/`map`; Terraform 1.15 output `type` release note and OpenTofu parity; `override.tf` and `.tf` + `.tofu` duplicate declarations; the six-target proof with `ext/typeexpr` linked
 
 ### Phase 16: Daemon Baseline, `report --blast` & `rebase`
@@ -152,7 +153,7 @@ Plans:
 | 11. Report, Single Instance & Release Proof | v0.3 | 7/7 | Complete | 2026-10-08 |
 | 12. Gap Closure — Watcher Dir Ignore & Audit Findings | v0.3 | 5/5 | Complete | 2026-10-10 |
 | 13. Removed-Output Diagnostic & Shared Blast Core | v0.4 | 3/3 | Complete    | 2026-10-10 |
-| 14. Transitive Impact with Paths | v0.4 | 0/TBD | Not started | - |
+| 14. Transitive Impact with Paths | v0.4 | 3/3 | Complete    | 2026-10-10 |
 | 15. Type-Level Surface Facts | v0.4 | 0/TBD | Not started | - |
 | 16. Daemon Baseline, `report --blast` & `rebase` | v0.4 | 0/TBD | Not started | - |
 | 17. Corpus Mutation Proof & Cross-Phase Audit | v0.4 | 0/TBD | Not started | - |

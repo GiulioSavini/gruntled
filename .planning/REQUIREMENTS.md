@@ -20,9 +20,9 @@ Milestone v0.4 Blast-aware Diagnostics. Each maps to one roadmap phase.
 
 ### Transitive impact
 
-- [ ] **BLAST-03**: Impacted includes the dependents reachable from the seeds by reverse `dependency` block edges whose `enabled` is literally true or absent and whose `skip_outputs` is literally false or absent (the same facts as `GRT001` rows 2-3), and whose target is a unit of the current graph. Any non-literal value stops propagation (a documented lower bound). `dependencies { paths }` edges do not propagate. Cycles, self-loops and diamonds terminate; Broken units are traversed but not listed as Impacted.
-- [ ] **BLAST-04**: Instantiating units have distance 1; a dependent k reverse edges from the nearest seed has distance 1+k. Each Impacted unit shows its distance and one shortest path: the one whose unit sequence, read from the impacted unit back to its seed, is smallest under `RepoPath.Compare` at the first differing hop. Independent of map and input order, proven by a brute-force oracle property test over random graphs with cycles, self-loops, diamonds and shuffled input. Blast JSON schema version 2, additive fields only.
-- [ ] **BLAST-05**: `blast --depth N` limits propagation; `--depth 1` limits Impacted to the instantiating units and, with only name-level changes, equals the v0.3 set. N is an integer >= 1, otherwise exit 2. Default: unlimited.
+- [x] **BLAST-03**: Impacted includes the dependents reachable from the seeds by reverse `dependency` block edges whose `enabled` is literally true or absent and whose `skip_outputs` is literally false or absent (the same facts as `GRT001` rows 2-3), and whose target is a unit of the current graph. Any non-literal value stops propagation (a documented lower bound). `dependencies { paths }` edges do not propagate. Cycles, self-loops and diamonds terminate; Broken units are traversed but not listed as Impacted.
+- [x] **BLAST-04**: Instantiating units have distance 1; a dependent k reverse edges from the nearest seed has distance 1+k. Each Impacted unit shows its distance and one shortest path: the one whose unit sequence, read from the impacted unit back to its seed, is smallest under `RepoPath.Compare` at the first differing hop. Independent of map and input order, proven by a brute-force oracle property test over random graphs with cycles, self-loops, diamonds and shuffled input. Blast JSON schema version 2, additive fields only.
+- [x] **BLAST-05**: `blast --depth N` limits propagation; `--depth 1` limits Impacted to the instantiating units and, with only name-level changes, equals the v0.3 set. N is an integer >= 1, otherwise exit 2. Default: unlimited.
 
 ### Type-level surface
 
@@ -80,9 +80,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | MORE-03 | Phase 13 | Complete |
 | MORE-07 | Phase 13 | Complete |
-| BLAST-03 | Phase 14 | Pending |
-| BLAST-04 | Phase 14 | Pending |
-| BLAST-05 | Phase 14 | Pending |
+| BLAST-03 | Phase 14 | Complete |
+| BLAST-04 | Phase 14 | Complete |
+| BLAST-05 | Phase 14 | Complete |
 | BLAST-06 | Phase 15 | Pending |
 | BLAST-07 | Phase 15 | Pending |
 | BLAST-08 | Phase 15 | Pending |
