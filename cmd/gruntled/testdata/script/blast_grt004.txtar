@@ -36,10 +36,12 @@ stdout '^Broken \(0\):$'
 ! stderr .
 
 # case 2: removed but unreferenced. cur drops "name", which nobody reads ->
-# no finding, exit 0; the module's consumer live/db is Impacted.
+# no finding, exit 0; the module's consumer live/db is Impacted, and so is
+# live/app, which depends on live/db.
 exec gruntled-exit 0 blast --base base2 cur2
 stdout '^Broken \(0\):$'
-stdout '^Impacted \(1\):$'
+stdout '^Impacted \(2\):$'
+stdout -count=1 '^  live/app'
 stdout '^  live/db \(module modules/vpc: -output name\)$'
 ! stdout 'GRT00'
 ! stderr .

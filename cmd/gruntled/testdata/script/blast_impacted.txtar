@@ -7,15 +7,17 @@ stdout '^Broken \(1\):$'
 stdout '^  live/app$'
 stdout '^    live/app/terragrunt.hcl:7:\d+: GRT004 dependency "db" output "id" was removed from module "modules/vpc" \(target unit "live/db"\)'
 ! stdout GRT001
-stdout '^Impacted \(2\):$'
+stdout '^Impacted \(3\):$'
 stdout '^  live/cache \(module modules/vpc: \+variable name, -output id\)$'
 stdout '^  live/db \(module modules/vpc: \+variable name, -output id\)$'
 # Broken and Impacted are disjoint: live/app is listed once, under Broken
 stdout -count=1 '^  live/app'
 ! stdout '^  live/app \(module'
-# consumers of other modules and consumers of consumers are not Impacted
+# live/edge depends on live/db (dependency "db", default options), so the
+# change reaches it transitively and it is Impacted; live/other only uses
+# modules/other and depends on nothing that changed, so it is not
+stdout -count=1 '^  live/edge'
 ! stdout 'live/other'
-! stdout 'live/edge'
 # the GRT100 present in both trees is not new
 ! stdout 'GRT100'
 ! stdout 'live/bad'
@@ -32,7 +34,7 @@ stdout '"impacted": \[\n\s+\{\n\s+"unit": "live/cache",\n\s+"module": "modules/v
 ! stdout '"impacted": \[[\s\S]*"unit": "live/app"'
 stdout '"added_variables": \[\n\s+"name"\n\s+\]'
 stdout '"removed_outputs": \[\n\s+"id"\n\s+\]'
-stdout '"summary": \{\n\s+"broken": 1,\n\s+"impacted": 2\n\s+\}'
+stdout '"summary": \{\n\s+"broken": 1,\n\s+"impacted": 3\n\s+\}'
 ! stderr .
 
 # comment-only edit and reordering of the module: names unchanged, nothing
