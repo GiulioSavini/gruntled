@@ -197,3 +197,30 @@ func TestDirInsideViaSymlink(t *testing.T) {
 		t.Fatal("path reached through a symlink to root must count as inside")
 	}
 }
+
+// TestDirInsideCaseVariant runs where the temp filesystem is
+// case-insensitive (macOS APFS, Windows NTFS): a case variant of the root
+// is the same directory and must count as inside.
+func TestDirInsideCaseVariant(t *testing.T) {
+	parent := realRoot(t)
+	root := filepath.Join(parent, "CaseRepo")
+	if err := os.Mkdir(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	variant := filepath.Join(parent, "caserepo")
+	rootFI, err := os.Stat(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vFI, err := os.Stat(variant)
+	if err != nil || !os.SameFile(rootFI, vFI) {
+		t.Skipf("filesystem at %s is case-sensitive", parent)
+	}
+	got, err := statusfile.Inside(root, filepath.Join(variant, "st", "status"))
+	if err != nil {
+		t.Fatalf("Inside: %v", err)
+	}
+	if !got {
+		t.Fatalf("Inside(%q, %q) = false; a case variant of the root is inside", root, filepath.Join(variant, "st", "status"))
+	}
+}

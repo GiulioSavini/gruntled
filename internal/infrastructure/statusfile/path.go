@@ -31,6 +31,10 @@ func OSEnv() Env {
 	}
 }
 
+// statFn is os.Stat; tests replace it to simulate two spellings of one
+// directory on a case-sensitive host.
+var statFn = os.Stat
+
 // hashLen is the number of hex characters of the root hash used as the
 // per-repository directory name. Kept short: Phase 11 puts a unix socket
 // beside the status file and sun_path is ~104 bytes on darwin.
