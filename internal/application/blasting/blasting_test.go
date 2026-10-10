@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/GiulioSavini/gruntled/internal/application/blasting"
+	"github.com/GiulioSavini/gruntled/internal/application/checking"
 	"github.com/GiulioSavini/gruntled/internal/application/ports"
 	"github.com/GiulioSavini/gruntled/internal/domain/diagnostic"
 	"github.com/GiulioSavini/gruntled/internal/domain/impact"
@@ -168,6 +169,99 @@ func TestBlastBrokenAndImpacted(t *testing.T) {
 	if !res.HasErrors() {
 		t.Errorf("HasErrors = false, want true")
 	}
+	// The baseline module declared vpc_id and live/app still reads it, so
+	// the finding is GRT004, not GRT001 (MORE-03).
+	if len(res.Broken) != 1 || len(res.Broken[0].Findings) != 1 {
+		t.Fatalf("Broken = %v, want one finding", res.Broken)
+	}
+	d := res.Broken[0].Findings[0]
+	if d.Code() != diagnostic.CodeRemovedOutput {
+		t.Errorf("code = %v, want GRT004", d.Code())
+	}
+	if d.Pos() != mustPos(t, "live/app/terragrunt.hcl", 6, 12) {
+		t.Errorf("pos = %v, want live/app/terragrunt.hcl:6:12", d.Pos())
+	}
+	if u, ok := d.Unit(); !ok || u.String() != "live/app" {
+		t.Errorf("unit = %v (%v), want live/app", u, ok)
+	}
+	const wantMsg = `dependency "vpc" output "vpc_id" was removed from module "modules/vpc" (target unit "live/vpc")`
+	if d.Message() != wantMsg {
+		t.Errorf("message =\n  %s\nwant\n  %s", d.Message(), wantMsg)
+	}
+}
+
+func check(t *testing.T, src blasting.Sources) checking.Report {
+	t.Helper()
+	rep, err := checking.Check(context.Background(), src.Units, src.Surfaces)
+	if err != nil {
+		t.Fatalf("Check: %v", err)
+	}
+	return rep
+}
+
+// treePairs are the base/cur pairs of this file.
+func treePairs(t *testing.T) map[string][2]blasting.Sources {
+	return map[string][2]blasting.Sources{
+		"shifted": {
+			tree(t, "vpc_idd", 6, []string{"vpc_id"}, nil, grt100(t, "live/zzz/terragrunt.hcl", 3)),
+			tree(t, "vpc_idd", 9, []string{"vpc_id"}, nil, grt100(t, "live/zzz/terragrunt.hcl", 7)),
+		},
+		"removed": {
+			tree(t, "vpc_id", 6, []string{"vpc_id"}, nil),
+			tree(t, "vpc_id", 6, []string{"id"}, nil),
+		},
+		"unchanged": {
+			tree(t, "vpc_id", 6, []string{"vpc_id"}, nil),
+			tree(t, "vpc_id", 6, []string{"vpc_id"}, nil),
+		},
+		"pre-existing GRT001": {
+			tree(t, "nope", 6, []string{"vpc_id"}, nil),
+			tree(t, "nope", 6, []string{"id"}, nil),
+		},
+	}
+}
+
+func TestBetweenEqualsBlast(t *testing.T) {
+	for name, p := range treePairs(t) {
+		t.Run(name, func(t *testing.T) {
+			base, cur := p[0], p[1]
+			want, err := blasting.Blast(context.Background(), cur, &base)
+			if err != nil {
+				t.Fatalf("Blast: %v", err)
+			}
+			got, err := blasting.Between(check(t, base), check(t, cur))
+			if err != nil {
+				t.Fatalf("Between: %v", err)
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("Between = %v\nBlast   = %v", got, want)
+			}
+		})
+	}
+}
+
+func TestBetweenPure(t *testing.T) {
+	for name, p := range treePairs(t) {
+		t.Run(name, func(t *testing.T) {
+			base, cur := check(t, p[0]), check(t, p[1])
+			baseD := diagnostic.NewSet(base.Diagnostics.All()...)
+			curD := diagnostic.NewSet(cur.Diagnostics.All()...)
+			first, err := blasting.Between(base, cur)
+			if err != nil {
+				t.Fatalf("Between: %v", err)
+			}
+			second, err := blasting.Between(base, cur)
+			if err != nil {
+				t.Fatalf("Between: %v", err)
+			}
+			if !reflect.DeepEqual(first, second) {
+				t.Errorf("Between not deterministic:\n%v\n%v", first, second)
+			}
+			if !base.Diagnostics.Equal(baseD) || !cur.Diagnostics.Equal(curD) {
+				t.Errorf("Between mutated its inputs")
+			}
+		})
+	}
 }
 
 func TestBlastNilBaseSkipsBaseline(t *testing.T) {
@@ -221,6 +315,9 @@ func TestErrorMessageAndUnwrap(t *testing.T) {
 	e := &blasting.Error{Stage: "baseline", Err: inner}
 	if e.Error() != "blasting: baseline: inner" {
 		t.Errorf("Error() = %q", e.Error())
+	}
+	if c := (&blasting.Error{Stage: "compare", Err: inner}).Error(); c != "blasting: compare: inner" {
+		t.Errorf("Error() = %q", c)
 	}
 	if !errors.Is(e, inner) {
 		t.Errorf("Unwrap does not reach inner")
