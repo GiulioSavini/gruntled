@@ -189,7 +189,7 @@ Flags:
 
 Exit codes:
   0  clean shutdown after SIGINT/SIGTERM, already watching (another daemon runs for path), or --print-status-path / -h
-  2  usage error: unknown flag, invalid duration, more than one path, --status-file inside the repository
+  2  usage error: unknown flag, invalid duration, more than one path, --status-file or runtime directory inside the repository
   3  watch could not start: path missing, not a directory or unreadable, no watcher, or the initial index failed
 ```
 
@@ -268,7 +268,7 @@ are reported in the status file and on stdout. As printed by
 
 ```
   0  clean shutdown after SIGINT/SIGTERM, already watching (another daemon runs for path), or --print-status-path / -h
-  2  usage error: unknown flag, invalid duration, more than one path, --status-file inside the repository
+  2  usage error: unknown flag, invalid duration, more than one path, --status-file or runtime directory inside the repository
   3  watch could not start: path missing, not a directory or unreadable, no watcher, or the initial index failed
 ```
 
@@ -774,7 +774,9 @@ Durations use Go syntax (`250ms`, `2s`).
 - **Incremental.** Each debounced batch of changed paths is handed to the
   parse cache, which drops only the entries under those paths; the rest of
   the repository is served from memory. The result is by construction the
-  same as a fresh `gruntled check`.
+  same as a fresh `gruntled check`. A file reached through an in-repo
+  symlink is re-read when its target changes, even though only the target
+  is reported as changed.
 - **Debounce.** 150 ms after the last change (trailing), capped at 1 s from
   the first change of a burst. An editor's save-and-rename sequence gives one
   reindex.
@@ -782,6 +784,10 @@ Durations use Go syntax (`250ms`, `2s`).
   `.terragrunt-cache`, and editor swap, backup and temp files (`*~`,
   `*.swp`/`.swo`/`.swn`/`.swx`, `.#*`, `#*#`, `*.tmp`, JetBrains
   `___jb_tmp___`/`___jb_old___`, `.DS_Store`) never trigger a reindex.
+  The editor patterns apply to files only: a directory named like one
+  (`2024`, `x.tmp`, `bak~`) is watched and indexed like any other. Symlinks
+  are pattern-ignored only for Emacs lock files (`.#name`); a symlink named
+  like any other pattern triggers a reindex.
 - **New and deleted directories** are picked up: a new unit directory is
   watched and indexed, a deleted one disappears from the results.
 - **Backends.** On linux and darwin the native watcher (inotify, kqueue) is
@@ -844,6 +850,14 @@ gruntled: stopped @ 14:05:40
     symlink resolution does not canonicalise get different status files.
 - The status file is never inside the repository: a `--status-file` (or a
   default path) that lands inside it, also through a symlink, is exit 2.
+- The same holds for the per-repository runtime directory (lock, socket,
+  report file) chosen from `$XDG_RUNTIME_DIR` or the user cache directory:
+  if it lies inside the repository, watch exits 2 before creating anything,
+  with `gruntled: runtime directory <dir> is inside the repository <root>; ...`
+  (or the status file message above, when the default status file lands
+  there too and no `--status-file` moves it out). Inside-ness is decided by file identity, so on a
+  case-insensitive filesystem a case variant of the repository path counts as
+  inside.
 - `gruntled watch --print-status-path [path]` prints the path, so a prompt
   or status bar does not have to recompute it:
 
@@ -908,6 +922,11 @@ per index with the same code `check` uses; `report` only copies those bytes.
   daemon holds its lock, so a file left behind by a dead daemon is reported
   as no daemon. There is no live query and no version negotiation beyond the
   version recorded in the file.
+- **Response cap.** One daemon response (socket reply or report file) is
+  capped at 64 MiB. It carries every format at once (text, summary, JSON and
+  SARIF, base64-encoded), so a repository whose combined renders exceed about
+  48 MiB gets a transport error from `report` (exit 3). `check` has no such
+  cap.
 
 ## Guarantees
 
@@ -933,7 +952,9 @@ per index with the same code `check` uses; `report` only copies those bytes.
   `gruntled watch` keeps its parse cache in memory only; what it writes
   (status file, lock file, unix socket on linux and darwin, report file on
   windows) lives in the per-repository runtime directory, always outside the
-  repository.
+  repository. On windows that directory is under `%LocalAppData%` and relies
+  on its per-user ACL: gruntled does not verify the directory's owner or ACL
+  there.
 
 ## Known limitations
 
@@ -980,3 +1001,9 @@ per index with the same code `check` uses; `report` only copies those bytes.
 - `report` on windows has no live query: it reads the report file the daemon
   rewrites after each index, so it shows the last published result and
   cannot ask the daemon anything else.
+- `watch` on darwin with the native watcher: a new file created in a
+  directory where a dangling symlink (for example an Emacs lock file
+  `.#name`) sorts before it is not seen while that symlink exists, because
+  kqueue directory scanning stops at the first dangling symlink. The 30 s
+  safety-net re-scan picks it up, or use `--poll`. Upstream:
+  https://github.com/fsnotify/fsnotify/issues/787.
