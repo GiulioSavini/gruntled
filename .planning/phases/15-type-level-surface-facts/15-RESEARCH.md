@@ -222,6 +222,9 @@ current `CheckNativeDepth`:
 | nested interpolation `"${"${...}"}"` ×600 | refused (quote + interp frames) |
 | unary runs, ternary chains, operator chains | refused (existing run/pending/chain rules) |
 | nested `%{if}` / `%{for}` blocks ×270,000 (quoted or heredoc) | **passed** -> fixed by 15-00 |
+| directive keyword after trivia: `%{/*c*/if a}`, `%{#c<NL>if a}`, `%{<NL>if a}`, `%{~/**/if a}` (sec #271; 4.08 MB `%{<NL>for x in[1]}`×170k = fatal) | the lexer yields TokenTemplateControl, then TokenComment or TokenNewline, then the keyword; a keyword-adjacent check misses them -> 15-00 takes the first non-comment/newline token and increments on anything but endif/endfor/else; prototype refuses all four at 1,001 and the 4.08 MB repro in 1.04 s |
+| config vs expression newline mode (sec #272): `a?b:<NL>`×690k as a .tf.json type string | CheckNativeDepth (config mode) releases the pending `?` at each top-level newline, but hcl/json parses the string with ParseExpression (newlines ignored) -> fatal. Fixed in 15-02: 64 KiB cap + CheckNativeExprDepth (root newlines off) |
+| the same in a native `.tf` `type = ...` | not a gap [exp]: at the top level of an attribute, `a ? b :<NL> c` is a syntax error for ParseConfig too (the newline ends the expression), so the file is a GRT100 and never analysed; inside parentheses or brackets newlines are ignored by both the parser and the scan (2,000 `a ? b :<NL>` inside `(...)` in an optional() default are refused by CheckNativeDepth); typeexpr walks the AST ParseConfig already built and never re-parses native source |
 
 No other escape found. Chains under the 10,000 cap recurse at most ~10,000 Go frames, which the
 growable goroutine stack handles (existing G17 design).
