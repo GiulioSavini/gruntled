@@ -482,19 +482,32 @@ Empty lists print as `[]`, never `null`. HTML characters are not escaped.
 `gruntled blast` (default `--format text`) writes to stdout only; there is no
 stderr summary. The first line names the baseline as given to `--base`.
 Each Broken subject is followed by its new findings in the `check` text
-layout without the `(unit U)` suffix. Each Impacted unit names the changed
+layout without the `(unit U)` suffix. Each Impacted unit carries its
+distance. A unit at distance 1 uses the changed module; its line names the
 module and its name changes, in the order removed variables, added
-variables, removed outputs, added outputs:
+variables, removed outputs, added outputs. A unit at distance 2 or more does
+not use the module: the change reached it from that module through
+dependency blocks, and its line names the module and one shortest path, from
+the unit back to the unit that instantiates the changed module:
 
 ```
 baseline: ../base
 Broken (1):
   live/app
     live/app/terragrunt.hcl:7:20: GRT004 dependency "db" output "id" was removed from module "modules/vpc" (target unit "live/db")
-Impacted (2):
-  live/cache (module modules/vpc: +variable name, -output id)
-  live/db (module modules/vpc: +variable name, -output id)
+Impacted (3):
+  live/cache (distance 1, module modules/vpc: +variable name, -output id)
+  live/db (distance 1, module modules/vpc: +variable name, -output id)
+  live/edge (distance 2, from module modules/vpc, path live/edge -> live/db)
 ```
+
+A path runs through Broken units too; they are listed only under Broken. A
+path of more than 6 units prints its first 4 units, then
+`... (<k> more) ->`, then the instantiating unit, so every line stays short.
+When several shortest paths exist, the one printed is the smallest by path
+order at the first unit where they differ, read from the unit back. The JSON
+`source` and `via` keys are the unambiguous form of a path: text joins hops
+with ` -> `, which a directory name may itself contain.
 
 Empty sections still print their header (`Broken (0):`). Without `--base`
 the first line is `baseline: none (no baseline)` and there is no Impacted
@@ -506,23 +519,27 @@ The baseline label is escaped like every path and name, with the
 ### Blast JSON
 
 `gruntled blast --format json` writes one JSON document to stdout. The
-schema is versioned; this is version 1, with the same stability rules as
-Graph JSON. New code values can appear without a version bump: since GRT004,
-a removed output is reported as GRT004 where earlier versions said GRT001.
-Gate on severity, not on a code list.
+schema is versioned; this is version 2, with the same stability rules as
+Graph JSON. Version 2 only adds keys to version 1. Readers must check
+`version`; a v1 reader must reject version 2. New code values can appear
+without a version bump: since GRT004, a removed output is reported as GRT004
+where earlier versions said GRT001. Gate on severity, not on a code list.
 
 | Key | Content |
 |-----|---------|
-| `version` | Schema version, `1`. |
+| `version` | Schema version, `2`. |
 | `kind` | Always `"blast"`. |
 | `baseline` | `true` when `--base` was given, `false` otherwise. |
 | `note` | `"no baseline"`. Present only when `baseline` is `false`. |
-| `broken[]` | `unit` (the unit, or the file for a unit-less finding) and `findings[]`, each `code`, `severity`, `file`, `line`, `column`, `message`. Sorted by `unit`. |
-| `impacted[]` | `unit`, `module`, `added_variables`, `removed_variables`, `added_outputs`, `removed_outputs` (sorted names). Sorted by `unit`. Always `[]` without a baseline. |
+| `broken[]` | `unit` (the unit, or the file for a unit-less finding) and `findings[]`, each `code`, `severity`, `file`, `line`, `column`, `message`. When propagation passed through the unit, also `distance`, `source` and `via`. Sorted by `unit`. |
+| `impacted[]` | `unit`; `module`, the changed module whose change reached this unit; for distance 1 it is also the unit's own module; `distance`; `source`, the unit that instantiates `module` at the start of the path (the unit itself at distance 1); `via`, the next unit on the path toward `source` (absent at distance 1). At distance 1 only, also `added_variables`, `removed_variables`, `added_outputs`, `removed_outputs` (sorted names); at distance 2 or more the change is the `changes[]` entry for `module`. Sorted by `unit`. Always `[]` without a baseline. |
+| `changes[]` | One entry per changed module: `module`, `added_variables`, `removed_variables`, `added_outputs`, `removed_outputs`. Sorted by `module`. Always `[]` without a baseline. |
 | `summary` | `broken` and `impacted` counts. |
 
-A unit never appears in both `broken` and `impacted`. Empty lists print as
-`[]`, never `null`. HTML characters are not escaped.
+A unit never appears in both `broken` and `impacted`. Following `via` from
+any `impacted[]` or `broken[]` entry reaches its `source` through entries of
+the same document. Every list present prints as `[]` when empty, never
+`null`. HTML characters are not escaped.
 
 ### SARIF
 
