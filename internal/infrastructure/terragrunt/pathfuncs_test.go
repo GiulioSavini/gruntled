@@ -349,28 +349,7 @@ func TestResolvePath(t *testing.T) {
 	}
 }
 
-// --- literalBool / literalString ---------------------------------------------
-
-func TestLiteralBool(t *testing.T) {
-	cases := []struct {
-		expr string
-		want repograph.Tristate
-	}{
-		{"true", repograph.TristateTrue},
-		{"false", repograph.TristateFalse},
-		{`"true"`, repograph.TristateUnknown},
-		{"local.x", repograph.TristateUnknown},
-		{"null", repograph.TristateUnknown},
-	}
-	for _, tc := range cases {
-		t.Run(tc.expr, func(t *testing.T) {
-			got := literalBool(parseExpr(t, tc.expr))
-			if got != tc.want {
-				t.Fatalf("literalBool(%q) = %v, want %v", tc.expr, got, tc.want)
-			}
-		})
-	}
-}
+// --- literalString (literalBool moved to hclconv.LiteralBool) ----------------
 
 func TestLiteralString(t *testing.T) {
 	if got, ok := literalString(parseExpr(t, `"no_merge"`)); !ok || got != "no_merge" {
