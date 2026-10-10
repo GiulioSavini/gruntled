@@ -61,12 +61,14 @@ func StatusStopped(w io.Writer, stamp string) error {
 	return writeStatus(w, "stopped", stamp)
 }
 
-// SanitizeReason turns every control rune (ESC, NUL, CR, LF, tab, DEL...)
+// SanitizeReason turns every control rune (ESC, NUL, CR, LF, tab, DEL,
+// C1...), every format rune (Cf: bidi overrides and isolates, zero-width
+// characters, BOM) and the line and paragraph separators U+2028/U+2029
 // into a space, then collapses whitespace runs to single spaces and trims
 // the ends. It does not cap the length.
 func SanitizeReason(s string) string {
 	s = strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) {
+		if unicode.IsControl(r) || isFormatOrSeparator(r) {
 			return ' '
 		}
 		return r
