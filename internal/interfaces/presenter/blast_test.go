@@ -306,3 +306,42 @@ func TestBlastJSONEscapesTerminalRunes(t *testing.T) {
 	assertJSONEscaped(t, out, jstring("impacted", 0, "module"), "modules/"+crafted)
 	assertJSONEscaped(t, out, jstring("impacted", 0, "added_variables", 0), "v"+crafted)
 }
+
+// blastGRT004 is a Broken GRT004 whose message carries crafted (raw ESC,
+// U+009B, U+202E, ...) as the module and target names: the presenter must
+// escape it like any other message, whatever the code.
+func blastGRT004(t *testing.T) (impact.Result, string) {
+	t.Helper()
+	msg := `dependency "vpc" output "id" was removed from module "modules/` + crafted + `" (target unit "live/` + crafted + `")`
+	d, err := diagnostic.NewForUnit(diagnostic.CodeRemovedOutput, diagnostic.SeverityError, rp(t, "live/app"), pos(t, "live/app/terragrunt.hcl", 7, 20), msg)
+	if err != nil {
+		t.Fatalf("NewForUnit: %v", err)
+	}
+	return impact.Result{
+		Baseline: true,
+		Broken:   []impact.BrokenUnit{{Subject: rp(t, "live/app"), Findings: []diagnostic.Diagnostic{d}}},
+		Impacted: []impact.ImpactedUnit{},
+	}, msg
+}
+
+func TestBlastTextGRT004(t *testing.T) {
+	res, _ := blastGRT004(t)
+	got := renderBlastText(t, res, "base")
+	assertTerminalSafe(t, []byte(got))
+	want := `    live/app/terragrunt.hcl:7:20: GRT004 dependency "vpc" output "id" was removed from module "modules/` + craftedTerm + `" (target unit "live/` + craftedTerm + `")` + "\n"
+	if !strings.Contains(got, want) {
+		t.Errorf("BlastText =\n%q\nwant a line\n%q", got, want)
+	}
+}
+
+func TestBlastJSONGRT004(t *testing.T) {
+	res, msg := blastGRT004(t)
+	out := []byte(renderBlastJSON(t, res))
+	assertJSONEscaped(t, out, jstring("broken", 0, "findings", 0, "message"), msg)
+	if !bytes.Contains(out, []byte(`"code": "GRT004"`)) {
+		t.Errorf("BlastJSON lacks \"code\": \"GRT004\":\n%s", out)
+	}
+	if !bytes.Contains(out, []byte(`"version": 1`)) {
+		t.Errorf("BlastJSON is not version 1:\n%s", out)
+	}
+}

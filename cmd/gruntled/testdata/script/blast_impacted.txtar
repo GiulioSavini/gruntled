@@ -5,7 +5,8 @@ exec gruntled-exit 1 blast --base base cur
 stdout '^baseline: base$'
 stdout '^Broken \(1\):$'
 stdout '^  live/app$'
-stdout '^    live/app/terragrunt.hcl:7:\d+: GRT001 dependency "db" output "id"'
+stdout '^    live/app/terragrunt.hcl:7:\d+: GRT004 dependency "db" output "id" was removed from module "modules/vpc" \(target unit "live/db"\)'
+! stdout GRT001
 stdout '^Impacted \(2\):$'
 stdout '^  live/cache \(module modules/vpc: \+variable name, -output id\)$'
 stdout '^  live/db \(module modules/vpc: \+variable name, -output id\)$'
@@ -24,6 +25,8 @@ stdout -count=1 '^  live/app'
 exec gruntled-exit 1 blast --base base --format json cur
 stdout '"baseline": true'
 ! stdout '"note"'
+stdout '"code": "GRT004"'
+! stdout '"code": "GRT001"'
 stdout '"broken": \[\n\s+\{\n\s+"unit": "live/app"'
 stdout '"impacted": \[\n\s+\{\n\s+"unit": "live/cache",\n\s+"module": "modules/vpc"[\s\S]*"unit": "live/db"'
 ! stdout '"impacted": \[[\s\S]*"unit": "live/app"'

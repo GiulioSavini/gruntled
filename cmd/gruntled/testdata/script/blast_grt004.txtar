@@ -1,0 +1,706 @@
+# GRT004 end to end (MORE-03): a dependency output that the baseline's module
+# declared, that the current module no longer declares, and that the current
+# tree still reads, is reported as GRT004 at each reading site instead of
+# GRT001. Every failed precondition keeps v0.3 behaviour (GRT001 or silence).
+#
+# live/app (module modules/app) has dependency "db" -> live/db (module
+# modules/vpc). Its inputs lines read "  a = dependency.db.outputs.<Y>":
+# "  a = " is 6 bytes, so the reference starts at byte column 7.
+
+# case 1: removed, two sites. base declares id, cur drops it, live/app reads it
+# on lines 8 and 9 (column 7) -> one GRT004 per site, no GRT001, exit 1.
+exec gruntled-exit 1 blast --base base1 cur1
+stdout '^Broken \(1\):$'
+stdout '^  live/app$'
+stdout -count=2 'GRT004'
+stdout '^    live/app/terragrunt.hcl:8:7: GRT004 dependency "db" output "id" was removed from module "modules/vpc" \(target unit "live/db"\)$'
+stdout '^    live/app/terragrunt.hcl:9:7: GRT004 dependency "db" output "id" was removed from module "modules/vpc" \(target unit "live/db"\)$'
+! stdout GRT001
+stdout '^  live/db \(module modules/vpc: -output id\)$'
+! stdout $WORK
+! stdout '^/'
+! stderr .
+
+# case 10: the same comparison as JSON: two GRT004 findings, schema version 1,
+# no GRT001.
+exec gruntled-exit 1 blast --base base1 --format json cur1
+stdout '"version": 1'
+stdout -count=2 '"code": "GRT004"'
+! stdout GRT001
+! stderr .
+
+# case 11: case 1 reversed (the output is added back): nothing is Broken.
+exec gruntled-exit 0 blast --base cur1 base1
+stdout '^Broken \(0\):$'
+! stdout 'GRT00'
+! stderr .
+
+# case 2: removed but unreferenced. cur drops "name", which nobody reads ->
+# no finding, exit 0; the module's consumer live/db is Impacted.
+exec gruntled-exit 0 blast --base base2 cur2
+stdout '^Broken \(0\):$'
+stdout '^Impacted \(1\):$'
+stdout '^  live/db \(module modules/vpc: -output name\)$'
+! stdout 'GRT00'
+! stderr .
+
+# case 3: the reference is added in the same change (baseHadRef fails): base
+# live/app reads nothing, cur reads id and the module drops it -> GRT001.
+exec gruntled-exit 1 blast --base base3 cur3
+stdout '^    live/app/terragrunt.hcl:8:7: GRT001 dependency "db" output "id" is not declared by module "modules/vpc" \(target unit "live/db"\)$'
+! stdout GRT004
+! stderr .
+
+# case 4: re-pointed to another module (sameModule fails): base db -> live/db
+# (modules/vpc declares id), cur db -> live/other (modules/other never had id)
+# -> GRT001.
+exec gruntled-exit 1 blast --base base4 cur4
+stdout '^    live/app/terragrunt.hcl:8:7: GRT001 dependency "db" output "id" is not declared by module "modules/other" \(target unit "live/other"\)$'
+! stdout GRT004
+! stderr .
+
+# case 5a: module unknown in the baseline (syntax error mid-edit) -> GRT001 in
+# cur, no GRT004; the base GRT100 is not new.
+exec gruntled-exit 1 blast --base base5a cur5a
+stdout '^    live/app/terragrunt.hcl:8:7: GRT001 dependency "db" output "id" is not declared'
+! stdout GRT004
+! stdout GRT100
+! stderr .
+
+# case 5b: module unknown in cur -> the reference site is silent (no GRT001, no
+# GRT004); the new GRT100 is what is Broken.
+exec gruntled-exit 1 blast --base base5b cur5b
+stdout 'GRT100'
+! stdout GRT001
+! stdout GRT004
+! stdout '^  live/app$'
+! stderr .
+
+# case 6: the output was never declared in the baseline (baseDeclared fails):
+# the GRT001 exists in both trees, so it is not new -> exit 0, Broken (0).
+exec gruntled-exit 0 blast --base base6 cur6
+stdout '^Broken \(0\):$'
+! stdout 'GRT00'
+! stderr .
+
+# case 7a: enabled = false in cur: Terragrunt does not read outputs, silent -> exit 0.
+exec gruntled-exit 0 blast --base base7a cur7a
+stdout '^Broken \(0\):$'
+! stdout 'GRT00'
+! stderr .
+
+# case 7b: skip_outputs = true in cur: Terragrunt does not read outputs, silent -> exit 0.
+exec gruntled-exit 0 blast --base base7b cur7b
+stdout '^Broken \(0\):$'
+! stdout 'GRT00'
+! stderr .
+
+# case 7c: enabled = local.on (not a literal) in cur: Terragrunt does not read outputs, silent -> exit 0.
+exec gruntled-exit 0 blast --base base7c cur7c
+stdout '^Broken \(0\):$'
+! stdout 'GRT00'
+! stderr .
+
+# case 7d: skip_outputs = local.skip (not a literal) in cur: Terragrunt does not read outputs, silent -> exit 0.
+exec gruntled-exit 0 blast --base base7d cur7d
+stdout '^Broken \(0\):$'
+! stdout 'GRT00'
+! stderr .
+
+# case 8a: mock_outputs covers id, merge with state, apply allowed: mocks never
+# suppress, so GRT004 still fires, with GRT001's mock suffix.
+exec gruntled-exit 1 blast --base base8a cur8a
+stdout '^    live/app/terragrunt.hcl:11:7: GRT004 dependency "db" output "id" was removed from module "modules/vpc" \(target unit "live/db"\); mock_outputs supplies it, so apply would silently use the mock value$'
+! stdout GRT001
+! stderr .
+
+# case 8b: the mock does not apply at apply (apply not allowed) -> GRT004
+# without the suffix.
+exec gruntled-exit 1 blast --base base8b cur8b
+stdout '^    live/app/terragrunt.hcl:11:7: GRT004 dependency "db" output "id" was removed from module "modules/vpc" \(target unit "live/db"\)$'
+! stdout 'mock_outputs supplies'
+! stdout GRT001
+! stderr .
+
+# case 9: the output moved to another .tf file of the module and gained
+# deprecated: same names -> nothing Broken, nothing Impacted.
+exec gruntled-exit 0 blast --base base9 cur9
+stdout '^Broken \(0\):$'
+stdout '^Impacted \(0\):$'
+! stderr .
+-- base1/live/app/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "db" {
+  config_path = "../db"
+}
+inputs = {
+  a = dependency.db.outputs.id
+  b = dependency.db.outputs.id
+}
+-- base1/live/db/terragrunt.hcl --
+terraform {
+  source = "../../modules/vpc"
+}
+-- base1/modules/app/main.tf --
+variable "a" {}
+variable "b" {}
+-- base1/modules/vpc/main.tf --
+output "id" { value = "x" }
+output "name" { value = "x" }
+-- base2/live/app/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "db" {
+  config_path = "../db"
+}
+inputs = {
+  a = dependency.db.outputs.id
+}
+-- base2/live/db/terragrunt.hcl --
+terraform {
+  source = "../../modules/vpc"
+}
+-- base2/modules/app/main.tf --
+variable "a" {}
+variable "b" {}
+-- base2/modules/vpc/main.tf --
+output "id" { value = "x" }
+output "name" { value = "x" }
+-- base3/live/app/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "db" {
+  config_path = "../db"
+}
+inputs = {
+}
+-- base3/live/db/terragrunt.hcl --
+terraform {
+  source = "../../modules/vpc"
+}
+-- base3/modules/app/main.tf --
+variable "a" {}
+variable "b" {}
+-- base3/modules/vpc/main.tf --
+output "id" { value = "x" }
+-- base4/live/app/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "db" {
+  config_path = "../db"
+}
+inputs = {
+  a = dependency.db.outputs.id
+}
+-- base4/live/db/terragrunt.hcl --
+terraform {
+  source = "../../modules/vpc"
+}
+-- base4/live/other/terragrunt.hcl --
+terraform {
+  source = "../../modules/other"
+}
+-- base4/modules/app/main.tf --
+variable "a" {}
+variable "b" {}
+-- base4/modules/other/main.tf --
+output "x" { value = "x" }
+-- base4/modules/vpc/main.tf --
+output "id" { value = "x" }
+-- base5a/live/app/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "db" {
+  config_path = "../db"
+}
+inputs = {
+  a = dependency.db.outputs.id
+}
+-- base5a/live/db/terragrunt.hcl --
+terraform {
+  source = "../../modules/vpc"
+}
+-- base5a/modules/app/main.tf --
+variable "a" {}
+variable "b" {}
+-- base5a/modules/vpc/main.tf --
+output "id" {
+-- base5b/live/app/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "db" {
+  config_path = "../db"
+}
+inputs = {
+  a = dependency.db.outputs.id
+}
+-- base5b/live/db/terragrunt.hcl --
+terraform {
+  source = "../../modules/vpc"
+}
+-- base5b/modules/app/main.tf --
+variable "a" {}
+variable "b" {}
+-- base5b/modules/vpc/main.tf --
+output "id" { value = "x" }
+-- base6/live/app/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "db" {
+  config_path = "../db"
+}
+inputs = {
+  a = dependency.db.outputs.ghost
+}
+-- base6/live/db/terragrunt.hcl --
+terraform {
+  source = "../../modules/vpc"
+}
+-- base6/modules/app/main.tf --
+variable "a" {}
+variable "b" {}
+-- base6/modules/vpc/main.tf --
+output "id" { value = "x" }
+output "name" { value = "x" }
+-- base7a/live/app/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "db" {
+  config_path = "../db"
+}
+inputs = {
+  a = dependency.db.outputs.id
+}
+-- base7a/live/db/terragrunt.hcl --
+terraform {
+  source = "../../modules/vpc"
+}
+-- base7a/modules/app/main.tf --
+variable "a" {}
+variable "b" {}
+-- base7a/modules/vpc/main.tf --
+output "id" { value = "x" }
+-- base7b/live/app/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "db" {
+  config_path = "../db"
+}
+inputs = {
+  a = dependency.db.outputs.id
+}
+-- base7b/live/db/terragrunt.hcl --
+terraform {
+  source = "../../modules/vpc"
+}
+-- base7b/modules/app/main.tf --
+variable "a" {}
+variable "b" {}
+-- base7b/modules/vpc/main.tf --
+output "id" { value = "x" }
+-- base7c/live/app/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "db" {
+  config_path = "../db"
+}
+inputs = {
+  a = dependency.db.outputs.id
+}
+-- base7c/live/db/terragrunt.hcl --
+terraform {
+  source = "../../modules/vpc"
+}
+-- base7c/modules/app/main.tf --
+variable "a" {}
+variable "b" {}
+-- base7c/modules/vpc/main.tf --
+output "id" { value = "x" }
+-- base7d/live/app/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "db" {
+  config_path = "../db"
+}
+inputs = {
+  a = dependency.db.outputs.id
+}
+-- base7d/live/db/terragrunt.hcl --
+terraform {
+  source = "../../modules/vpc"
+}
+-- base7d/modules/app/main.tf --
+variable "a" {}
+variable "b" {}
+-- base7d/modules/vpc/main.tf --
+output "id" { value = "x" }
+-- base8a/live/app/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "db" {
+  config_path = "../db"
+  mock_outputs = { id = "mock" }
+  mock_outputs_merge_with_state = true
+  mock_outputs_allowed_terraform_commands = ["init", "plan", "apply", "destroy", "validate"]
+}
+inputs = {
+  a = dependency.db.outputs.id
+}
+-- base8a/live/db/terragrunt.hcl --
+terraform {
+  source = "../../modules/vpc"
+}
+-- base8a/modules/app/main.tf --
+variable "a" {}
+variable "b" {}
+-- base8a/modules/vpc/main.tf --
+output "id" { value = "x" }
+-- base8b/live/app/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "db" {
+  config_path = "../db"
+  mock_outputs = { id = "mock" }
+  mock_outputs_merge_with_state = true
+  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+}
+inputs = {
+  a = dependency.db.outputs.id
+}
+-- base8b/live/db/terragrunt.hcl --
+terraform {
+  source = "../../modules/vpc"
+}
+-- base8b/modules/app/main.tf --
+variable "a" {}
+variable "b" {}
+-- base8b/modules/vpc/main.tf --
+output "id" { value = "x" }
+-- base9/live/app/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "db" {
+  config_path = "../db"
+}
+inputs = {
+  a = dependency.db.outputs.id
+}
+-- base9/live/db/terragrunt.hcl --
+terraform {
+  source = "../../modules/vpc"
+}
+-- base9/modules/app/main.tf --
+variable "a" {}
+variable "b" {}
+-- base9/modules/vpc/main.tf --
+output "id" { value = "x" }
+output "name" { value = "x" }
+-- cur1/live/app/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "db" {
+  config_path = "../db"
+}
+inputs = {
+  a = dependency.db.outputs.id
+  b = dependency.db.outputs.id
+}
+-- cur1/live/db/terragrunt.hcl --
+terraform {
+  source = "../../modules/vpc"
+}
+-- cur1/modules/app/main.tf --
+variable "a" {}
+variable "b" {}
+-- cur1/modules/vpc/main.tf --
+output "name" { value = "x" }
+-- cur2/live/app/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "db" {
+  config_path = "../db"
+}
+inputs = {
+  a = dependency.db.outputs.id
+}
+-- cur2/live/db/terragrunt.hcl --
+terraform {
+  source = "../../modules/vpc"
+}
+-- cur2/modules/app/main.tf --
+variable "a" {}
+variable "b" {}
+-- cur2/modules/vpc/main.tf --
+output "id" { value = "x" }
+-- cur3/live/app/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "db" {
+  config_path = "../db"
+}
+inputs = {
+  a = dependency.db.outputs.id
+}
+-- cur3/live/db/terragrunt.hcl --
+terraform {
+  source = "../../modules/vpc"
+}
+-- cur3/modules/app/main.tf --
+variable "a" {}
+variable "b" {}
+-- cur3/modules/vpc/main.tf --
+output "name" { value = "x" }
+-- cur4/live/app/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "db" {
+  config_path = "../other"
+}
+inputs = {
+  a = dependency.db.outputs.id
+}
+-- cur4/live/db/terragrunt.hcl --
+terraform {
+  source = "../../modules/vpc"
+}
+-- cur4/live/other/terragrunt.hcl --
+terraform {
+  source = "../../modules/other"
+}
+-- cur4/modules/app/main.tf --
+variable "a" {}
+variable "b" {}
+-- cur4/modules/other/main.tf --
+output "x" { value = "x" }
+-- cur4/modules/vpc/main.tf --
+output "id" { value = "x" }
+-- cur5a/live/app/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "db" {
+  config_path = "../db"
+}
+inputs = {
+  a = dependency.db.outputs.id
+}
+-- cur5a/live/db/terragrunt.hcl --
+terraform {
+  source = "../../modules/vpc"
+}
+-- cur5a/modules/app/main.tf --
+variable "a" {}
+variable "b" {}
+-- cur5a/modules/vpc/main.tf --
+output "name" { value = "x" }
+-- cur5b/live/app/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "db" {
+  config_path = "../db"
+}
+inputs = {
+  a = dependency.db.outputs.id
+}
+-- cur5b/live/db/terragrunt.hcl --
+terraform {
+  source = "../../modules/vpc"
+}
+-- cur5b/modules/app/main.tf --
+variable "a" {}
+variable "b" {}
+-- cur5b/modules/vpc/main.tf --
+output "id" {
+-- cur6/live/app/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "db" {
+  config_path = "../db"
+}
+inputs = {
+  a = dependency.db.outputs.ghost
+}
+-- cur6/live/db/terragrunt.hcl --
+terraform {
+  source = "../../modules/vpc"
+}
+-- cur6/modules/app/main.tf --
+variable "a" {}
+variable "b" {}
+-- cur6/modules/vpc/main.tf --
+output "id" { value = "x" }
+-- cur7a/live/app/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "db" {
+  config_path = "../db"
+  enabled = false
+}
+inputs = {
+  a = dependency.db.outputs.id
+}
+-- cur7a/live/db/terragrunt.hcl --
+terraform {
+  source = "../../modules/vpc"
+}
+-- cur7a/modules/app/main.tf --
+variable "a" {}
+variable "b" {}
+-- cur7a/modules/vpc/main.tf --
+output "name" { value = "x" }
+-- cur7b/live/app/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "db" {
+  config_path = "../db"
+  skip_outputs = true
+}
+inputs = {
+  a = dependency.db.outputs.id
+}
+-- cur7b/live/db/terragrunt.hcl --
+terraform {
+  source = "../../modules/vpc"
+}
+-- cur7b/modules/app/main.tf --
+variable "a" {}
+variable "b" {}
+-- cur7b/modules/vpc/main.tf --
+output "name" { value = "x" }
+-- cur7c/live/app/terragrunt.hcl --
+locals {
+  on = true
+}
+terraform {
+  source = "../../modules/app"
+}
+dependency "db" {
+  config_path = "../db"
+  enabled = local.on
+}
+inputs = {
+  a = dependency.db.outputs.id
+}
+-- cur7c/live/db/terragrunt.hcl --
+terraform {
+  source = "../../modules/vpc"
+}
+-- cur7c/modules/app/main.tf --
+variable "a" {}
+variable "b" {}
+-- cur7c/modules/vpc/main.tf --
+output "name" { value = "x" }
+-- cur7d/live/app/terragrunt.hcl --
+locals {
+  skip = false
+}
+terraform {
+  source = "../../modules/app"
+}
+dependency "db" {
+  config_path = "../db"
+  skip_outputs = local.skip
+}
+inputs = {
+  a = dependency.db.outputs.id
+}
+-- cur7d/live/db/terragrunt.hcl --
+terraform {
+  source = "../../modules/vpc"
+}
+-- cur7d/modules/app/main.tf --
+variable "a" {}
+variable "b" {}
+-- cur7d/modules/vpc/main.tf --
+output "name" { value = "x" }
+-- cur8a/live/app/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "db" {
+  config_path = "../db"
+  mock_outputs = { id = "mock" }
+  mock_outputs_merge_with_state = true
+  mock_outputs_allowed_terraform_commands = ["init", "plan", "apply", "destroy", "validate"]
+}
+inputs = {
+  a = dependency.db.outputs.id
+}
+-- cur8a/live/db/terragrunt.hcl --
+terraform {
+  source = "../../modules/vpc"
+}
+-- cur8a/modules/app/main.tf --
+variable "a" {}
+variable "b" {}
+-- cur8a/modules/vpc/main.tf --
+output "name" { value = "x" }
+-- cur8b/live/app/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "db" {
+  config_path = "../db"
+  mock_outputs = { id = "mock" }
+  mock_outputs_merge_with_state = true
+  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+}
+inputs = {
+  a = dependency.db.outputs.id
+}
+-- cur8b/live/db/terragrunt.hcl --
+terraform {
+  source = "../../modules/vpc"
+}
+-- cur8b/modules/app/main.tf --
+variable "a" {}
+variable "b" {}
+-- cur8b/modules/vpc/main.tf --
+output "name" { value = "x" }
+-- cur9/live/app/terragrunt.hcl --
+terraform {
+  source = "../../modules/app"
+}
+dependency "db" {
+  config_path = "../db"
+}
+inputs = {
+  a = dependency.db.outputs.id
+}
+-- cur9/live/db/terragrunt.hcl --
+terraform {
+  source = "../../modules/vpc"
+}
+-- cur9/modules/app/main.tf --
+variable "a" {}
+variable "b" {}
+-- cur9/modules/vpc/main.tf --
+output "name" { value = "x" }
+-- cur9/modules/vpc/outputs.tf --
+output "id" {
+  value      = "x"
+  deprecated = "use name"
+}
