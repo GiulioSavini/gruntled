@@ -300,6 +300,25 @@ use `/`, on every platform. A reference in a file included by several units
 is reported once per including unit, at the same position; the unit suffix
 tells the lines apart.
 
+Control characters. Paths, messages and unit names come from the repository,
+so before printing gruntled replaces everything a terminal could act on with a
+visible escape (hex is lowercase):
+
+| Input | Printed as |
+|-------|------------|
+| invalid UTF-8 byte | `\xNN` |
+| C0 control (U+0000-U+001F: ESC, BEL, tab, newline...) and DEL (U+007F) | `\xNN` |
+| C1 control (U+0080-U+009F) | `\uNNNN` |
+| format character (Unicode Cf: bidi overrides and isolates, zero-width characters, BOM, soft hyphen, tags), U+2028, U+2029 | `\uNNNN`, or `\UNNNNNNNN` above U+FFFF |
+
+A directory named `a<ESC>]0;x<BEL>b` prints as `a\x1b]0;x\x07b`, and every
+diagnostic stays on one line. Names made of printable characters, non-ASCII
+letters included, print unchanged. A backslash is not escaped, so a literal
+`\x1b` in a name reads the same as an escaped ESC: text output is for people;
+use `--format json` or `--format sarif` for exact bytes. The same escaping
+applies to `gruntled watch` stdout, `gruntled report` text and
+[blast text](#blast-text).
+
 A one-line summary goes to stderr:
 
 ```
@@ -342,7 +361,11 @@ is version 1.
 
 Empty lists print as `[]`, never `null`. HTML characters (`<`, `>`, `&`) are
 not escaped. `file`, `path` and `unit` follow the same repo-relative `/` rule
-as text mode.
+as text mode. DEL, C1 controls (U+0080-U+009F), format characters (Unicode
+Cf) and U+2028/U+2029 are written as `\uXXXX` escapes (a surrogate pair above
+U+FFFF), so the document is safe to print to a terminal and decodes to the
+same values; [Graph JSON](#graph-json), [Blast JSON](#blast-json) and
+[SARIF](#sarif) are escaped the same way.
 
 Example: the repository above plus a `dns` unit with a remote
 `terraform { source = "git::https://..." }`:
@@ -471,6 +494,9 @@ Impacted (2):
 Empty sections still print their header (`Broken (0):`). Without `--base`
 the first line is `baseline: none (no baseline)` and there is no Impacted
 section.
+
+The baseline label is escaped like every path and name, with the
+[text control-character rules](#text-default).
 
 ### Blast JSON
 
