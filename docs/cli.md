@@ -1001,9 +1001,11 @@ per index with the same code `check` uses; `report` only copies those bytes.
 - `report` on windows has no live query: it reads the report file the daemon
   rewrites after each index, so it shows the last published result and
   cannot ask the daemon anything else.
-- `watch` on darwin with the native watcher: a new file created in a
-  directory where a dangling symlink (for example an Emacs lock file
-  `.#name`) sorts before it is not seen while that symlink exists, because
-  kqueue directory scanning stops at the first dangling symlink. The 30 s
-  safety-net re-scan picks it up, or use `--poll`. Upstream:
-  https://github.com/fsnotify/fsnotify/issues/787.
+- `watch` on darwin with the native watcher: while a directory holds a
+  dangling symlink (an Emacs lock file `.#name`, or a broken link committed
+  to the repository), kqueue directory scanning stops at that link. Files
+  that sort after it are not seen when created, and a file replaced by a
+  rename-on-save editor (vim's default) is not watched again, so its later
+  saves are seen only by the 30 s safety-net re-scan. Results are late by
+  at most 30 s, never wrong for longer; `check` and `--poll` are not
+  affected. Upstream: https://github.com/fsnotify/fsnotify/issues/787.

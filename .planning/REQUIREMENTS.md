@@ -53,8 +53,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DAEMON-01 | Phase 10 | Complete |
-| DAEMON-02 | Phase 8 | Complete |
+| DAEMON-01 | Phase 10, Phase 12 (gap closure) | Complete |
+| DAEMON-02 | Phase 8, Phase 12 (gap closure) | Complete |
 | DAEMON-03 | Phase 10 | Complete |
 | DAEMON-04 | Phase 11 | Complete |
 | DAEMON-05 | Phase 11 | Complete |

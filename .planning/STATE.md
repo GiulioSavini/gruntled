@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.3
 milestone_name: Watch & Blast
-status: gap_closure
-stopped_at: v0.3 audit gaps_found (DAEMON-01/02 partial) — Phase 12 gap closure, planning
+status: milestone_complete
+stopped_at: Phase 12 verified (passed), v0.3 re-audit passed — next complete-milestone (tag needs the person)
 last_updated: "2026-10-08T13:45:25.297Z"
-last_activity: 2026-10-10 — v0.3 milestone audit (gaps_found), phase 12 added
+last_activity: 2026-10-10 — phase 12 complete (5/5), v0.3 re-audit passed
 progress:
   total_phases: 5
-  completed_phases: 4
-  total_plans: 19
-  completed_plans: 19
+  completed_phases: 5
+  total_plans: 24
+  completed_plans: 24
 ---
 
 # Project State
@@ -24,12 +24,12 @@ See: .planning/PROJECT.md (updated 2026-10-08)
 
 ## Current Position
 
-Phase: 12 of 12 (Gap Closure — Watcher Directory Ignore & v0.3 Audit Findings) — planning
+Phase: 12 of 12 (Gap Closure — Watcher Directory Ignore & v0.3 Audit Findings) — complete
 Plan: 7 of 7 (11-01..11-07 complete)
-Status: v0.3 audit gaps_found (.planning/v0.3-MILESTONE-AUDIT.md); phase 12 closes DAEMON-01/02 gaps + sec findings, then complete-milestone (tag needs the person)
-Last activity: 2026-10-10 — milestone audit; phase 12 added
+Status: v0.3 re-audit passed; phase 12 verified, sec SECURED; next complete-milestone (tag needs the person)
+Last activity: 2026-10-10 — phase 12 complete, v0.3 re-audit passed
 
-Progress: [██████████] 19/19 plans (v0.3: 4/4 phases verified)
+Progress: [██████████] 24/24 plans (v0.3: 5/5 phases verified)
 
 ## Performance Metrics
 
@@ -142,6 +142,12 @@ Per-plan decision history lives in the phase SUMMARY files and git history.
 - [Phase 11]: 11-06: sun_path overflow is a hard exit 3
 - [Phase 11]: 11-06: windows CI (test-os windows-latest) red on pre-existing tests in run 37780137349; pending 11-07
 - [Phase 11]: .gitattributes '* text=auto eol=lf' plus narrow windows test skips make CI green on all OSes (run 37782939975)
+
+- [Phase 12]: Editor patterns apply to files only (IgnoredEntry); dirs never pattern-ignored, symlinks only by `.#`
+- [Phase 12]: Parse cache entries carry their canonical path; Invalidate and reuse check it (symlink aliases)
+- [Phase 12]: Runtime dir and status path refused inside the repo by file identity (os.SameFile), exit 2
+- [Phase 12]: Presenter escapes C0/DEL/C1/Cf/U+2028-9 in text (escapeTerm) and as \uXXXX in JSON (escapeJSON)
+- [Phase 12]: darwin native watcher limitation from fsnotify#787 accepted and documented (≤30 s late)
 
 ### Pending Todos
 

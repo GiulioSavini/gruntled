@@ -4,7 +4,7 @@
 
 - ✅ **v0.1 Validated Engine** - Phases 1-4 (shipped 2026-09-29) — archived in `milestones/v0.1-ROADMAP.md`
 - ✅ **v0.2 CI-Ready** - Phases 5-7 (shipped 2026-10-08) — archived in `milestones/v0.2-ROADMAP.md`
-- 🚧 **v0.3 Watch & Blast** - Phases 8-11 (in progress)
+- 🚧 **v0.3 Watch & Blast** - Phases 8-12 (in progress)
 
 ## Phases
 
@@ -34,7 +34,7 @@ See `milestones/v0.2-ROADMAP.md`.
 - [x] **Phase 9: Blast Radius** - `gruntled blast --base` reports disjoint Broken and Impacted unit sets (completed 2026-10-08)
 - [x] **Phase 10: Watch Daemon & Status File** - `gruntled watch` reindexes on save and writes an atomic status line (completed 2026-10-08)
 - [x] **Phase 11: Report, Single Instance & Release Proof** - Socket/lock/attach, `report`, six-target no-net/no-exec proof, docs (completed 2026-10-08)
-- [ ] **Phase 12: Gap Closure — Watcher Directory Ignore & v0.3 Audit Findings** - Directory names matching editor-file patterns are watched; audit findings closed
+- [x] **Phase 12: Gap Closure — Watcher Directory Ignore & v0.3 Audit Findings** - Directory names matching editor-file patterns are watched; audit findings closed (completed 2026-10-10)
 
 ## Phase Details
 
@@ -133,11 +133,11 @@ Plans:
 **Plans**: 5 plans
 
 Plans:
-- [ ] 12-01-PLAN.md — watcher: editor patterns apply to files only (IgnoredEntry), poll/native/safety net, contract + daemon regression (wave 1)
-- [ ] 12-02-PLAN.md — parse cache tracks canonical path of symlink-reached files; evict and re-check by it (wave 1)
-- [ ] 12-03-PLAN.md — statusfile.Inside by file identity; refuse runtime dir inside the repo (wave 1)
-- [ ] 12-04-PLAN.md — presenter escapes terminal control/bidi runes on every text path; SanitizeReason Cf (wave 1)
-- [ ] 12-05-PLAN.md — rapid property: pattern-named dirs + symlinked includes; docs, DAEMON-04 wording; x/text v0.41.0; phase gate (wave 2)
+- [x] 12-01-PLAN.md — watcher: editor patterns apply to files only (IgnoredEntry), poll/native/safety net, contract + daemon regression (wave 1)
+- [x] 12-02-PLAN.md — parse cache tracks canonical path of symlink-reached files; evict and re-check by it (wave 1)
+- [x] 12-03-PLAN.md — statusfile.Inside by file identity; refuse runtime dir inside the repo (wave 1)
+- [x] 12-04-PLAN.md — presenter escapes terminal control/bidi runes on every text path; SanitizeReason Cf (wave 1)
+- [x] 12-05-PLAN.md — rapid property: pattern-named dirs + symlinked includes; docs, DAEMON-04 wording; x/text v0.41.0; phase gate (wave 2)
 
 ## Progress
 
@@ -150,4 +150,4 @@ Plans:
 | 9. Blast Radius | v0.3 | 3/3 | Complete | 2026-10-08 |
 | 10. Watch Daemon & Status File | v0.3 | 7/7 | Complete | 2026-10-08 |
 | 11. Report, Single Instance & Release Proof | v0.3 | 7/7 | Complete | 2026-10-08 |
-| 12. Gap Closure — Watcher Dir Ignore & Audit Findings | v0.3 | 0/5 | Planned | - |
+| 12. Gap Closure — Watcher Dir Ignore & Audit Findings | v0.3 | 5/5 | Complete | 2026-10-10 |
