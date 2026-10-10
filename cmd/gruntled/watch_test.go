@@ -262,6 +262,22 @@ type parityOp struct {
 	do   func(t *testing.T, dir string)
 }
 
+// retryFS runs a remove or rename on a tree a --poll daemon is reading,
+// retrying 20 times 25 ms apart: on windows the daemon's open handle makes
+// it fail with a sharing violation for a moment (same as removeAll in
+// internal/infrastructure/watch/helpers_test.go).
+func retryFS(t *testing.T, op func() error) {
+	t.Helper()
+	var err error
+	for range 20 {
+		if err = op(); err == nil {
+			return
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	t.Fatal(err)
+}
+
 func mustDo(t *testing.T, err error) {
 	t.Helper()
 	if err != nil {
@@ -279,7 +295,7 @@ var parityOps = []parityOp{
 		writeFiles(t, dir, map[string]string{"app/terragrunt.hcl": goodApp})
 	}},
 	{"delete", func(t *testing.T, dir string) {
-		mustDo(t, os.Remove(filepath.Join(dir, "db", "terragrunt.hcl")))
+		retryFS(t, func() error { return os.Remove(filepath.Join(dir, "db", "terragrunt.hcl")) })
 	}},
 	{"mkdir with new unit", func(t *testing.T, dir string) {
 		writeFiles(t, dir, map[string]string{
@@ -292,10 +308,10 @@ var parityOps = []parityOp{
 		})
 	}},
 	{"rename", func(t *testing.T, dir string) {
-		mustDo(t, os.Rename(filepath.Join(dir, "vpc"), filepath.Join(dir, "vpc2")))
+		retryFS(t, func() error { return os.Rename(filepath.Join(dir, "vpc"), filepath.Join(dir, "vpc2")) })
 	}},
 	{"delete dir", func(t *testing.T, dir string) {
-		mustDo(t, os.RemoveAll(filepath.Join(dir, "net")))
+		retryFS(t, func() error { return os.RemoveAll(filepath.Join(dir, "net")) })
 	}},
 }
 

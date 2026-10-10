@@ -98,7 +98,7 @@ func TestReportParity(t *testing.T) {
 			writeFiles(t, dir, map[string]string{
 				"live/app/terragrunt.hcl": "dependency \"network\" {\n  config_path = \"../network\"\n}\n\ninputs = {\n  vpc_id = dependency.network.outputs.vpc_id\n}\n",
 			})
-			mustDo(t, os.RemoveAll(filepath.Join(dir, "live", "ring")))
+			retryFS(t, func() error { return os.RemoveAll(filepath.Join(dir, "live", "ring")) })
 			if c := runCheckAt("text", dir); c.code != exitOK {
 				t.Fatalf("edited fixture is not clean: %s", c)
 			}
