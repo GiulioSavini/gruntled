@@ -120,7 +120,10 @@ both trees and reports two disjoint, path-sorted lists:
   across the trees by code, unit, file and message, without line and column,
   so a pre-existing finding that only moved to another line is not new. A
   finding that has no unit (GRT100 on a file no unit reads) is listed under
-  its file.
+  its file. A reference to an output that the baseline's module declared and
+  the current module removed is reported as
+  [GRT004](#grt004-dependency-output-removed-error-blast-only) instead of
+  GRT001, at the same site.
 - **Impacted**: units of `path` that use a module whose declared variable or
   output names differ between the trees, and are not already Broken. Only
   direct consumers are listed: a unit that merely depends on an Impacted unit
@@ -145,11 +148,13 @@ usage: gruntled blast [--base dir] [--format text|json] [path]
 
 Compare the Terragrunt repository at path (default ".") with the baseline
 tree at --base. Broken lists the units with findings that are new in path
-(a finding that only moved to another line is not new). Impacted lists the
-units that use a module whose variable or output names changed and are not
-Broken; only direct consumers are listed. Without --base every finding is
-Broken and Impacted is not computed ("no baseline"). gruntled never runs
-git: check the baseline out yourself, for example with git worktree.
+(a finding that only moved to another line is not new). A reference to an
+output that the baseline module declared and path removed is reported as
+GRT004 instead of GRT001. Impacted lists the units that use a module whose
+variable or output names changed and are not Broken; only direct consumers
+are listed. Without --base every finding is Broken and Impacted is not
+computed ("no baseline"). gruntled never runs git: check the baseline out
+yourself, for example with git worktree.
 Flags may appear before or after path; "--" ends flag parsing.
 
 Flags:
@@ -485,7 +490,7 @@ variables, removed outputs, added outputs:
 baseline: ../base
 Broken (1):
   live/app
-    live/app/terragrunt.hcl:7:20: GRT001 dependency "db" output "id" is not declared by module "modules/vpc" (target unit "live/db")
+    live/app/terragrunt.hcl:7:20: GRT004 dependency "db" output "id" was removed from module "modules/vpc" (target unit "live/db")
 Impacted (2):
   live/cache (module modules/vpc: +variable name, -output id)
   live/db (module modules/vpc: +variable name, -output id)
@@ -502,7 +507,9 @@ The baseline label is escaped like every path and name, with the
 
 `gruntled blast --format json` writes one JSON document to stdout. The
 schema is versioned; this is version 1, with the same stability rules as
-Graph JSON.
+Graph JSON. New code values can appear without a version bump: since GRT004,
+a removed output is reported as GRT004 where earlier versions said GRT001.
+Gate on severity, not on a code list.
 
 | Key | Content |
 |-----|---------|
@@ -583,6 +590,38 @@ dependency "<label>" output "<Y>" is not declared by module "<module>" (target u
 
 with the suffix `; mock_outputs supplies it, so apply would silently use the mock value`
 when mock masking is certain.
+
+### GRT004: dependency output removed (error, blast only)
+
+Only `gruntled blast --base` produces GRT004. It reports a
+`dependency.X.outputs.Y` reference whose output `Y` the baseline's module
+declared and the current module no longer declares. It replaces the GRT001
+that `check` reports at the same reference site: never both codes at one
+site, never an extra finding, and the exit code stays 1. A reference site is
+GRT004 instead of GRT001 only when all four hold:
+
+| # | Condition | When it fails |
+|---|-----------|---------------|
+| 1 | GRT001 fires at the site in the current tree (see the [DIAG-03 table](#how-grt001-treats-mock_outputs-enabled-and-skip_outputs-diag-03)) | no finding, or another code |
+| 2 | The baseline has a reference with the same unit, dependency name and output (its line may differ) | GRT001: the reference was added in the same change |
+| 3 | In the baseline the unit's dependency resolves to a unit whose module and module surface are known, with the same module path as in the current tree | GRT001: re-pointed to another module, or the module is unknown in the baseline |
+| 4 | The baseline module declares the output | GRT001: it was never declared |
+
+The dependency may be re-pointed to another unit of the same module; it is
+still GRT004. `enabled`, `skip_outputs` and `mock_outputs` follow GRT001's
+table in the current tree: `mock_outputs` never suppresses GRT004 and only
+selects the same suffix.
+
+Message:
+
+```
+dependency "<label>" output "<Y>" was removed from module "<module>" (target unit "<target>")
+```
+
+with the suffix `; mock_outputs supplies it, so apply would silently use the mock value`
+under exactly GRT001's condition. `check`, `report`, `graph`, the watch
+status file and SARIF never show GRT004; they keep reporting GRT001 at that
+site.
 
 ### GRT100: HCL syntax error (error)
 
@@ -683,7 +722,7 @@ Rejected alternatives:
 
 ### Reserved codes
 
-Every other code is reserved. GRT004 to GRT006 are planned for later
+Every other code is reserved. GRT005 and GRT006 are planned for later
 versions.
 
 ## How GRT001 treats mock_outputs, enabled and skip_outputs (DIAG-03)
@@ -973,6 +1012,11 @@ per index with the same code `check` uses; `report` only copies those bytes.
   through other findings.
 - `blast` attributes a unit-less finding (GRT100 in a file no unit reads) to
   its file, not to a unit.
+- `blast` reports GRT004 only under all four of its conditions. A reference
+  added in the same change, a dependency re-pointed to another module, and a
+  module unknown in either tree stay GRT001 (or silent, as in `check`).
+- GRT004 has no SARIF rule: `blast` has no SARIF output, and `check` never
+  emits GRT004.
 - Terragrunt stacks that have not been generated are invisible.
 - Undeclared dependency labels are not reported.
 - A config-unknown unit carries no dependency edges: a cycle through it is

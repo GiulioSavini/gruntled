@@ -65,11 +65,13 @@ const blastUsage = `usage: gruntled blast [--base dir] [--format text|json] [pat
 
 Compare the Terragrunt repository at path (default ".") with the baseline
 tree at --base. Broken lists the units with findings that are new in path
-(a finding that only moved to another line is not new). Impacted lists the
-units that use a module whose variable or output names changed and are not
-Broken; only direct consumers are listed. Without --base every finding is
-Broken and Impacted is not computed ("no baseline"). gruntled never runs
-git: check the baseline out yourself, for example with git worktree.
+(a finding that only moved to another line is not new). A reference to an
+output that the baseline module declared and path removed is reported as
+GRT004 instead of GRT001. Impacted lists the units that use a module whose
+variable or output names changed and are not Broken; only direct consumers
+are listed. Without --base every finding is Broken and Impacted is not
+computed ("no baseline"). gruntled never runs git: check the baseline out
+yourself, for example with git worktree.
 Flags may appear before or after path; "--" ends flag parsing.
 
 Flags:

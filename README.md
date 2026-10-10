@@ -147,7 +147,7 @@ way. All 8 known broken references there are still reported.
 `gruntled blast` (Broken vs Impacted against a baseline tree). See
 [Watch, report and blast](#watch-report-and-blast).
 
-**Later:** diagnostics `GRT004`-`GRT006`.
+**Later:** diagnostics `GRT005`-`GRT006`.
 
 ### Usage
 
@@ -378,7 +378,7 @@ explicitly instead of silently walking a zero path.
 ## Diagnostic codes
 
 A `Code` is always `"GRT"` followed by exactly three ASCII digits
-(`internal/domain/diagnostic/diagnostic.go`, `Code.Valid()`). Four are defined
+(`internal/domain/diagnostic/diagnostic.go`, `Code.Valid()`). Five are defined
 in code today:
 
 | Code | Constant | Meaning |
@@ -386,17 +386,18 @@ in code today:
 | `GRT001` | `CodeUnknownOutput` | A `dependency.X.outputs.Y` reference names an output the target module does not declare. |
 | `GRT002` | `CodeMissingDependencyTarget` | A `dependency` `config_path` or `dependencies` path resolves to a directory that does not exist or holds no `terragrunt.hcl`. |
 | `GRT003` | `CodeDependencyCycle` | Units depend on each other in a cycle (one diagnostic per cycle). |
+| `GRT004` | `CodeRemovedOutput` | (blast only) A referenced output that the baseline module declared was removed; replaces GRT001 at that reference. |
 | `GRT100` | `CodeSyntaxError` | The HCL being analyzed is invalid. |
 
-All four are emitted by `gruntled check` (see [Usage](#usage) and
-[docs/cli.md](docs/cli.md#diagnostics)). `GRT001`-`GRT003` come from the
-analyzers in `internal/domain/analysis`; `GRT100` from the parsers, one per
-file that fails to parse.
+`GRT001`-`GRT003` and `GRT100` are emitted by `gruntled check` (see
+[Usage](#usage) and [docs/cli.md](docs/cli.md#diagnostics)); `GRT004` only by
+`gruntled blast --base`. `GRT001`-`GRT004` come from the analyzers in
+`internal/domain/analysis`; `GRT100` from the parsers, one per file that
+fails to parse.
 
-`GRT004` through `GRT006` are named and scoped in the design document and the
-roadmap's "Later" section (a removed-but-still-referenced output, an
-`inputs` key with no matching `variable`, an unset `variable` with no
-default) but have no `Code` constant yet.
+`GRT005` and `GRT006` are named and scoped in the design document and the
+roadmap's "Later" section (an `inputs` key with no matching `variable`, an
+unset `variable` with no default) but have no `Code` constant yet.
 
 ## Determinism guarantees
 
