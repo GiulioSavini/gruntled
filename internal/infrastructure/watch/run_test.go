@@ -37,7 +37,7 @@ func (f *fakeWatcher) Close() error           { f.closes.Add(1); return nil }
 
 func (f *fakeWatcher) feed(paths ...string) {
 	for _, p := range paths {
-		f.p.add(p)
+		f.p.add(p, 0)
 	}
 }
 

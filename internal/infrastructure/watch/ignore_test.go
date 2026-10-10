@@ -1,8 +1,11 @@
 package watch
 
-import "testing"
+import (
+	"io/fs"
+	"testing"
+)
 
-func TestIgnored(t *testing.T) {
+func TestIgnoredEntry(t *testing.T) {
 	ignored := []string{
 		".git",
 		".git/HEAD",
@@ -25,8 +28,8 @@ func TestIgnored(t *testing.T) {
 		"a/49134",
 	}
 	for _, p := range ignored {
-		if !Ignored(p) {
-			t.Errorf("Ignored(%q) = false, want true", p)
+		if !IgnoredEntry(p, 0) {
+			t.Errorf("IgnoredEntry(%q, 0) = false, want true", p)
 		}
 	}
 	kept := []string{
@@ -44,8 +47,49 @@ func TestIgnored(t *testing.T) {
 		"git/x",
 	}
 	for _, p := range kept {
-		if Ignored(p) {
-			t.Errorf("Ignored(%q) = true, want false", p)
+		for _, typ := range []fs.FileMode{0, fs.ModeDir} {
+			if IgnoredEntry(p, typ) {
+				t.Errorf("IgnoredEntry(%q, %v) = true, want false", p, typ)
+			}
+		}
+	}
+
+	// Directories named like editor files are walked and watched.
+	patternNamed := []string{"4913", "a/49134", "x.tmp", "bak~", "#d#", ".#d", ".DS_Store", "a.swp"}
+	for _, p := range patternNamed {
+		if IgnoredEntry(p, fs.ModeDir) {
+			t.Errorf("IgnoredEntry(%q, ModeDir) = true, want false", p)
+		}
+	}
+	// Symlinks are exempt from every pattern except the Emacs lock rule.
+	for _, p := range patternNamed {
+		if p == ".#d" {
+			continue
+		}
+		if IgnoredEntry(p, fs.ModeSymlink) {
+			t.Errorf("IgnoredEntry(%q, ModeSymlink) = true, want false", p)
+		}
+	}
+	for _, p := range []string{".#d", ".#terragrunt.hcl", "a/.#x.hcl"} {
+		if !IgnoredEntry(p, fs.ModeSymlink) {
+			t.Errorf("IgnoredEntry(%q, ModeSymlink) = false, want true (Emacs lock)", p)
+		}
+		if IgnoredEntry(p, fs.ModeDir) {
+			t.Errorf("IgnoredEntry(%q, ModeDir) = true, want false", p)
+		}
+	}
+	// Ignored-directory components apply to every entry type.
+	for _, p := range []string{".git", "a/.terraform", "a/.terragrunt-cache/x", ".git/HEAD"} {
+		for _, typ := range []fs.FileMode{0, fs.ModeDir, fs.ModeSymlink} {
+			if !IgnoredEntry(p, typ) {
+				t.Errorf("IgnoredEntry(%q, %v) = false, want true", p, typ)
+			}
+		}
+	}
+	// A file inside a pattern-named directory is judged by its own name.
+	for _, p := range []string{"live/2024/terragrunt.hcl", "x.tmp/f.hcl", "bak~/f.hcl", "#d#/f.hcl", ".#d/f.hcl"} {
+		if IgnoredEntry(p, 0) {
+			t.Errorf("IgnoredEntry(%q, 0) = true, want false", p)
 		}
 	}
 }
