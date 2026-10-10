@@ -5,9 +5,17 @@
 #   . "$(dirname "${BASH_SOURCE[0]}")/lib/txtar-extract.sh"
 # scripts/test-txtar-extract.sh holds its negative tests.
 #
-# Symlink targets are checked lexically, then again from the link's real
-# parent directory, and the created link is resolved with `realpath -m`
-# (GNU coreutils): a missing realpath fails closed.
+# A symlink must not already exist or sit under another symlink; its target
+# is checked lexically, then again from the link's real parent directory,
+# the link is created with `ln -sn`, and once every link exists each one is
+# resolved with `realpath -m` against the real destination.
+#
+# Requirements: bash, git, Go, GNU coreutils `realpath` (for `-m`) and
+# `sha256sum`, as on Linux and in CI. macOS/BSD ship neither in that form:
+# install coreutils and put its gnubin directory first on PATH (so
+# `realpath` and `sha256sum` are the GNU `grealpath` and `gsha256sum`), or
+# run the script on Linux or in CI. Without them the script fails closed:
+# it exits non-zero and writes nothing outside its temp directory.
 
 # safe_rel <name>: fails unless name is a relative path that stays inside
 # its root: not absolute, no drive letter or backslash, no ".." segment.
@@ -46,8 +54,9 @@ inside_after_link() {
 # checked before anything is created, directories are made from bash with
 # a quoted argv (no shell built from a name), and awk only writes files.
 extract() {
-  local archive=$1 dest=$2 name line link target destreal parent rel resolved
+  local archive=$1 dest=$2 name line link target destreal parent rel resolved prefix l segs
   mkdir -p -- "$dest"
+  destreal=$(cd -- "$dest" && pwd -P)
   while IFS= read -r name; do
     if ! safe_rel "$name"; then
       echo "txtar-extract: $archive: unsafe member name: $name" >&2
@@ -85,11 +94,25 @@ extract() {
         echo "txtar-extract: $archive: unsafe symlink: $line" >&2
         exit 1
       fi
+      # A link never replaces or goes through another entry: its own path
+      # must not exist yet, and no directory on the way to it may be a link.
+      if [ -e "$dest/$link" ] || [ -L "$dest/$link" ]; then
+        echo "txtar-extract: $archive: symlink path already exists: $line" >&2
+        exit 1
+      fi
+      prefix=$dest
+      IFS=/ read -r -a segs <<<"$(dirname -- "$link")"
+      for l in "${segs[@]}"; do
+        [ "$l" = . ] && continue
+        prefix=$prefix/$l
+        if [ -L "$prefix" ]; then
+          echo "txtar-extract: $archive: symlink parent is a symlink: $line" >&2
+          exit 1
+        fi
+      done
       mkdir -p -- "$(dirname -- "$dest/$link")"
-      # The lexical check above trusts the path; an earlier link can make
-      # a directory of it point elsewhere. Re-check the link's real parent,
-      # then the fully resolved target, against the real dest.
-      destreal=$(cd -- "$dest" && pwd -P)
+      # The lexical check above trusts the path; re-check the link's real
+      # parent, then the fully resolved target, against the real dest.
       parent=$(cd -- "$(dirname -- "$dest/$link")" && pwd -P)
       case $parent/ in
         "$destreal"/*) ;;
@@ -104,7 +127,7 @@ extract() {
         echo "txtar-extract: $archive: unsafe symlink: $line" >&2
         exit 1
       fi
-      ln -s -- "$target" "$dest/$link"
+      ln -sn -- "$target" "$dest/$link"
       resolved=$(realpath -m -- "$dest/$link")
       case $resolved/ in
         "$destreal"/*) ;;
@@ -116,5 +139,17 @@ extract() {
       esac
     done <"$dest/.symlinks"
     rm -f -- "$dest/.symlinks"
+    # A link checked early can be redirected by one created later (l ->
+    # d/../x, then d -> .): resolve every link again once all exist.
+    while IFS= read -r -d '' l; do
+      resolved=$(realpath -m -- "$l")
+      case $resolved/ in
+        "$destreal"/*) ;;
+        *)
+          echo "txtar-extract: $archive: symlink resolves outside the tree: ${l#"$dest"/}" >&2
+          exit 1
+          ;;
+      esac
+    done < <(find "$dest" -type l -print0)
   fi
 }
