@@ -64,8 +64,15 @@ func NewLoader(fsys fs.FS) *Loader {
 // means "everything changed" and clears the whole store, whatever else
 // is in the batch (fail safe).
 //
+// Alias rule: an entry is evicted when its key OR its recorded canonical
+// path (parsedFile.canon) is in the batch or lies under a batch path, so
+// editing the target of an in-repo symlink evicts every alias key that
+// read it (watchers report only the target). A retargeted link is caught
+// on the next load by fileCache.getCanon's canonical re-check instead.
+//
 // The batch is cleaned once into a set and the store is scanned once, so
-// the cost is O(cache x depth) per call, not per path.
+// the cost is O(cache x depth) per call, not per path (twice for an
+// entry whose canonical path differs from its key).
 func (l *Loader) Invalidate(paths ...string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -85,14 +92,22 @@ func (l *Loader) Invalidate(paths ...string) {
 	if len(set) == 0 {
 		return
 	}
-	for key := range l.store.files {
-		for p := key; p != "." && p != "/"; p = path.Dir(p) {
-			if _, ok := set[p]; ok {
-				delete(l.store.files, key)
-				break
-			}
+	for key, pf := range l.store.files {
+		if underAny(set, key) || (pf.canon != key && underAny(set, pf.canon)) {
+			delete(l.store.files, key)
 		}
 	}
+}
+
+// underAny reports whether p or one of its ancestors is in set ("a" is
+// not an ancestor of "ab/x").
+func underAny(set map[string]struct{}, p string) bool {
+	for ; p != "." && p != "/" && p != ""; p = path.Dir(p) {
+		if _, ok := set[p]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 // CacheStats returns the parse-cache hits and misses of the last
@@ -236,6 +251,9 @@ func (l *Loader) resolveUnit(cache *fileCache, e unitEntry, targets *includeTarg
 		targets.markAncestors(unitDir)
 		return ports.UnitConfig{Path: unitPath, ConfigUnknownReason: ReasonUnreadableConfig}
 	}
+	// Unit files are canonical by construction (discoverUnits never
+	// enters symlinked directories nor counts symlinked configs), so the
+	// key is its own canonical path.
 	childPF := cache.get(unitFile)
 	if childPF.readErr != nil {
 		targets.markAncestors(unitDir)
@@ -455,7 +473,9 @@ func (l *Loader) resolveIncludes(cache *fileCache, unitDir string, unitFile repo
 		if pathErr != nil {
 			return nil, ReasonIncludeNotFound
 		}
-		pf := cache.get(file)
+		// canon, recomputed on every load, is checked against the
+		// entry's recorded one: a retargeted link is a miss.
+		pf := cache.getCanon(file, canon)
 		if pf.readErr != nil {
 			return nil, ReasonUnreadableConfig
 		}

@@ -123,7 +123,13 @@ type generateDecl struct {
 // sorts/appends into its slices in place (mergeReferences copies refs
 // into a fresh slice before sorting). Keep it that way.
 type parsedFile struct {
-	path    repograph.RepoPath
+	path repograph.RepoPath
+	// canon is the canonical (symlink-free, in-repo) path of the file the
+	// bytes were read from, as computed by the caller of getCanon: equal to
+	// path for a unit file, the include's canonicalPath for an include
+	// reached through a symlink. It is set before the entry is stored and
+	// never changed afterwards. Diagnostics keep using path (lexical).
+	canon   string
 	src     []byte
 	readErr error
 	syntax  *diagnostic.Diagnostic
@@ -151,6 +157,14 @@ type parsedFile struct {
 // Loader.Invalidate when the caller reports a path as dirty. Negative
 // entries (readErr set, e.g. a file read before it existed) are stored
 // too, so a create MUST be invalidated like any other change.
+//
+// Alias rule (v0.3 sec MEDIUM): a key is the lexical path the load used,
+// which for an include reached through an in-repo symlink is an alias of
+// the file actually read. Each entry records that file's canonical path
+// (parsedFile.canon); Loader.Invalidate evicts by key or canonical path,
+// and getCanon reuses an entry only when its recorded canonical path
+// equals the one the current load computed, so editing a link target or
+// retargeting a link anywhere in a chain never serves the old parse.
 type parseStore struct {
 	files map[string]*parsedFile
 }
@@ -187,20 +201,32 @@ func newFileCacheOn(fsys fs.FS, store *parseStore) *fileCache {
 	return &fileCache{fsys: fsys, store: store, touched: map[string]struct{}{}}
 }
 
-// get returns p's parsedFile. The first call for a given p (absent from
-// the store) reads and parses the file; every later call, from however
-// many distinct callers or later LoadUnits calls sharing the store,
-// returns the exact same *parsedFile without reading or parsing again. It
-// never returns nil.
+// get returns the parsedFile of p, a path that is its own canonical path
+// (unit files: discoverUnits never enters symlinked directories nor
+// counts symlinked configs). It is getCanon(p, p.String()).
 func (c *fileCache) get(p repograph.RepoPath) *parsedFile {
+	return c.getCanon(p, p.String())
+}
+
+// getCanon returns p's parsedFile, where canon is the canonical in-repo
+// path p resolves to in the current load. The first call for a given p
+// (absent from the store) reads and parses the file; every later call,
+// from however many distinct callers or later LoadUnits calls sharing the
+// store, returns the exact same *parsedFile without reading or parsing
+// again, as long as the stored entry was read from the same canonical
+// path. An entry whose recorded canonical path differs from canon (a link
+// on the way was retargeted) is a miss: p is re-read and the entry
+// overwritten. It never returns nil.
+func (c *fileCache) getCanon(p repograph.RepoPath, canon string) *parsedFile {
 	key := p.String()
 	c.touched[key] = struct{}{}
-	if pf, ok := c.store.files[key]; ok {
+	if pf, ok := c.store.files[key]; ok && pf.canon == canon {
 		c.hits++
 		return pf
 	}
 	c.misses++
 	pf := c.parse(p)
+	pf.canon = canon
 	c.store.files[key] = pf
 	return pf
 }
