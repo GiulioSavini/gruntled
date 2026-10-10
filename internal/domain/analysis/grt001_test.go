@@ -181,17 +181,25 @@ func withOpts(f func(o *repograph.DependencyOptions)) repograph.DependencyOption
 	return o
 }
 
-func TestDIAG03(t *testing.T) {
+// diag03Row is one row of the DIAG-03 decision-table test: the scenario,
+// how many GRT001 UnknownOutputs must return, and whether the message
+// carries the mock suffix. grt004_test.go reuses the same rows for the
+// GRT004 parity matrix.
+type diag03Row struct {
+	name   string
+	build  func(t *testing.T) scenario
+	want   int
+	suffix bool
+}
+
+// diag03Rows returns the 22 DIAG-03 rows. Every row references
+// dependency.vpc.outputs.vpc_idd from live/app; the target module is
+// live/vpc.
+func diag03Rows() []diag03Row {
 	allCmds := func(t *testing.T) repograph.NameList {
 		return mustNames(t, "init", "plan", "apply", "destroy", "validate")
 	}
-	type row struct {
-		name   string
-		build  func(t *testing.T) scenario
-		want   int
-		suffix bool
-	}
-	rows := []row{
+	return []diag03Row{
 		{name: "row1 undeclared label", build: func(t *testing.T) scenario {
 			return scenario{opts: withOpts(nil), dep: depUndeclared, outputs: []string{"vpc_id"}}
 		}},
@@ -296,8 +304,17 @@ func TestDIAG03(t *testing.T) {
 			}), outputs: []string{"vpc_id"}}
 		}},
 	}
+}
 
-	for _, r := range rows {
+// TestDIAG03RowCount notices a row lost while the table is shared.
+func TestDIAG03RowCount(t *testing.T) {
+	if n := len(diag03Rows()); n != 22 {
+		t.Fatalf("diag03Rows() has %d rows, want 22", n)
+	}
+}
+
+func TestDIAG03(t *testing.T) {
+	for _, r := range diag03Rows() {
 		t.Run(r.name, func(t *testing.T) {
 			g := buildScenario(t, r.build(t))
 			got, err := analysis.UnknownOutputs(g)

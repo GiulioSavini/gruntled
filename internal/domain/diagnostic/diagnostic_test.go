@@ -47,6 +47,17 @@ func TestCodeValid(t *testing.T) {
 	}
 }
 
+// TestCodeRemovedOutput pins GRT004's code string: it is part of every
+// blast JSON/text finding and of the documented rule registry.
+func TestCodeRemovedOutput(t *testing.T) {
+	if diagnostic.CodeRemovedOutput != "GRT004" {
+		t.Errorf("CodeRemovedOutput = %q, want %q", diagnostic.CodeRemovedOutput, "GRT004")
+	}
+	if !diagnostic.CodeRemovedOutput.Valid() {
+		t.Errorf("CodeRemovedOutput.Valid() = false, want true")
+	}
+}
+
 func TestSeverityString(t *testing.T) {
 	if diagnostic.SeverityError.String() != "error" {
 		t.Errorf("SeverityError.String() = %q, want %q", diagnostic.SeverityError.String(), "error")
