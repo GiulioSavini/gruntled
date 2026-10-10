@@ -63,6 +63,8 @@ report, graph and SARIF golden.
   in code today", "All four are emitted by `gruntled check`") must say GRT004 exists and is blast-only.
 - `docs/cli.md` Known limitations 965-975: add the GRT004 boundaries (reference added in the same
   change, re-pointed dependency, unknown module either side stay GRT001; blast only, no SARIF rule).
+- `README.md:396-399` says "GRT004 through GRT006 ... have no `Code` constant yet": rewrite to GRT005/GRT006 only (sec #135).
+- `docs/cli.md` Blast JSON promises Graph-JSON stability; keeping version 1 while sites move GRT001 -> GRT004 needs an explicit "new code values can appear without a version bump; gate on severity" note (sec #137).
 - `TestReadmeDocumentsV03` pins substrings only; still green.
 
 ## 4. Site identity and the supersede key
@@ -85,7 +87,7 @@ position-free keys `(code, unit, file, message)`. A base GRT001 with the same ke
 same dependency, output, module and target with the output undeclared in base, which contradicts
 the GRT004 precondition "the baseline surface declares the output" for the same module path. So
 every superseded GRT001 was new in v0.3.0, and the replacing GRT004 (no GRT004 ever in base) is new
-now: Broken subjects, per-subject counts, Impacted and `HasErrors` are unchanged; only codes and
+now (this relies on base coming from `checking.Check`, which never emits GRT004; Phase 16's daemon baseline must keep that, sec #138): Broken subjects, per-subject counts, Impacted and `HasErrors` are unchanged; only codes and
 messages at those sites differ. Phase 13 proves this with a rapid property (`Between` vs
 `impact.Compute` on the un-superseded sets) rather than relying on the argument.
 
@@ -118,7 +120,7 @@ disables one check at a time (`TestRemovedOutputsChecksAreNecessary`).
 |-------|------|----------------------------------------------------|
 | `fires` | `resolveReference(cur)` ok and cur surface lacks Y (the GRT001 row 7 condition) | output still declared in cur (mutant emits GRT004 where nothing fires) |
 | `baseHadRef` | base has a reference with the same (unit, dependency name, output) | reference added in the same change |
-| `sameModule` | `resolveDependency(base)` ok and its module path == cur module path | dependency re-pointed to a unit of another module that declares Y in base |
+| `sameModule` | `resolveDependency(base, unit, dep)` (computed for every site, never gated on baseHadRef) ok and its module path == cur module path | dependency re-pointed to a unit of another module that declares Y in base |
 | `baseDeclared` | base surface (known) declares Y | base module never declared Y (pre-existing GRT001) |
 
 Rows that must stay silent in cur (enabled false/unknown, skip_outputs true/unknown, unresolved,
