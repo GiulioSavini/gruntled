@@ -1,0 +1,7 @@
+baseline: base
+Broken (1):
+  live/app
+    live/app/terragrunt.hcl:7:20: GRT004 dependency "db" output "id" was removed from module "modules/vpc" (target unit "live/db")
+Impacted (2):
+  live/cache (module modules/vpc: +variable name, -output id)
+  live/db (module modules/vpc: +variable name, -output id)

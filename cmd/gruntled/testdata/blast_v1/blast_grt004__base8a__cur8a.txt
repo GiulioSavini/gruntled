@@ -1,0 +1,6 @@
+baseline: base8a
+Broken (1):
+  live/app
+    live/app/terragrunt.hcl:11:7: GRT004 dependency "db" output "id" was removed from module "modules/vpc" (target unit "live/db"); mock_outputs supplies it, so apply would silently use the mock value
+Impacted (1):
+  live/db (module modules/vpc: -output id, +output name)

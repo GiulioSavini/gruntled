@@ -1,0 +1,5 @@
+baseline: base4
+Broken (1):
+  live/app
+    live/app/terragrunt.hcl:8:7: GRT001 dependency "db" output "id" is not declared by module "modules/other" (target unit "live/other")
+Impacted (0):

@@ -1,0 +1,5 @@
+baseline: clean
+Broken (1):
+  app
+    app/terragrunt.hcl:4:17: GRT001 dependency "vpc" output "vpc_idd" is not declared by module "vpc" (target unit "vpc")
+Impacted (0):

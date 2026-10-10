@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "kind": "blast",
+  "baseline": true,
+  "broken": [
+    {
+      "unit": "modules/vpc/main.tf",
+      "findings": [
+        {
+          "code": "GRT100",
+          "severity": "error",
+          "file": "modules/vpc/main.tf",
+          "line": 1,
+          "column": 13,
+          "message": "Unclosed configuration block: There is no closing brace for this block before the end of the file. This may be caused by incorrect brace nesting elsewhere in this file."
+        }
+      ]
+    }
+  ],
+  "impacted": [],
+  "summary": {
+    "broken": 1,
+    "impacted": 0
+  }
+}

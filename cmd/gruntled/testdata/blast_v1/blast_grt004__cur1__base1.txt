@@ -1,0 +1,4 @@
+baseline: cur1
+Broken (0):
+Impacted (1):
+  live/db (module modules/vpc: +output id)

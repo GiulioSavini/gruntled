@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "kind": "blast",
+  "baseline": true,
+  "broken": [
+    {
+      "unit": "live/app",
+      "findings": [
+        {
+          "code": "GRT004",
+          "severity": "error",
+          "file": "live/app/terragrunt.hcl",
+          "line": 11,
+          "column": 7,
+          "message": "dependency \"db\" output \"id\" was removed from module \"modules/vpc\" (target unit \"live/db\"); mock_outputs supplies it, so apply would silently use the mock value"
+        }
+      ]
+    }
+  ],
+  "impacted": [
+    {
+      "unit": "live/db",
+      "module": "modules/vpc",
+      "added_variables": [],
+      "removed_variables": [],
+      "added_outputs": [
+        "name"
+      ],
+      "removed_outputs": [
+        "id"
+      ]
+    }
+  ],
+  "summary": {
+    "broken": 1,
+    "impacted": 1
+  }
+}

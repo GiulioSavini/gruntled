@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "kind": "blast",
+  "baseline": true,
+  "broken": [
+    {
+      "unit": "live/app",
+      "findings": [
+        {
+          "code": "GRT004",
+          "severity": "error",
+          "file": "live/app/terragrunt.hcl",
+          "line": 7,
+          "column": 20,
+          "message": "dependency \"db\" output \"id\" was removed from module \"modules/vpc\" (target unit \"live/db\")"
+        }
+      ]
+    }
+  ],
+  "impacted": [
+    {
+      "unit": "live/cache",
+      "module": "modules/vpc",
+      "added_variables": [
+        "name"
+      ],
+      "removed_variables": [],
+      "added_outputs": [],
+      "removed_outputs": [
+        "id"
+      ]
+    },
+    {
+      "unit": "live/db",
+      "module": "modules/vpc",
+      "added_variables": [
+        "name"
+      ],
+      "removed_variables": [],
+      "added_outputs": [],
+      "removed_outputs": [
+        "id"
+      ]
+    }
+  ],
+  "summary": {
+    "broken": 1,
+    "impacted": 2
+  }
+}

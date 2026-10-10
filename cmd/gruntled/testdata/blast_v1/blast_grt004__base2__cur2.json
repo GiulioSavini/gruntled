@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "kind": "blast",
+  "baseline": true,
+  "broken": [],
+  "impacted": [
+    {
+      "unit": "live/db",
+      "module": "modules/vpc",
+      "added_variables": [],
+      "removed_variables": [],
+      "added_outputs": [],
+      "removed_outputs": [
+        "name"
+      ]
+    }
+  ],
+  "summary": {
+    "broken": 0,
+    "impacted": 1
+  }
+}
