@@ -96,7 +96,9 @@ func toGraphPos(p repograph.Position) graphPos {
 // target could not be determined, ordered by declaring unit then
 // position) and a summary. Empty lists are written as [], never null, and
 // HTML characters are not escaped. Columns are 1-based byte offsets.
-// Reason strings are human-readable text, not a stable contract.
+// Reason strings are human-readable text, not a stable contract. The
+// encoded bytes go through escapeJSON (DEL, C1, format and line/paragraph
+// separator runes as \uXXXX).
 func Graph(w io.Writer, g *repograph.RepositoryGraph) error {
 	units := g.Units()
 	modules := g.Modules()
@@ -173,7 +175,7 @@ func Graph(w io.Writer, g *repograph.RepositoryGraph) error {
 	if err := enc.Encode(doc); err != nil {
 		return err
 	}
-	_, err := w.Write(b.Bytes())
+	_, err := w.Write(escapeJSON(b.Bytes()))
 	return err
 }
 

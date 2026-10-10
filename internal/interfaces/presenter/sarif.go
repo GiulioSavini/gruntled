@@ -247,7 +247,9 @@ func percentEncode(p string) string {
 // resolved and per module whose surface is unknown (units first, then
 // modules, each in the graph's path order). Empty lists are written as [],
 // HTML characters are not escaped, and nothing time- or host-dependent
-// (timestamps, GUIDs, absolute paths, fingerprints) is emitted.
+// (timestamps, GUIDs, absolute paths, fingerprints) is emitted. The
+// encoded bytes go through escapeJSON (DEL, C1, format and line/paragraph
+// separator runes as \uXXXX).
 //
 // URIs are repo-relative to the analysed path, percent-encoded, with
 // uriBaseId %SRCROOT%; an uploader must map %SRCROOT% to that path (for
@@ -328,7 +330,7 @@ func SARIF(w io.Writer, g *repograph.RepositoryGraph, diags diagnostic.Set, tool
 	if err := enc.Encode(doc); err != nil {
 		return err
 	}
-	_, err := w.Write(b.Bytes())
+	_, err := w.Write(escapeJSON(b.Bytes()))
 	return err
 }
 

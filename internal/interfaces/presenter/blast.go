@@ -70,14 +70,16 @@ type blastSummary struct {
 //	Impacted (M):
 //	  <unit> (module <m>: -variable a, +variable b, -output c, +output d)
 //
-// baselineLabel is printed as given. Without a baseline the first line is
+// baselineLabel, like every path, message, module and name, is written
+// through escapeTerm, so nothing printed can carry a terminal control
+// sequence; printable text prints unchanged. Without a baseline the first line is
 // "baseline: none (no baseline)" and the Impacted section is omitted, since
 // nothing can be compared. Empty sections still print their header.
 func BlastText(w io.Writer, res impact.Result, baselineLabel string) error {
 	var b bytes.Buffer
 	b.WriteString("baseline: ")
 	if res.Baseline {
-		b.WriteString(baselineLabel)
+		b.WriteString(escapeTerm(baselineLabel))
 	} else {
 		b.WriteString("none (" + blastNoBaselineNote + ")")
 	}
@@ -88,12 +90,12 @@ func BlastText(w io.Writer, res impact.Result, baselineLabel string) error {
 	b.WriteString("):\n")
 	for _, u := range res.Broken {
 		b.WriteString("  ")
-		b.WriteString(u.Subject.String())
+		b.WriteString(escapeTerm(u.Subject.String()))
 		b.WriteByte('\n')
 		for _, d := range u.Findings {
 			p := d.Pos()
 			b.WriteString("    ")
-			b.WriteString(p.File().String())
+			b.WriteString(escapeTerm(p.File().String()))
 			b.WriteByte(':')
 			b.WriteString(strconv.Itoa(p.Line()))
 			b.WriteByte(':')
@@ -101,7 +103,7 @@ func BlastText(w io.Writer, res impact.Result, baselineLabel string) error {
 			b.WriteString(": ")
 			b.WriteString(string(d.Code()))
 			b.WriteByte(' ')
-			b.WriteString(d.Message())
+			b.WriteString(escapeTerm(d.Message()))
 			b.WriteByte('\n')
 		}
 	}
@@ -112,9 +114,9 @@ func BlastText(w io.Writer, res impact.Result, baselineLabel string) error {
 		b.WriteString("):\n")
 		for _, u := range res.Impacted {
 			b.WriteString("  ")
-			b.WriteString(u.Unit.String())
+			b.WriteString(escapeTerm(u.Unit.String()))
 			b.WriteString(" (module ")
-			b.WriteString(u.Change.Module.String())
+			b.WriteString(escapeTerm(u.Change.Module.String()))
 			b.WriteString(": ")
 			writeChangeTokens(&b, u.Change)
 			b.WriteString(")\n")
@@ -137,7 +139,7 @@ func writeChangeTokens(b *bytes.Buffer, c impact.SurfaceChange) {
 			}
 			first = false
 			b.WriteString(prefix)
-			b.WriteString(n)
+			b.WriteString(escapeTerm(n))
 		}
 	}
 	group("-variable ", c.RemovedVariables)
@@ -149,7 +151,8 @@ func writeChangeTokens(b *bytes.Buffer, c impact.SurfaceChange) {
 // BlastJSON writes a blast radius as an indented JSON document (version 1,
 // kind "blast"). Every list is written as [] when empty, never null. A run
 // without a baseline carries baseline:false, a "note" and an empty
-// impacted list.
+// impacted list. The encoded bytes go through escapeJSON, so DEL, C1,
+// format and line/paragraph separator runes are written as \uXXXX.
 func BlastJSON(w io.Writer, res impact.Result) error {
 	doc := blastDoc{
 		Version:  blastSchemaVersion,
@@ -189,7 +192,7 @@ func BlastJSON(w io.Writer, res impact.Result) error {
 	if err := enc.Encode(doc); err != nil {
 		return err
 	}
-	_, err := w.Write(b.Bytes())
+	_, err := w.Write(escapeJSON(b.Bytes()))
 	return err
 }
 

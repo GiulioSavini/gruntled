@@ -58,7 +58,9 @@ type jsonSummary struct {
 // diagnostics in diags' canonical order, the units that are not resolved
 // and the modules whose surface is unknown (both in the graph's path
 // order), and the run summary. Empty lists are written as [], never null,
-// and HTML characters are not escaped.
+// and HTML characters are not escaped. The encoded bytes go through
+// escapeJSON, so DEL, C1, format and line/paragraph separator runes are
+// written as \uXXXX escapes (same decoded value).
 func JSON(w io.Writer, g *repograph.RepositoryGraph, diags diagnostic.Set) error {
 	all := diags.All()
 	report := jsonReport{
@@ -119,6 +121,6 @@ func JSON(w io.Writer, g *repograph.RepositoryGraph, diags diagnostic.Set) error
 	if err := enc.Encode(report); err != nil {
 		return err
 	}
-	_, err := w.Write(b.Bytes())
+	_, err := w.Write(escapeJSON(b.Bytes()))
 	return err
 }
