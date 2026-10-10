@@ -122,3 +122,74 @@ func allHold(checks []removedOutputCheck, f siteFacts) bool {
 	}
 	return true
 }
+
+// siteKey is a reference site's identity: the unit and the position, whose
+// file is part of the key.
+type siteKey struct {
+	unit repograph.RepoPath
+	pos  repograph.Position
+}
+
+// SupersedeUnknownOutputs returns cur with each GRT004 of removed replacing
+// one GRT001 of cur that has the same Unit and Pos; a GRT004 with no such
+// GRT001 is dropped, so the result never holds more findings than cur.
+// Matching is by code, Unit and Pos (Pos includes the file) only, never by
+// message; every diagnostic other than a replaced GRT001 is kept. Callers
+// guarantee at most one GRT001 per (Unit, Pos): References puts each site
+// at its traversal's unique start byte in a file, and the loader rejects a
+// file included twice, so (Unit, Pos) is a site identity.
+func SupersedeUnknownOutputs(cur diagnostic.Set, removed []diagnostic.Diagnostic) diagnostic.Set {
+	if len(removed) == 0 {
+		return cur
+	}
+	available := make(map[siteKey]int)
+	for _, d := range cur.All() {
+		if d.Code() != diagnostic.CodeUnknownOutput {
+			continue
+		}
+		u, ok := d.Unit()
+		if !ok {
+			continue
+		}
+		available[siteKey{unit: u, pos: d.Pos()}]++
+	}
+
+	consume := make(map[siteKey]int)
+	var replacing []diagnostic.Diagnostic
+	for _, d := range removed {
+		if d.Code() != diagnostic.CodeRemovedOutput {
+			continue
+		}
+		u, ok := d.Unit()
+		if !ok {
+			continue
+		}
+		k := siteKey{unit: u, pos: d.Pos()}
+		if available[k] == 0 {
+			continue
+		}
+		available[k]--
+		consume[k]++
+		replacing = append(replacing, d)
+	}
+	if len(replacing) == 0 {
+		return cur
+	}
+
+	all := cur.All()
+	out := make([]diagnostic.Diagnostic, 0, len(all))
+	for _, d := range all {
+		if d.Code() == diagnostic.CodeUnknownOutput {
+			if u, ok := d.Unit(); ok {
+				k := siteKey{unit: u, pos: d.Pos()}
+				if consume[k] > 0 {
+					consume[k]--
+					continue
+				}
+			}
+		}
+		out = append(out, d)
+	}
+	out = append(out, replacing...)
+	return diagnostic.NewSet(out...)
+}
