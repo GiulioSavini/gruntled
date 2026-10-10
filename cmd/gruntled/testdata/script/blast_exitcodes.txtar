@@ -41,7 +41,7 @@ stdout '"baseline": true'
 # blast 2: invalid --format (sarif is not supported by blast)
 exec gruntled-exit 2 blast --format sarif clean
 stderr 'invalid --format "sarif" \(want text or json\)'
-stderr '^usage: gruntled blast \[--base dir\] \[--format text\|json\] \[path\]$'
+stderr '^usage: gruntled blast \[--base dir\] \[--format text\|json\] \[--depth N\] \[path\]$'
 ! stdout .
 exec gruntled-exit 2 blast --format xml clean
 stderr 'invalid --format "xml" \(want text or json\)'

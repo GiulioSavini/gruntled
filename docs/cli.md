@@ -144,27 +144,31 @@ baseline. `--format` is `text` or `json`; `sarif` is not supported for
 `blast` and is a usage error.
 
 ```
-usage: gruntled blast [--base dir] [--format text|json] [path]
+usage: gruntled blast [--base dir] [--format text|json] [--depth N] [path]
 
 Compare the Terragrunt repository at path (default ".") with the baseline
 tree at --base. Broken lists the units with findings that are new in path
 (a finding that only moved to another line is not new). A reference to an
 output that the baseline module declared and path removed is reported as
 GRT004 instead of GRT001. Impacted lists the units that use a module whose
-variable or output names changed and are not Broken; only direct consumers
-are listed. Without --base every finding is Broken and Impacted is not
-computed ("no baseline"). gruntled never runs git: check the baseline out
-yourself, for example with git worktree.
+variable or output names changed (distance 1) and the units that depend on
+them through dependency blocks whose enabled and skip_outputs are absent or
+literally true and false, each with its distance and one shortest path;
+Broken units are not listed again. --depth N stops at distance N. Without
+--base every finding is Broken and Impacted is not computed ("no
+baseline"). gruntled never runs git: check the baseline out yourself, for
+example with git worktree.
 Flags may appear before or after path; "--" ends flag parsing.
 
 Flags:
   --base dir           baseline tree to compare against (default: none)
   --format text|json   output format (default "text")
+  --depth N            list Impacted units up to distance N (default: no limit)
 
 Exit codes:
   0  comparison completed, no error diagnostic in Broken
   1  comparison completed, at least one error diagnostic in Broken
-  2  usage error: unknown flag, invalid --format, more than one path
+  2  usage error: unknown flag, invalid --format or --depth, more than one path
   3  comparison could not run: path or --base missing, not a directory or unreadable, an internal failure, or stdout write failed
 ```
 

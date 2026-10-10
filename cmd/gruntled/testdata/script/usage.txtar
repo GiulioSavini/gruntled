@@ -30,7 +30,7 @@ stderr '^  3  analysis could not run'
 
 # blast help: exit 0 with the exit-code table
 exec gruntled-exit 0 blast -h
-stderr '^usage: gruntled blast \[--base dir\] \[--format text\|json\] \[path\]$'
+stderr '^usage: gruntled blast \[--base dir\] \[--format text\|json\] \[--depth N\] \[path\]$'
 stderr '^  0  comparison completed'
 stderr '^  1  comparison completed, at least one error diagnostic in Broken$'
 stderr '^  2  usage error'
