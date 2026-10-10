@@ -44,7 +44,7 @@ PATH for every command: `export PATH=$HOME/.local/go/bin:$HOME/go/bin:$PATH`.
 | 2 | Only live block edges propagate; Broken traversed, listed only under Broken; disjoint and sorted | `TestPropagatesEdgeRule`, `TestComputeBrokenTraversed`, `TestDisjoint`, oracle (edge-fact variants), `blast_transitive.txtar` cases 2-3, hand mutations (a)(c) |
 | 3 | Cycles, self-loops, diamonds terminate; minimum distance; canonical path; order-independent; brute-force oracle with shuffled input | `TestPropagateCycleSelfLoopDiamond`, `TestPropagateTieBreak` (sec #111 counterexample), `TestPropagateOrderIndependent`, `TestPropagateNoRecursion`, `TestTransitiveMatchesOracleExhaustive`, `TestTransitiveMatchesOracleRandom` (two shuffles, non-vacuity counters), `blast_transitive.txtar` cases 4-5 |
 | 4 | `--depth N`; `--depth 1` == v0.3 Impacted set; 0/negative/non-integer exit 2 | `TestWithMaxDistance`, oracle per depth 1..4, `TestBlastDepthFlag`, `blast_exitcodes.txtar` depth cases, `TestBlastDepth1MatchesV1` (snapshots from the pre-Phase-14 commit), `blast_transitive.txtar` case 6 |
-| 5 | JSON version 2, additive (distance, source, via; linear); text full path up to a fixed hop count, deterministic elision | `TestBlastJSONGolden`, `TestBlastJSONV1Compat`, `TestBlastJSONLinear`, `TestBlastJSONBrokenReach`, `TestBlastTextPathElision`, `TestBlastTextPathThroughBroken`, `TestBlastTextLinear`, escape tests, `TestBlastTransitiveSynthrepo` (size) |
+| 5 | JSON version 2, additive (distance, source, via; linear); text full path up to a fixed hop count, deterministic elision | `TestBlastJSONGolden`, `TestBlastJSONV1KeysKeepType`, `TestBlastJSONLinear`, `TestBlastJSONBrokenReach`, `TestBlastTextPathElision`, `TestBlastTextPathThroughBroken`, `TestBlastTextLinear`, escape tests, `TestBlastTransitiveSynthrepo` (size) |
 
 ---
 
@@ -84,6 +84,9 @@ step of its own task, so no separate Wave 0 plan is needed.
 | Broken units not traversed | `TestComputeBrokenTraversed`, oracle counter "Broken on a shortest path" | 14-01-SUMMARY |
 | Text path not capped / elision count off by one | `TestBlastTextPathElision`, `TestBlastTextLinear` | 14-02-SUMMARY |
 | compare-ref.sh perturbed | exits 1 with a `DIFF ` line | 14-03-SUMMARY |
+| txtar extraction checks removed (traversal/link/ref) | `scripts/test-txtar-extract.sh` | 14-03-SUMMARY (before and after the lib move) |
+| snapshots regenerated with HEAD | TestBlastDepth1MatchesV1 provenance assertions + gate `diff -r` / ancestry / no transitive.go | 14-03-SUMMARY |
+| oracle cannot distinguish the #111 readings | counter "read-back != seed-first" > 0 | 14-01-SUMMARY |
 
 ---
 

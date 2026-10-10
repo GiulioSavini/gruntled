@@ -88,7 +88,7 @@ JSON `version` 2 (the existing key; see D-14-01), additive only:
   consumer can follow `via` through it.
 
 Text: distance-1 line `  <unit> (distance 1, module <m>: <tokens>)` (v0.3 line plus one token);
-distance >= 2 `  <unit> (distance <d>, module <m>, path <unit> -> <hop> -> ... -> <source>)`. A
+distance >= 2 `  <unit> (distance <d>, from module <m>, path <unit> -> <hop> -> ... -> <source>)` (sec #195: impacted[] `module` is the changed module that reached the unit; for distance 1 it is also the unit's own module; readers must check `version`). A
 path of more than 6 units prints its first 4, then `... (<k> more) ->`, then the source:
 O(1) per line, deterministic. Every hop via `escapeTerm`.
 
