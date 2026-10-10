@@ -15,8 +15,8 @@ Milestone v0.4 Blast-aware Diagnostics. Each maps to one roadmap phase.
 
 ### Removed outputs
 
-- [ ] **MORE-03**: In `blast --base` and `report --blast`, `GRT004` fires at exactly the reference sites where the current tree raises `GRT001`, and replaces each of them (one finding per site, never both codes at one site), when the baseline had a reference with the same (unit, dependency name, output) (position-free) and both trees resolve the dependency to the same module path, known on both sides, whose baseline surface declares the output. It only reclassifies an existing `GRT001`, so it can never add a finding, and it shares `GRT001`'s decision table (`mock_outputs` never suppresses; `skip_outputs`/`enabled`/unknown keep it silent). Severity error, exit 1 in `blast` and `report --blast`. The message names the output, the module and the target unit, carries no consumer list, and uses repo-relative paths.
-- [ ] **MORE-07**: `check` (text/json/sarif), plain `report`, `graph --json` and the status file never emit `GRT004` or type facts and stay byte-identical to v0.3.0 (pinned goldens).
+- [x] **MORE-03**: In `blast --base` and `report --blast`, `GRT004` fires at exactly the reference sites where the current tree raises `GRT001`, and replaces each of them (one finding per site, never both codes at one site), when the baseline had a reference with the same (unit, dependency name, output) (position-free) and both trees resolve the dependency to the same module path, known on both sides, whose baseline surface declares the output. It only reclassifies an existing `GRT001`, so it can never add a finding, and it shares `GRT001`'s decision table (`mock_outputs` never suppresses; `skip_outputs`/`enabled`/unknown keep it silent). Severity error, exit 1 in `blast` and `report --blast`. The message names the output, the module and the target unit, carries no consumer list, and uses repo-relative paths.
+- [x] **MORE-07**: `check` (text/json/sarif), plain `report`, `graph --json` and the status file never emit `GRT004` or type facts and stay byte-identical to v0.3.0 (pinned goldens).
 
 ### Transitive impact
 
@@ -78,8 +78,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MORE-03 | Phase 13 | Pending |
-| MORE-07 | Phase 13 | Pending |
+| MORE-03 | Phase 13 | Complete |
+| MORE-07 | Phase 13 | Complete |
 | BLAST-03 | Phase 14 | Pending |
 | BLAST-04 | Phase 14 | Pending |
 | BLAST-05 | Phase 14 | Pending |

@@ -44,7 +44,7 @@ See `milestones/v0.3-ROADMAP.md`.
 
 **Milestone Goal:** Use the difference against a baseline, not only the current tree: the daemon answers blast on every save, impact follows the graph past one hop and through type changes, and a removed output that is still referenced becomes an error that names its consumers.
 
-- [ ] **Phase 13: Removed-Output Diagnostic & Shared Blast Core** - `GRT004` replaces `GRT001` at every reference to an output the change removed; `check` stays byte-identical to v0.3.0
+- [x] **Phase 13: Removed-Output Diagnostic & Shared Blast Core** - `GRT004` replaces `GRT001` at every reference to an output the change removed; `check` stays byte-identical to v0.3.0 (completed 2026-10-10)
 - [ ] **Phase 14: Transitive Impact with Paths** - Impacted follows dependents past one hop, with a distance, one connecting path and `--depth`
 - [ ] **Phase 15: Type-Level Surface Facts** - New required variables and variable/output type or `sensitive` changes put instantiating units in Impacted, never in Broken
 - [ ] **Phase 16: Daemon Baseline, `report --blast` & `rebase`** - The daemon answers blast against its in-memory baseline over IPC v2, and the baseline moves only on `rebase`
@@ -62,12 +62,13 @@ See `milestones/v0.3-ROADMAP.md`.
   2. `GRT004` only reclassifies an existing `GRT001`: for the same two trees the Broken units and the number of findings per unit equal what v0.3.0 `blast` printed, no site ever shows both codes, and removing an output that nothing references adds no finding
   3. Wherever a precondition fails the site behaves exactly as `check` does in v0.3.0: a reference added in the same change, a dependency re-pointed to another module, a module unknown on either side, or an output the baseline surface did not declare keeps `GRT001`; `enabled = false`, `skip_outputs = true` or a non-literal value for either stays silent; `mock_outputs` never suppresses the error
   4. `check` (text, JSON, SARIF), plain `report`, `graph --json` and the status file never print `GRT004` and stay byte-identical to v0.3.0 on pinned goldens
-**Plans**: 3 plans
+
+**Plans**: 3/3 plans complete
 
 Plans:
-- [ ] 13-01-PLAN.md — domain: CodeRemovedOutput, shared resolveReference extraction, RemovedOutputs (precondition matrix, DIAG-03 parity, necessity test), SupersedeUnknownOutputs
-- [ ] 13-02-PLAN.md — blasting.Between shared core, Blast delegates, reclassification property vs v0.3, blast_grt004 testscript, escape e2e
-- [ ] 13-03-PLAN.md — MORE-07 pins (check/report/graph/status never GRT004, v0.3.0 byte identity), usage/docs/README with doc-sync test, phase gate
+- [x] 13-01-PLAN.md — domain: CodeRemovedOutput, shared resolveReference extraction, RemovedOutputs (precondition matrix, DIAG-03 parity, necessity test), SupersedeUnknownOutputs
+- [x] 13-02-PLAN.md — blasting.Between shared core, Blast delegates, reclassification property vs v0.3, blast_grt004 testscript, escape e2e
+- [x] 13-03-PLAN.md — MORE-07 pins (check/report/graph/status never GRT004, v0.3.0 byte identity), usage/docs/README with doc-sync test, phase gate
 
 ### Phase 14: Transitive Impact with Paths
 
@@ -80,6 +81,7 @@ Plans:
   3. Cycles, self-loops and diamonds terminate; each unit appears once, at its minimum distance, with the path that is smallest under `RepoPath.Compare` at the first differing hop, identical for any input or map order (proven against a brute-force oracle on random graphs with shuffled input)
   4. `blast --depth N` limits propagation (default unlimited); `--depth 1` with only name-level changes yields the v0.3 Impacted set; `--depth 0`, a negative or a non-integer value exits 2
   5. JSON carries `"version": 2` (existing key, D-14-01) with additive fields only (distance, source and `via` = predecessor, so size is linear in chain length); text prints the full path up to a fixed hop count and elides the rest deterministically (the 5,000-unit size bound is proven in Phase 15 under BLAST-11)
+
 **Plans**: 3 plans
 
 Plans:
@@ -98,6 +100,7 @@ Plans:
   3. Type-level reasons never create a diagnostic, never make a unit Broken and never change the exit code: a unit missing a newly required variable is not Broken, and with `--depth 1` every v0.3 blast golden gives the same Broken and Impacted sets and exit code (text differs only by distance/path tokens, JSON only by `"version": 2` (existing key, D-14-01) and the additive fields)
   4. An ambiguous fact reports nothing: a name declared in more than one kept file with differing facts, any Terraform override file, a non-literal or unparseable value, or an unknown fact on either side stays silent, while names stay known so `GRT001` and name-level Impacted are unchanged
   5. Hostile or huge input is safe and bounded: variable, output and object attribute names containing C0, C1, U+202E and invalid UTF-8 print escaped in `blast` text and JSON; a 4 MiB type expression and a 5,000-unit linear chain keep RSS and output size within the asserted bounds; the canonical type renderer never panics (fuzz test in CI); the six-target no-net/no-exec proof passes on the first commit that imports `hcl/v2/ext/typeexpr`
+
 **Plans**: TBD
 **Research flag**: yes — spike before planning: `typeexpr` over `.tf.json` string form and legacy bare `list`/`map`; Terraform 1.15 output `type` release note and OpenTofu parity; `override.tf` and `.tf` + `.tofu` duplicate declarations; the six-target proof with `ext/typeexpr` linked
 
@@ -112,6 +115,7 @@ Plans:
   3. `gruntled rebase [--expect N]` moves the baseline to the last published report in memory only: it prints the new generation and the number of error findings in Broken at that moment, refuses with exit 3 while indexing or failed or when `--expect N` differs, says the outcome is unknown on a client timeout, exits 3 as unsupported on windows, writes no file and never starts a daemon; until the next save `report --blast` then shows empty sets; docs no longer call `report` read-only
   4. The IPC protocol is version 2: a client/daemon version mismatch is an explicit error with exit 3, never an empty "nothing impacted" answer; the compatibility matrix (fake v1 daemon with v2 client, v2 daemon with v1 request, v1 report dump) passes and plain `report` bytes are unchanged
   5. The baseline holds only the `checking.Report` (never a loader, `fs.FS` or parse cache); a blast response over 64 MiB is an explicit exit-3 error naming the cap; daemon memory on `synthrepo` at 65, 500 and 5,000 units is measured and recorded
+
 **Plans**: TBD
 **Research flag**: yes — first mutating socket op and its serialisation with publish; windows asymmetry (`report --blast` via dump, `rebase` unsupported); 64 MiB cap with a pre-rendered blast view; unmeasured memory at thousands of units; peer-credential trust boundary of the 0600 socket
 
@@ -125,6 +129,7 @@ Plans:
   2. Reformat-only mutations (whitespace, comments, attribute reorder, `optional()` default, `.tf` to `.tf.json`, output moved to another file, `deprecated` added) each give an empty Impacted set
   3. Every mutation in the set is caught: referenced output removed (`GRT004` at every site and no `GRT001`), unreferenced output removed, required variable added, default removed, variable type changed, output type declared and changed, `sensitive` flipped, and propagation to depth 2 or more
   4. An independent security review across the blast core, the socket ops and output escaping leaves no open BLOCKER or MEDIUM (any found is closed in this phase), the six-target no-net/no-exec proof and the doc-sync pins pass on the final tree, and the docs match the shipped behaviour of `GRT004`, `--depth`, `report --blast` and `rebase`
+
 **Plans**: TBD
 
 ## Progress
@@ -139,7 +144,7 @@ Plans:
 | 10. Watch Daemon & Status File | v0.3 | 7/7 | Complete | 2026-10-08 |
 | 11. Report, Single Instance & Release Proof | v0.3 | 7/7 | Complete | 2026-10-08 |
 | 12. Gap Closure — Watcher Dir Ignore & Audit Findings | v0.3 | 5/5 | Complete | 2026-10-10 |
-| 13. Removed-Output Diagnostic & Shared Blast Core | v0.4 | 0/TBD | Not started | - |
+| 13. Removed-Output Diagnostic & Shared Blast Core | v0.4 | 3/3 | Complete    | 2026-10-10 |
 | 14. Transitive Impact with Paths | v0.4 | 0/TBD | Not started | - |
 | 15. Type-Level Surface Facts | v0.4 | 0/TBD | Not started | - |
 | 16. Daemon Baseline, `report --blast` & `rebase` | v0.4 | 0/TBD | Not started | - |

@@ -1,7 +1,7 @@
 {
   "contract": "1.0.0",
   "flavor": "core",
-  "milestone": "v0.4",
+  "milestone": "v0.4 — Blast-aware Diagnostics",
   "phases": [
     {
       "number": "5",
@@ -42,12 +42,37 @@
       "number": "12",
       "name": "Gap Closure — Watcher Dir Ignore & Audit Findings",
       "status": "complete"
+    },
+    {
+      "number": "13",
+      "name": "Removed-Output Diagnostic & Shared Blast Core",
+      "status": "complete"
+    },
+    {
+      "number": "14",
+      "name": "Transitive Impact with Paths",
+      "status": "pending"
+    },
+    {
+      "number": "15",
+      "name": "Type-Level Surface Facts",
+      "status": "pending"
+    },
+    {
+      "number": "16",
+      "name": "Daemon Baseline, `report --blast` & `rebase`",
+      "status": "pending"
+    },
+    {
+      "number": "17",
+      "name": "Corpus Mutation Proof & Cross-Phase Audit",
+      "status": "pending"
     }
   ],
   "next": {
-    "command": "/gsd:discuss-phase",
-    "label": "Discuss the first phase",
-    "reason": "Project initialized — plan your first phase"
+    "command": "/gsd:progress --next",
+    "label": "Advance to the next step (plan phase 14)",
+    "reason": "Phase 14 of 5 — needs a plan"
   },
-  "updated_at": "2026-10-10T11:40:13.366Z"
+  "updated_at": "2026-10-10T16:09:02.667Z"
 }

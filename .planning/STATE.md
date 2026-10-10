@@ -2,19 +2,20 @@
 gsd_state_version: "1.0"
 milestone: v0.4
 milestone_name: Blast-aware Diagnostics
-current_phase: 13
-current_phase_name: Removed-Output Diagnostic & Shared Blast Core
+current_phase: 14
+current_phase_name: Transitive Impact with Paths
 status: planning
-stopped_at: Created ROADMAP.md (phases 13-17), STATE.md and REQUIREMENTS.md traceability for v0.4
-last_updated: "2026-10-10T13:27:56.473Z"
+stopped_at: Phase 13 complete, ready to plan Phase 14
+last_updated: "2026-10-10T16:09:02.657Z"
 last_activity: 2026-10-10
-state_head: 87171de4c8f5db25d67a13ae93a9f37591a8f0fc
+last_activity_desc: Phase 13 complete, transitioned to Phase 14
+state_head: 78153438564cfb34caacbb1baabe1d36dd943c63
 progress:
   total_phases: 5
-  completed_phases: 8
-  total_plans: 0
-  completed_plans: 0
-  percent: 100
+  completed_phases: 9
+  total_plans: 6
+  completed_plans: 3
+  percent: 69
 ---
 
 # Project State
@@ -28,12 +29,12 @@ See: .planning/PROJECT.md (updated 2026-10-10)
 
 ## Current Position
 
-Phase: 13 of 17 (Removed-Output Diagnostic & Shared Blast Core)
+Phase: 14 of 17 (Transitive Impact with Paths)
 Plan: Not started
 Status: Ready to plan
-Last activity: 2026-10-10
+Last activity: 2026-10-10 — Phase 13 complete, transitioned to Phase 14
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [███████░░░] 69%
 
 ## Performance Metrics
 
@@ -84,7 +85,7 @@ Items acknowledged and deferred, most recent first:
 ## Session Continuity
 
 Last session: 2026-10-10 13:26
-Stopped at: Created ROADMAP.md (phases 13-17), STATE.md and REQUIREMENTS.md traceability for v0.4
+Stopped at: Phase 13 complete, ready to plan Phase 14
 Resume file: None
 
 ## Operator Next Steps
