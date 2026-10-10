@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v0.3
 milestone_name: Watch & Blast
-status: milestone_complete
-stopped_at: Phase 11 verified (passed); v0.3 phases all complete — next audit-milestone
+status: gap_closure
+stopped_at: v0.3 audit gaps_found (DAEMON-01/02 partial) — Phase 12 gap closure, planning
 last_updated: "2026-10-08T13:45:25.297Z"
-last_activity: 2026-10-08 — completed 11-07 (.gitattributes LF + narrow windows test skips; CI all green)
+last_activity: 2026-10-10 — v0.3 milestone audit (gaps_found), phase 12 added
 progress:
-  total_phases: 4
+  total_phases: 5
   completed_phases: 4
   total_plans: 19
   completed_plans: 19
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-10-08)
 
 ## Current Position
 
-Phase: 11 of 11 (Report, Single Instance & Release Proof) — complete
+Phase: 12 of 12 (Gap Closure — Watcher Directory Ignore & v0.3 Audit Findings) — planning
 Plan: 7 of 7 (11-01..11-07 complete)
-Status: v0.3 complete — phases 8-11 verified passed, phase 11 sec audit clean; next: audit-milestone, then complete-milestone (tag needs the person)
-Last activity: 2026-10-08 — completed 11-07 (.gitattributes LF + narrow windows test skips; CI all green)
+Status: v0.3 audit gaps_found (.planning/v0.3-MILESTONE-AUDIT.md); phase 12 closes DAEMON-01/02 gaps + sec findings, then complete-milestone (tag needs the person)
+Last activity: 2026-10-10 — milestone audit; phase 12 added
 
 Progress: [██████████] 19/19 plans (v0.3: 4/4 phases verified)
 

@@ -34,10 +34,12 @@ See `milestones/v0.2-ROADMAP.md`.
 - [x] **Phase 9: Blast Radius** - `gruntled blast --base` reports disjoint Broken and Impacted unit sets (completed 2026-10-08)
 - [x] **Phase 10: Watch Daemon & Status File** - `gruntled watch` reindexes on save and writes an atomic status line (completed 2026-10-08)
 - [x] **Phase 11: Report, Single Instance & Release Proof** - Socket/lock/attach, `report`, six-target no-net/no-exec proof, docs (completed 2026-10-08)
+- [ ] **Phase 12: Gap Closure — Watcher Directory Ignore & v0.3 Audit Findings** - Directory names matching editor-file patterns are watched; audit findings closed
 
 ## Phase Details
 
 ### Phase 8: Incremental Index Foundation
+
 **Goal**: The index can be updated incrementally from a set of dirty paths and always yields exactly what a full rescan yields.
 **Depends on**: Phase 7
 **Requirements**: DAEMON-02
@@ -46,6 +48,7 @@ See `milestones/v0.2-ROADMAP.md`.
   2. The rapid stateful property test runs in CI, shrinks failures to a minimal operation sequence, and uses no real watcher or sleeps
   3. `check` output on the existing fixtures is unchanged (no regression from the persistent cache)
   4. Unchanged files are not re-parsed on a reindex (observable via cache hit count)
+
 **Plans**: 2 plans
 
 Plans:
@@ -53,6 +56,7 @@ Plans:
 - [x] 08-02-PLAN.md — rapid stateful incremental == full test
 
 ### Phase 9: Blast Radius
+
 **Goal**: User can see which units a change breaks and which it puts at risk, against a baseline directory.
 **Depends on**: Phase 8
 **Requirements**: BLAST-01, BLAST-02
@@ -61,6 +65,7 @@ Plans:
   2. A unit with a finding present in `<path>` and absent in `<dir>` is Broken; a finding present in both is never reported as Broken
   3. A unit directly consuming a module that gained or lost a `variable` or `output` name is Impacted; a module with an unchanged surface impacts nothing
   4. Without `--base`, only Broken is reported and labelled "no baseline"
+
 **Plans**: 3 plans
 
 Plans:
@@ -69,6 +74,7 @@ Plans:
 - [x] 09-03-PLAN.md — `blast` CLI, testscript scenarios, docs/cli.md, phase gate
 
 ### Phase 10: Watch Daemon & Status File
+
 **Goal**: User can leave `gruntled watch` running and see current diagnostics from a prompt or editor bar after each save.
 **Depends on**: Phase 8
 **Requirements**: DAEMON-01, DAEMON-03
@@ -77,6 +83,7 @@ Plans:
   2. Changes under `.git`, `.terraform`, `.terragrunt-cache` and editor swap/backup files trigger no reindex; newly created and deleted directories are picked up
   3. The daemon writes a one-line status (e.g. `gruntled: 2 errors (GRT001×1 GRT003×1) @ 14:02:11` or `gruntled: ok @ …`) atomically to a documented per-repository path outside the repository, readable with `cat`
   4. `--poll` (and windows) uses stat polling and yields the same results as the fsnotify watcher
+
 **Plans**: 7 plans
 
 Plans:
@@ -89,6 +96,7 @@ Plans:
 - [x] 10-07-PLAN.md — watch run loop (single indexer goroutine, skip-stale publish)
 
 ### Phase 11: Report, Single Instance & Release Proof
+
 **Goal**: User can query a running daemon, never get two for one repository, and trust the release binaries still cannot touch net or exec.
 **Depends on**: Phase 10
 **Requirements**: DAEMON-04, DAEMON-05, DAEMON-06
@@ -98,6 +106,7 @@ Plans:
   3. A second `gruntled watch` on the same repository prints where the daemon runs and exits 0; after a daemon crash, a restart succeeds (stale socket and lock recovered)
   4. The no-net/no-exec binary proof passes on all six release targets with watcher and socket code linked in
   5. README documents `watch`, `report`, `blast`, the status file path and the Windows limitation
+
 **Plans**: 7 plans
 
 Plans:
@@ -107,7 +116,24 @@ Plans:
 - [x] 11-04-PLAN.md — `gruntled report` (socket / windows file), docs/cli.md, parity tests
 - [x] 11-05-PLAN.md — (wave 4, after 11-03) six-target proof self-tests for socket code, mktemp fix, macOS/Windows CI job
 - [x] 11-06-PLAN.md — README for watch/report/blast, guard test, phase gate, bookkeeping (wave 5)
-- [ ] 11-07-PLAN.md — verify macOS/Windows CI for pushed HEAD via gh (autonomous)
+- [x] 11-07-PLAN.md — verify macOS/Windows CI for pushed HEAD via gh (autonomous)
+
+### Phase 12: Gap Closure — Watcher Directory Ignore & v0.3 Audit Findings
+
+**Goal**: The daemon stays exactly as fresh as `check` for every directory name, and the open findings from the v0.3 milestone audit are closed or explicitly accepted.
+**Depends on**: Phase 11
+**Requirements**: DAEMON-01, DAEMON-02 (gap closure, see `.planning/v0.3-MILESTONE-AUDIT.md`)
+**Gap Closure**: Closes gaps from the v0.3 audit
+**Success Criteria** (what must be TRUE):
+  1. Editor swap/backup/probe patterns (vim `4913`-style digits, `*.tmp`, `*~`, `#…#`, `.#…`) apply only to files: directories such as `live/2024/` are walked, watched (native and `--poll`) and their edits reindexed
+  2. A regression test reproduces the stale-daemon case (edit inside a digit-named directory) on both the native and poll paths, and the rapid incremental == full test generates directory names that match file ignore patterns
+  3. Every BLOCKER/HIGH/MEDIUM finding of the v0.3 cross-phase security audit is fixed with a test, or accepted with a documented reason in `12-SECURITY.md`
+  4. `go test ./...`, `go vet ./...`, `scripts/check-architecture.sh` and CI on linux/macos/windows are green
+
+**Plans**: TBD
+
+Plans:
+- [ ] TBD (planned by gruntled-planner)
 
 ## Progress
 
@@ -120,3 +146,4 @@ Plans:
 | 9. Blast Radius | v0.3 | 3/3 | Complete | 2026-10-08 |
 | 10. Watch Daemon & Status File | v0.3 | 7/7 | Complete | 2026-10-08 |
 | 11. Report, Single Instance & Release Proof | v0.3 | 7/7 | Complete | 2026-10-08 |
+| 12. Gap Closure — Watcher Dir Ignore & Audit Findings | v0.3 | 0/? | Planned | - |

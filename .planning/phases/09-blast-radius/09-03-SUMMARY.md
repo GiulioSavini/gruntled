@@ -26,7 +26,7 @@ key-files:
     - .planning/phases/09-blast-radius/09-VALIDATION.md
 decisions:
   - An unopenable --base exits 3 with "cannot open repository"; never a fallback to no baseline
-  - "--base \"\"" is treated as no --base (flag default is empty)
+  - '--base "" is treated as no --base (flag default is empty)'
   - blast writes no stderr summary; stdout only
   - Exit 1 only when Broken holds an error diagnostic (HasErrors); a warnings-only Broken set exits 0, documented in docs/cli.md
   - e2e_test.go {"blast", 4} committed with the docs (Task 2) so every commit stays green

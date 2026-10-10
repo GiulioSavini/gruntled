@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>gruntled · agent team</title>
+<style>
+  :root {
+    --bg: #0e1116; --panel: #161b22; --line: #262d36; --text: #d7dde5; --mute: #8590a0;
+    --orchestrator: #c792ea; --planner: #82aaff; --executor: #c3e88d; --sec: #ff7b72; --giulio: #ffcb6b;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 ui-sans-serif, system-ui, sans-serif; }
+  header { display: flex; align-items: baseline; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 16px; margin: 0; letter-spacing: .3px; }
+  header .live { font-size: 12px; color: var(--mute); }
+  header .live b { color: #3fb950; }
+  main { display: grid; grid-template-columns: 340px 1fr; gap: 16px; padding: 16px 20px; height: calc(100vh - 54px); }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+  aside { display: flex; flex-direction: column; gap: 16px; overflow: auto; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--mute); margin: 0 0 10px; }
+  svg text { fill: var(--text); font-size: 12px; text-anchor: middle; }
+  .node circle { fill: var(--panel); stroke-width: 2.5; transition: filter .3s; }
+  .node.working circle { filter: drop-shadow(0 0 8px currentColor); }
+  .node .st { fill: var(--mute); font-size: 10px; }
+  .edge { stroke: var(--line); stroke-width: 1.5; }
+  .pulse { r: 5; }
+  .agents { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .card { border: 1px solid var(--line); border-left: 3px solid var(--c); border-radius: 8px; padding: 8px; cursor: pointer; }
+  .card.off { opacity: .4; }
+  .card .n { font-weight: 600; color: var(--c); }
+  .card .s { font-size: 11px; color: var(--mute); }
+  .card .last { font-size: 11px; margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; font-size: 12px; }
+  .kv span:nth-child(odd) { color: var(--mute); }
+  .bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin: 8px 0; }
+  .bar i { display: block; height: 100%; background: #3fb950; }
+  .commits { font: 11px ui-monospace, monospace; color: var(--mute); margin: 8px 0 0; padding: 0; list-style: none; }
+  .commits li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  section.feed { display: flex; flex-direction: column; min-height: 0; }
+  .filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  .filters button { background: none; border: 1px solid var(--line); color: var(--mute); border-radius: 14px; padding: 3px 10px; cursor: pointer; font-size: 12px; }
+  .filters button.on { color: var(--text); border-color: var(--mute); }
+  #log { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 6px; }
+  .msg { border: 1px solid var(--line); border-left: 3px solid var(--c); border-radius: 8px; padding: 8px 12px; animation: in .35s ease; }
+  .msg.lifecycle { border: none; padding: 2px 12px; color: var(--mute); font-size: 12px; font-style: italic; }
+  .msg .h { font-size: 12px; color: var(--mute); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .msg .from { color: var(--c); font-weight: 600; }
+  .msg .to { color: var(--c2); font-weight: 600; }
+  .tag { font-size: 10px; border-radius: 4px; padding: 1px 6px; background: var(--line); text-transform: uppercase; letter-spacing: .5px; }
+  .tag.finding, .tag.blocker { background: #5a1d1d; color: #ffb4ad; }
+  .tag.verdict { background: #3b2d10; color: #ffcb6b; }
+  .tag.handoff { background: #1d3354; color: #a5c8ff; }
+  .tag.decision { background: #3a2550; color: #e2c1ff; }
+  .msg .t { margin-top: 4px; white-space: pre-wrap; word-break: break-word; }
+  .msg .ref { font: 11px ui-monospace, monospace; color: var(--mute); margin-top: 4px; }
+  form { display: flex; gap: 8px; margin-top: 10px; }
+  form select, form input, form button { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 8px; font: inherit; }
+  form input { flex: 1; }
+  form button { cursor: pointer; background: #238636; border-color: #238636; }
+  .empty { color: var(--mute); text-align: center; margin-top: 40px; }
+  @keyframes in { from { opacity: 0; transform: translateY(6px); } }
+  @media (max-width: 860px) { main { grid-template-columns: 1fr; height: auto; } #log { max-height: 70vh; } }
+</style>
+</head>
+<body>
+<header><h1>gruntled · agent team</h1><span class="live" id="live">connessione…</span></header>
+<main>
+  <aside>
+    <div class="panel">
+      <h2>Rete</h2>
+      <svg id="net" viewBox="0 0 300 220" width="100%"></svg>
+    </div>
+    <div class="panel">
+      <h2>Agenti</h2>
+      <div class="agents" id="cards"></div>
+    </div>
+    <div class="panel">
+      <h2>Stato GSD</h2>
+      <div id="state" class="kv"></div>
+    </div>
+  </aside>
+  <section class="panel feed">
+    <h2>Comunicazioni</h2>
+    <div class="filters" id="filters"></div>
+    <div id="log"><div class="empty">Ancora nessun messaggio sul bus.</div></div>
+    <form id="send">
+      <select id="to"><option>orchestrator</option><option>all</option><option>planner</option><option>executor</option><option>sec</option></select>
+      <input id="text" placeholder="Scrivi una nota al team (arriva come task da giulio)…" autocomplete="off">
+      <button>Invia</button>
+    </form>
+  </section>
+</main>
+<script>
+const AG = {
+  orchestrator: { x: 150, y: 40, label: "Orchestrator", role: "coordina GSD" },
+  planner: { x: 45, y: 175, label: "Planner", role: "PLAN.md" },
+  executor: { x: 150, y: 175, label: "Executor", role: "codice + test" },
+  sec: { x: 255, y: 175, label: "Sec", role: "assessment" },
+};
+const color = (a) => getComputedStyle(document.documentElement).getPropertyValue(`--${a}`).trim() || "#8590a0";
+const state = Object.fromEntries(Object.keys(AG).map((a) => [a, { st: "idle", last: "", n: 0 }]));
+const hidden = new Set();
+let msgs = [];
+
+const NS = "http://www.w3.org/2000/svg";
+const svg = document.getElementById("net");
+function el(tag, attrs, parent = svg) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); parent.appendChild(e); return e; }
+const names = Object.keys(AG);
+for (let i = 0; i < names.length; i++) for (let j = i + 1; j < names.length; j++) {
+  const a = AG[names[i]], b = AG[names[j]];
+  el("line", { x1: a.x, y1: a.y, x2: b.x, y2: b.y, class: "edge" });
+}
+const nodes = {};
+for (const [k, a] of Object.entries(AG)) {
+  const g = el("g", { class: "node", style: `color:${color(k)}` });
+  el("circle", { cx: a.x, cy: a.y, r: 26, stroke: color(k) }, g);
+  const t = el("text", { x: a.x, y: a.y + 4 }, g); t.textContent = a.label.slice(0, 5);
+  const s = el("text", { x: a.x, y: a.y + 42, class: "st" }, g); s.textContent = "idle";
+  nodes[k] = { g, s };
+}
+function pulse(from, to) {
+  const a = AG[from] || AG.orchestrator;
+  const targets = to === "all" ? names.filter((n) => n !== from) : [to];
+  for (const t of targets) {
+    const b = AG[t]; if (!b || b === a) continue;
+    const c = el("circle", { cx: a.x, cy: a.y, r: 5, fill: color(from in AG ? from : "giulio") });
+    const t0 = performance.now(), dur = 900;
+    (function step(now) {
+      const p = Math.min(1, (now - t0) / dur), e = p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+      c.setAttribute("cx", a.x + (b.x - a.x) * e); c.setAttribute("cy", a.y + (b.y - a.y) * e);
+      if (p < 1) requestAnimationFrame(step); else c.remove();
+    })(t0);
+  }
+}
+
+function renderCards() {
+  const box = document.getElementById("cards"); box.innerHTML = "";
+  for (const [k, a] of Object.entries(AG)) {
+    const s = state[k];
+    const d = document.createElement("div");
+    d.className = "card" + (hidden.has(k) ? " off" : "");
+    d.style.setProperty("--c", color(k));
+    d.innerHTML = `<div class="n"></div><div class="s"></div><div class="last"></div>`;
+    d.querySelector(".n").textContent = a.label;
+    d.querySelector(".s").textContent = `${s.st === "working" ? "● al lavoro" : s.st === "done" ? "✓ finito" : "○ idle"} · ${s.n} msg · ${a.role}`;
+    d.querySelector(".last").textContent = s.last;
+    d.onclick = () => { hidden.has(k) ? hidden.delete(k) : hidden.add(k); renderCards(); renderFilters(); renderLog(); };
+    box.appendChild(d);
+    nodes[k].s.textContent = s.st;
+    nodes[k].g.classList.toggle("working", s.st === "working");
+  }
+}
+function renderFilters() {
+  const f = document.getElementById("filters"); f.innerHTML = "";
+  for (const k of [...names, "giulio"]) {
+    const b = document.createElement("button");
+    b.textContent = k; b.className = hidden.has(k) ? "" : "on"; b.style.color = hidden.has(k) ? "" : color(k);
+    b.onclick = () => { hidden.has(k) ? hidden.delete(k) : hidden.add(k); renderFilters(); renderCards(); renderLog(); };
+    f.appendChild(b);
+  }
+}
+function msgEl(m) {
+  const d = document.createElement("div");
+  d.className = "msg" + (m.type === "lifecycle" ? " lifecycle" : "");
+  d.style.setProperty("--c", color(m.from)); d.style.setProperty("--c2", color(m.to));
+  if (m.type === "lifecycle") { d.textContent = `${m.ts.slice(11, 19)} · ${m.text}`; return d; }
+  d.innerHTML = `<div class="h"><span></span><span class="from"></span>→<span class="to"></span><span class="tag"></span><span class="ph"></span></div><div class="t"></div>`;
+  const h = d.querySelectorAll(".h span");
+  h[0].textContent = `#${m.id} ${m.ts.slice(11, 19)}`; h[1].textContent = m.from; h[2].textContent = m.to;
+  h[3].textContent = m.type; h[3].classList.add(m.type); h[4].textContent = m.phase ? `fase ${m.phase}` : "";
+  d.querySelector(".t").textContent = m.text;
+  if (m.ref) { const r = document.createElement("div"); r.className = "ref"; r.textContent = "↳ " + m.ref; d.appendChild(r); }
+  return d;
+}
+function visible(m) { return !hidden.has(m.from) && !(hidden.has(m.to) && m.to !== "all"); }
+function renderLog() {
+  const log = document.getElementById("log"); log.innerHTML = "";
+  const v = msgs.filter(visible);
+  if (!v.length) { log.innerHTML = `<div class="empty">Ancora nessun messaggio sul bus.</div>`; return; }
+  for (const m of v) log.appendChild(msgEl(m));
+  log.scrollTop = log.scrollHeight;
+}
+function absorb(m) {
+  const s = state[m.from];
+  if (s) {
+    if (m.type === "lifecycle") s.st = m.state;
+    else { s.n++; s.last = m.text; if (s.st === "idle") s.st = "working"; }
+  }
+}
+function add(m) {
+  msgs.push(m); absorb(m);
+  const log = document.getElementById("log");
+  if (log.querySelector(".empty")) log.innerHTML = "";
+  if (visible(m)) { const near = log.scrollHeight - log.scrollTop - log.clientHeight < 80; log.appendChild(msgEl(m)); if (near) log.scrollTop = log.scrollHeight; }
+  if (m.type !== "lifecycle") pulse(m.from, m.to);
+  renderCards();
+}
+function renderState(s) {
+  const pct = s.total_plans ? Math.round(100 * s.completed_plans / s.total_plans) : 0;
+  const box = document.getElementById("state");
+  const rows = [["milestone", `${s.milestone || "?"} ${s.milestone_name || ""}`], ["status", s.status], ["fasi", `${s.completed_phases ?? "?"}/${s.total_phases ?? "?"}`], ["piani", `${s.completed_plans ?? "?"}/${s.total_plans ?? "?"}`], ["fermo a", s.stopped_at], ["ultima", s.last_activity]];
+  box.innerHTML = "";
+  for (const [k, v] of rows) { const a = document.createElement("span"), b = document.createElement("span"); a.textContent = k; b.textContent = v || "—"; box.append(a, b); }
+  const bar = document.createElement("div"); bar.className = "bar"; bar.style.gridColumn = "1 / -1"; bar.innerHTML = `<i style="width:${pct}%"></i>`; box.appendChild(bar);
+  const ul = document.createElement("ul"); ul.className = "commits"; ul.style.gridColumn = "1 / -1";
+  for (const c of s.commits || []) { const li = document.createElement("li"); li.textContent = c; li.title = c; ul.appendChild(li); }
+  box.appendChild(ul);
+}
+
+async function boot() {
+  msgs = await (await fetch("/api/messages")).json();
+  msgs.forEach(absorb); renderFilters(); renderCards(); renderLog();
+  renderState(await (await fetch("/api/state")).json());
+  const es = new EventSource("/events");
+  const live = document.getElementById("live");
+  es.onopen = () => live.innerHTML = "<b>●</b> live";
+  es.onerror = () => live.textContent = "○ riconnessione…";
+  es.addEventListener("msg", (e) => add(JSON.parse(e.data)));
+  es.addEventListener("state", (e) => renderState(JSON.parse(e.data)));
+}
+document.getElementById("send").onsubmit = async (e) => {
+  e.preventDefault();
+  const text = document.getElementById("text").value.trim(); if (!text) return;
+  await fetch("/api/post", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ to: document.getElementById("to").value, text }) });
+  document.getElementById("text").value = "";
+};
+boot();
+</script>
+</body>
+</html>

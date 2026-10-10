@@ -7,3 +7,6 @@
 
 # rapid failure files (testdata/rapid/<Test>/*.fail)
 internal/infrastructure/terragrunt/testdata/rapid/
+
+# agent bus runtime log (local only)
+.claude/agentbus/log/

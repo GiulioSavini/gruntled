@@ -1,0 +1,48 @@
+{
+  "contract": "1.0.0",
+  "flavor": "core",
+  "milestone": "v0.3 — Watch & Blast",
+  "phases": [
+    {
+      "number": "5",
+      "name": "Graph Diagnostics",
+      "status": "complete"
+    },
+    {
+      "number": "6",
+      "name": "Machine-Readable Output",
+      "status": "complete"
+    },
+    {
+      "number": "7",
+      "name": "Distribution & CI Integration",
+      "status": "complete"
+    },
+    {
+      "number": "8",
+      "name": "Incremental Index Foundation",
+      "status": "complete"
+    },
+    {
+      "number": "9",
+      "name": "Blast Radius",
+      "status": "complete"
+    },
+    {
+      "number": "10",
+      "name": "Watch Daemon & Status File",
+      "status": "complete"
+    },
+    {
+      "number": "11",
+      "name": "Report, Single Instance & Release Proof",
+      "status": "complete"
+    }
+  ],
+  "next": {
+    "command": "/gsd:progress",
+    "label": "Show progress",
+    "reason": "Unsure of state — showing progress"
+  },
+  "updated_at": "2026-10-10T08:23:19.357Z"
+}

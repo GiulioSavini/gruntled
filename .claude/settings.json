@@ -1,0 +1,10 @@
+{
+  "hooks": {
+    "SubagentStart": [
+      { "hooks": [ { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/agentbus/bus.mjs\" hook", "timeout": 5 } ] }
+    ],
+    "SubagentStop": [
+      { "hooks": [ { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/agentbus/bus.mjs\" hook", "timeout": 5 } ] }
+    ]
+  }
+}
