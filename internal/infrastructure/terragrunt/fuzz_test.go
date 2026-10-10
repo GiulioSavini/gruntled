@@ -43,6 +43,9 @@ inputs = {
 `,
 		// Mid-edit: unterminated block.
 		`locals {`,
+		// 1,100 nested template directives (sec #261): refused by the
+		// native depth pre-scan, never evaluated.
+		"dependency \"vpc\" {\n  config_path = \"" + strings.Repeat("%{if a}", 1100) + "../vpc" + strings.Repeat("%{endif}", 1100) + "\"\n}\n",
 		// Trailing partial traversal.
 		`inputs = {
   x = dependency.vpc.outputs.
