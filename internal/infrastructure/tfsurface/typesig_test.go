@@ -398,6 +398,13 @@ func TestTypeSigJSONDeepString(t *testing.T) {
 		t.Run("list x "+itoa(n), func(t *testing.T) { assertJSONRefused(t, deepList(n)) })
 		t.Run("${} list x "+itoa(n), func(t *testing.T) { assertJSONRefused(t, "${"+deepList(n)+"}") })
 	}
+	t.Run("list x 500: only the bracket scan refuses it", func(t *testing.T) {
+		s := deepList(500)
+		if hclconv.CheckNativeExprDepth([]byte(s)) != nil {
+			t.Fatal("CheckNativeExprDepth refuses it too: the case would not pin the bracket scan")
+		}
+		assertJSONRefused(t, s)
+	})
 	t.Run("escaped paren list x 2000", func(t *testing.T) {
 		calls := countTypeexpr(t)
 		raw := `"` + strings.Repeat(`list\u0028`, 2_000) + "string" + strings.Repeat(")", 2_000) + `"`
