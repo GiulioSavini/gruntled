@@ -1,0 +1,453 @@
+# Phase 15 type-level reasons end to end on real HCL (BLAST-06..10).
+# Every case exits 0 with nothing Broken: type-level changes are Impacted
+# reasons only. Paths are relative; no $WORK appears in any regexp.
+
+# (1) BLAST-06: a new variable without a default is a new required variable
+exec gruntled-exit 0 blast --base base1 cur1
+stdout '^Broken \(0\):$'
+stdout '^Impacted \(1\):$'
+stdout '^  live/a \(distance 1, module modules/m: \+variable x, required variable x\)$'
+stdout '^Type changes \(1\):$'
+stdout '^  modules/m variable x: now required$'
+! stderr .
+
+# (2) BLAST-06: removing a default makes the variable required
+exec gruntled-exit 0 blast --base base2 cur2
+stdout '^Broken \(0\):$'
+stdout '^Impacted \(1\):$'
+stdout '^  live/a \(distance 1, module modules/m: required variable x\)$'
+stdout '^Type changes \(1\):$'
+stdout '^  modules/m variable x: now required$'
+! stderr .
+
+# (3) BLAST-06: default = null is a default (presence only): nothing
+exec gruntled-exit 0 blast --base base3 cur3
+stdout '^Broken \(0\):$'
+stdout '^Impacted \(0\):$'
+! stdout 'Type changes'
+! stderr .
+
+# (4) BLAST-07: a changed variable type
+exec gruntled-exit 0 blast --base base4 cur4
+stdout '^Broken \(0\):$'
+stdout '^Impacted \(1\):$'
+stdout '^  live/a \(distance 1, module modules/m: type variable x\)$'
+stdout '^Type changes \(1\):$'
+stdout '^  modules/m variable x: type string -> list\(string\)$'
+! stderr .
+
+# (16) --format json of case 4: changes[].type_changes, version 2
+exec gruntled-exit 0 blast --base base4 --format json cur4
+stdout '"version": 2'
+stdout '"type_changes": \[\n\s+\{\n\s+"kind": "variable_type",\n\s+"name": "x",\n\s+"old": "string",\n\s+"new": "list\(string\)"\n\s+\}\n\s+\]'
+stdout '"broken": \[\]'
+! stdout '^/'
+! stderr .
+
+# (5) BLAST-07: an absent type is any, so any -> string is reported
+exec gruntled-exit 0 blast --base base5 cur5
+stdout '^Broken \(0\):$'
+stdout '^Impacted \(1\):$'
+stdout '^  live/a \(distance 1, module modules/m: type variable x\)$'
+stdout '^Type changes \(1\):$'
+stdout '^  modules/m variable x: type any -> string$'
+! stderr .
+
+# (6) BLAST-08: an output type declared on both sides changes
+exec gruntled-exit 0 blast --base base6 cur6
+stdout '^Broken \(0\):$'
+stdout '^Impacted \(1\):$'
+stdout '^  live/a \(distance 1, module modules/m: type output o\)$'
+stdout '^Type changes \(1\):$'
+stdout '^  modules/m output o: type string -> number$'
+! stderr .
+
+# (7) BLAST-08: an output type declared on one side only: nothing
+exec gruntled-exit 0 blast --base base7 cur7
+stdout '^Broken \(0\):$'
+stdout '^Impacted \(0\):$'
+! stdout 'Type changes'
+! stderr .
+
+# (8) BLAST-08: sensitive absent (false) -> true
+exec gruntled-exit 0 blast --base base8 cur8
+stdout '^Broken \(0\):$'
+stdout '^Impacted \(1\):$'
+stdout '^  live/a \(distance 1, module modules/m: sensitive output o\)$'
+stdout '^Type changes \(1\):$'
+stdout '^  modules/m output o: sensitive false -> true$'
+! stderr .
+
+# (9) BLAST-08: a non-literal sensitive is unknown: nothing
+exec gruntled-exit 0 blast --base base9 cur9
+stdout '^Broken \(0\):$'
+stdout '^Impacted \(0\):$'
+! stdout 'Type changes'
+! stderr .
+
+# (10) BLAST-07: reformat, comments, attribute reorder and an optional() default change: nothing
+exec gruntled-exit 0 blast --base base10 cur10
+stdout '^Broken \(0\):$'
+stdout '^Impacted \(0\):$'
+! stdout 'Type changes'
+! stderr .
+
+# (11) BLAST-07: a variable moved to an equivalent .tf.json: nothing
+exec gruntled-exit 0 blast --base base11 cur11
+stdout '^Broken \(0\):$'
+stdout '^Impacted \(0\):$'
+! stdout 'Type changes'
+! stderr .
+
+# (12) BLAST-10: an override file redeclaring the variable makes its facts unknown: nothing
+exec gruntled-exit 0 blast --base base12 cur12
+stdout '^Broken \(0\):$'
+stdout '^Impacted \(0\):$'
+! stdout 'Type changes'
+! stderr .
+
+# (13) BLAST-10: .tf and .tofu declarations that disagree make the type unknown: nothing
+exec gruntled-exit 0 blast --base base13 cur13
+stdout '^Broken \(0\):$'
+stdout '^Impacted \(0\):$'
+! stdout 'Type changes'
+! stderr .
+
+# (14) BLAST-09: the unit does not set the new required variable: Impacted, never Broken, exit 0
+exec gruntled-exit 0 blast --base base14 cur14
+stdout '^Broken \(0\):$'
+stdout '^Impacted \(1\):$'
+stdout '^  live/a \(distance 1, module modules/m: \+variable need, required variable need\)$'
+stdout '^Type changes \(1\):$'
+stdout '^  modules/m variable need: now required$'
+! stderr .
+
+# (15) BLAST-06: nullable, validation, ephemeral, deprecated, const and description never count: nothing
+exec gruntled-exit 0 blast --base base15 cur15
+stdout '^Broken \(0\):$'
+stdout '^Impacted \(0\):$'
+! stdout 'Type changes'
+! stderr .
+
+# (17) BLAST-07 + Phase 14: a type-only change propagates to dependents
+exec gruntled-exit 0 blast --base base17 cur17
+stdout '^Broken \(0\):$'
+stdout '^Impacted \(2\):$'
+stdout '^  live/a \(distance 1, module modules/m: type variable x\)$'
+stdout '^  live/b \(distance 2, from module modules/m, path live/b -> live/a\)$'
+stdout '^Type changes \(1\):$'
+stdout '^  modules/m variable x: type string -> number$'
+! stderr .
+-- base1/live/a/terragrunt.hcl --
+terraform {
+  source = "../../modules/m"
+}
+-- base1/modules/m/main.tf --
+variable "keep" {
+  default = 1
+}
+-- cur1/live/a/terragrunt.hcl --
+terraform {
+  source = "../../modules/m"
+}
+-- cur1/modules/m/main.tf --
+variable "keep" {
+  default = 1
+}
+variable "x" {}
+-- base2/live/a/terragrunt.hcl --
+terraform {
+  source = "../../modules/m"
+}
+-- base2/modules/m/main.tf --
+variable "x" {
+  default = "a"
+}
+-- cur2/live/a/terragrunt.hcl --
+terraform {
+  source = "../../modules/m"
+}
+-- cur2/modules/m/main.tf --
+variable "x" {}
+-- base3/live/a/terragrunt.hcl --
+terraform {
+  source = "../../modules/m"
+}
+-- base3/modules/m/main.tf --
+variable "x" {
+  default = "a"
+}
+-- cur3/live/a/terragrunt.hcl --
+terraform {
+  source = "../../modules/m"
+}
+-- cur3/modules/m/main.tf --
+variable "x" {
+  default = null
+}
+-- base4/live/a/terragrunt.hcl --
+terraform {
+  source = "../../modules/m"
+}
+-- base4/modules/m/main.tf --
+variable "x" {
+  type = string
+}
+-- cur4/live/a/terragrunt.hcl --
+terraform {
+  source = "../../modules/m"
+}
+-- cur4/modules/m/main.tf --
+variable "x" {
+  type = list(string)
+}
+-- base5/live/a/terragrunt.hcl --
+terraform {
+  source = "../../modules/m"
+}
+-- base5/modules/m/main.tf --
+variable "x" {}
+-- cur5/live/a/terragrunt.hcl --
+terraform {
+  source = "../../modules/m"
+}
+-- cur5/modules/m/main.tf --
+variable "x" {
+  type = string
+}
+-- base6/live/a/terragrunt.hcl --
+terraform {
+  source = "../../modules/m"
+}
+-- base6/modules/m/main.tf --
+output "o" {
+  value = 1
+  type  = string
+}
+-- cur6/live/a/terragrunt.hcl --
+terraform {
+  source = "../../modules/m"
+}
+-- cur6/modules/m/main.tf --
+output "o" {
+  value = 1
+  type  = number
+}
+-- base7/live/a/terragrunt.hcl --
+terraform {
+  source = "../../modules/m"
+}
+-- base7/modules/m/main.tf --
+output "o" {
+  value = 1
+}
+-- cur7/live/a/terragrunt.hcl --
+terraform {
+  source = "../../modules/m"
+}
+-- cur7/modules/m/main.tf --
+output "o" {
+  value = 1
+  type  = number
+}
+-- base8/live/a/terragrunt.hcl --
+terraform {
+  source = "../../modules/m"
+}
+-- base8/modules/m/main.tf --
+output "o" {
+  value = 1
+}
+-- cur8/live/a/terragrunt.hcl --
+terraform {
+  source = "../../modules/m"
+}
+-- cur8/modules/m/main.tf --
+output "o" {
+  value     = 1
+  sensitive = true
+}
+-- base9/live/a/terragrunt.hcl --
+terraform {
+  source = "../../modules/m"
+}
+-- base9/modules/m/main.tf --
+variable "s" {
+  default = false
+}
+output "o" {
+  value = 1
+}
+-- cur9/live/a/terragrunt.hcl --
+terraform {
+  source = "../../modules/m"
+}
+-- cur9/modules/m/main.tf --
+variable "s" {
+  default = false
+}
+output "o" {
+  value     = 1
+  sensitive = var.s
+}
+-- base10/live/a/terragrunt.hcl --
+terraform {
+  source = "../../modules/m"
+}
+-- base10/modules/m/main.tf --
+variable "x" {
+  type = object({ a = string, b = optional(number, 1) })
+}
+-- cur10/live/a/terragrunt.hcl --
+terraform {
+  source = "../../modules/m"
+}
+-- cur10/modules/m/main.tf --
+# reformatted
+variable "x" {
+  type = object({
+    # b first now
+    b = optional(number, 2)
+    a = string // still a string
+  })
+}
+-- base11/live/a/terragrunt.hcl --
+terraform {
+  source = "../../modules/m"
+}
+-- base11/modules/m/main.tf --
+variable "x" {
+  type    = list(string)
+  default = []
+}
+output "o" {
+  value = 1
+}
+-- cur11/live/a/terragrunt.hcl --
+terraform {
+  source = "../../modules/m"
+}
+-- cur11/modules/m/main.tf --
+output "o" {
+  value = 1
+}
+-- cur11/modules/m/vars.tf.json --
+{"variable": {"x": {"type": "list(string)", "default": []}}}
+-- base12/live/a/terragrunt.hcl --
+terraform {
+  source = "../../modules/m"
+}
+-- base12/modules/m/main.tf --
+variable "x" {
+  type = string
+}
+-- cur12/live/a/terragrunt.hcl --
+terraform {
+  source = "../../modules/m"
+}
+-- cur12/modules/m/main.tf --
+variable "x" {
+  type = string
+}
+-- cur12/modules/m/override.tf --
+variable "x" {
+  type = number
+}
+-- base13/live/a/terragrunt.hcl --
+terraform {
+  source = "../../modules/m"
+}
+-- base13/modules/m/a.tf --
+variable "x" {
+  type = string
+}
+-- cur13/live/a/terragrunt.hcl --
+terraform {
+  source = "../../modules/m"
+}
+-- cur13/modules/m/a.tf --
+variable "x" {
+  type = string
+}
+-- cur13/modules/m/a.tofu --
+variable "x" {
+  type = number
+}
+-- base14/live/a/terragrunt.hcl --
+terraform {
+  source = "../../modules/m"
+}
+inputs = {
+  other = 1
+}
+-- base14/modules/m/main.tf --
+variable "other" {}
+-- cur14/live/a/terragrunt.hcl --
+terraform {
+  source = "../../modules/m"
+}
+inputs = {
+  other = 1
+}
+-- cur14/modules/m/main.tf --
+variable "other" {}
+variable "need" {
+  type = string
+}
+-- base15/live/a/terragrunt.hcl --
+terraform {
+  source = "../../modules/m"
+}
+-- base15/modules/m/main.tf --
+variable "x" {
+  type = string
+}
+output "o" {
+  value = 1
+}
+-- cur15/live/a/terragrunt.hcl --
+terraform {
+  source = "../../modules/m"
+}
+-- cur15/modules/m/main.tf --
+variable "x" {
+  type        = string
+  description = "d"
+  nullable    = false
+  ephemeral   = true
+  const       = true
+  deprecated  = "use y"
+  validation {
+    condition     = length(var.x) > 0
+    error_message = "empty"
+  }
+}
+output "o" {
+  value      = 1
+  ephemeral  = false
+  deprecated = "no"
+}
+-- base17/live/a/terragrunt.hcl --
+terraform {
+  source = "../../modules/m"
+}
+-- base17/live/b/terragrunt.hcl --
+dependency "a" {
+  config_path = "../a"
+}
+-- base17/modules/m/main.tf --
+variable "x" {
+  type = string
+}
+-- cur17/live/a/terragrunt.hcl --
+terraform {
+  source = "../../modules/m"
+}
+-- cur17/live/b/terragrunt.hcl --
+dependency "a" {
+  config_path = "../a"
+}
+-- cur17/modules/m/main.tf --
+variable "x" {
+  type = number
+}
