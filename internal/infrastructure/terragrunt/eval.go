@@ -6,6 +6,8 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/zclconf/go-cty/cty"
+
+	"github.com/GiulioSavini/gruntled/internal/infrastructure/hclconv"
 )
 
 // evalPath evaluates expr inside the closed EvalContext built from s:
@@ -14,7 +16,15 @@ import (
 // wholly known, non-null and of type cty.String; any other construct
 // (a variable, any other function, a non-string, an unknown or null
 // result) makes it unusable and returns ok == false. Research Pattern 3.
+//
+// An expression holding a for-expression anywhere is dynamic and is never
+// evaluated: the closed context does not stop a for over a literal list,
+// nested fors multiply, and a template %{for} or an indexed for yields a
+// string (sec #327). No real path needs a for.
 func evalPath(expr hcl.Expression, s evalScope) (string, bool) {
+	if hclconv.HasForExpr(expr) {
+		return "", false
+	}
 	v, diags := expr.Value(&hcl.EvalContext{Functions: s.functions()})
 	if diags.HasErrors() || !v.IsWhollyKnown() || v.IsNull() || !v.Type().Equals(cty.String) {
 		return "", false
@@ -57,8 +67,12 @@ func resolvePath(unitDir, p string) (string, bool) {
 // literalString returns expr's value when it is a known, non-null
 // cty.String literal evaluated with no variables and no functions
 // (expr.Value(nil)): ok is false for anything else, including a reference
-// like "${local.x}".
+// like "${local.x}". An expression holding a for-expression anywhere is
+// not a literal and is never evaluated (sec #327; see evalPath).
 func literalString(expr hcl.Expression) (string, bool) {
+	if hclconv.HasForExpr(expr) {
+		return "", false
+	}
 	v, diags := expr.Value(nil)
 	if diags.HasErrors() || !v.IsWhollyKnown() || v.IsNull() || !v.Type().Equals(cty.String) {
 		return "", false
