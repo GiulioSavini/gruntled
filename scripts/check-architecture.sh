@@ -392,6 +392,48 @@ if [ -n "$hcl_violations" ]; then
   fail=1
 fi
 
+# --- Step 6b: typeexpr-only-in-tfsurface ------------------------------------
+# github.com/hashicorp/hcl/v2/ext/typeexpr, and the cty types it returns, are
+# confined to the Terraform surface reader (D-15-01): the canonical type
+# string is all that leaves internal/infrastructure/tfsurface. No other
+# package may import it, in production or test code, and that includes
+# packages below tfsurface: only the package itself is exempt. Same two
+# engines as Step 6 (go list for every host-visible import, the source scan
+# for build-tagged and _GOOS files). Non-vacuous guard: tfsurface's own
+# production imports must include typeexpr, so a renamed or moved package
+# cannot make this rule pass by matching nothing.
+typeexpr_pkg=github.com/hashicorp/hcl/v2/ext/typeexpr
+tfsurface_pkg="${module}/internal/infrastructure/tfsurface"
+typeexpr_go_list=$(
+  go list -e -f '{{.ImportPath}}{{"\t"}}{{join .Imports " "}} {{join .TestImports " "}} {{join .XTestImports " "}}' ./... |
+    while IFS=$'\t' read -r pkg rest; do
+      case "$pkg" in
+      "$tfsurface_pkg" | "${tfsurface_pkg}_test") continue ;;
+      esac
+      for imp in $rest; do
+        if [ "$imp" = "$typeexpr_pkg" ]; then
+          echo "${pkg} -> ${imp}"
+        fi
+      done
+    done
+)
+scan_imports typeexpr-only-in-tfsurface '^github\.com/hashicorp/hcl/v2/ext/typeexpr$'
+typeexpr_source=$(printf '%s\n' "$scan_out" | grep -v -E '^\./internal/infrastructure/tfsurface/[^/]+\.go:[0-9]+:' || true)
+typeexpr_violations=$(printf '%s\n%s\n' "$typeexpr_go_list" "$typeexpr_source" | grep -v '^$' | sort -u || true)
+if [ -n "$typeexpr_violations" ]; then
+  echo "=== RULE FAILED: typeexpr-only-in-tfsurface ===" >&2
+  echo "package(s) other than internal/infrastructure/tfsurface import ${typeexpr_pkg}:" >&2
+  printf '%s\n' "$typeexpr_violations" >&2
+  echo "Type constraints are parsed and rendered only in tfsurface; pass canonical type strings, never cty types." >&2
+  fail=1
+fi
+if ! go list -e -f '{{join .Imports "\n"}}' ./internal/infrastructure/tfsurface | grep -q -x -F "$typeexpr_pkg"; then
+  echo "=== RULE FAILED: typeexpr-only-in-tfsurface ===" >&2
+  echo "non-vacuous guard: internal/infrastructure/tfsurface does not import ${typeexpr_pkg} in production code." >&2
+  echo "The rule would pass by matching nothing; the package was probably renamed or moved." >&2
+  fail=1
+fi
+
 # --- Step 7: infrastructure-importers ---------------------------------------
 # Only cmd/... and internal/infrastructure/... may import
 # internal/infrastructure/...; every other layer must go through the
