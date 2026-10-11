@@ -127,12 +127,17 @@ both trees and reports two disjoint, path-sorted lists:
 - **Impacted**: units of `path` that the change reaches, each with its
   distance and one shortest path. An instantiating unit, one that uses a
   module whose declared variable or output names differ between the trees,
-  is at distance 1. A dependent of a reached unit is one further away. A
-  dependent is reached only through a `dependency` block whose `enabled` is
-  absent or literally `true` and whose `skip_outputs` is absent or literally
-  `false`. Broken units are traversed, so their dependents are reached, but
-  they are listed only under Broken. `--depth N` lists Impacted units up to
-  distance N; `--depth 1` lists the instantiating units only.
+  is at distance 1. So is a unit whose module only changed a type-level
+  fact: a new required variable, a variable type, a declared output type or
+  an output's `sensitive` flag. A dependent of a reached unit is one further
+  away. A dependent is reached only through a `dependency` block whose
+  `enabled` is absent or literally `true` and whose `skip_outputs` is absent
+  or literally `false`. Broken units are traversed, so their dependents are
+  reached, but they are listed only under Broken. `--depth N` lists Impacted
+  units up to distance N; `--depth 1` lists the instantiating units only.
+  Impacted beyond distance 1 is a may-be-affected set: dependents read
+  outputs, so a change to a module's variables reaches them only through the
+  outputs of the units that use it.
 
 gruntled never runs git or any other program. Check the baseline out
 yourself, for example in CI:
@@ -494,7 +499,9 @@ Each Broken subject is followed by its new findings in the `check` text
 layout without the `(unit U)` suffix. Each Impacted unit carries its
 distance. A unit at distance 1 uses the changed module; its line names the
 module and its name changes, in the order removed variables, added
-variables, removed outputs, added outputs. A unit at distance 2 or more does
+variables, removed outputs, added outputs, then its type-level reasons:
+`required variable <name>`, `type variable <name>`, `type output <name>`,
+`sensitive output <name>`. A unit at distance 2 or more does
 not use the module: the change reached it from that module through
 dependency blocks, and its line names the module and one shortest path, from
 the unit back to the unit that instantiates the changed module:
@@ -505,10 +512,28 @@ Broken (1):
   live/app
     live/app/terragrunt.hcl:7:20: GRT004 dependency "db" output "id" was removed from module "modules/vpc" (target unit "live/db")
 Impacted (3):
-  live/cache (distance 1, module modules/vpc: +variable name, -output id)
-  live/db (distance 1, module modules/vpc: +variable name, -output id)
+  live/cache (distance 1, module modules/vpc: +variable name, -output id, required variable name)
+  live/db (distance 1, module modules/vpc: +variable name, -output id, required variable name)
   live/edge (distance 2, from module modules/vpc, path live/edge -> live/db)
+Type changes (1):
+  modules/vpc variable name: now required
 ```
+
+The `Type changes (N):` section comes last and is printed only when at least
+one changed module has a type-level change. It lists each change once per
+module, so a type string never repeats per unit:
+
+- `<module> variable <name>: now required`: a new variable without a
+  `default`, or an existing one that lost its `default`.
+- `<module> variable <name>: type <old> -> <new>`: the canonical type; a
+  variable without `type` is `any`.
+- `<module> output <name>: type <old> -> <new>`: only when both trees declare
+  the output's `type`.
+- `<module> output <name>: sensitive <old> -> <new>`: `false` or `true`; an
+  absent `sensitive` is `false`.
+
+Type-level changes are Impacted reasons only: they never create a
+diagnostic, never make a unit Broken and never change the exit code.
 
 A path runs through Broken units too; they are listed only under Broken. A
 path of more than 6 units prints its first 4 units, then
@@ -518,9 +543,9 @@ order at the first unit where they differ, read from the unit back. The JSON
 `source` and `via` keys are the unambiguous form of a path: text joins hops
 with ` -> `, which a directory name may itself contain.
 
-Empty sections still print their header (`Broken (0):`). Without `--base`
-the first line is `baseline: none (no baseline)` and there is no Impacted
-section.
+Empty sections still print their header (`Broken (0):`), except Type
+changes. Without `--base` the first line is `baseline: none (no baseline)`
+and there is no Impacted or Type changes section.
 
 The baseline label is escaped like every path and name, with the
 [text control-character rules](#text-default).
@@ -542,8 +567,12 @@ where earlier versions said GRT001. Gate on severity, not on a code list.
 | `note` | `"no baseline"`. Present only when `baseline` is `false`. |
 | `broken[]` | `unit` (the unit, or the file for a unit-less finding) and `findings[]`, each `code`, `severity`, `file`, `line`, `column`, `message`. When propagation passed through the unit, also `distance`, `source` and `via`. Sorted by `unit`. |
 | `impacted[]` | `unit`; `module`, the changed module whose change reached this unit; for distance 1 it is also the unit's own module; `distance`; `source`, the unit that instantiates `module` at the start of the path (the unit itself at distance 1); `via`, the next unit on the path toward `source` (absent at distance 1). At distance 1 only, also `added_variables`, `removed_variables`, `added_outputs`, `removed_outputs` (sorted names); at distance 2 or more the change is the `changes[]` entry for `module`. Sorted by `unit`. Always `[]` without a baseline. |
-| `changes[]` | One entry per changed module: `module`, `added_variables`, `removed_variables`, `added_outputs`, `removed_outputs`. Sorted by `module`. Always `[]` without a baseline. |
+| `changes[]` | One entry per changed module: `module`, `added_variables`, `removed_variables`, `added_outputs`, `removed_outputs`, `type_changes`. Sorted by `module`. Always `[]` without a baseline. |
+| `changes[].type_changes[]` | The module's type-level changes, each `kind`, `name`, `old`, `new`, sorted by kind in the order below, then `name`. `[]` when none. `variable_required`: `old` is `absent` (a new variable) or `optional` (it lost its `default`), `new` is `required`. `variable_type`, `output_type`: canonical type strings. `output_sensitive`: `false` or `true`. Type strings appear only here, never in `impacted[]`. |
 | `summary` | `broken` and `impacted` counts. |
+
+Type-level changes are Impacted reasons only: they never create a
+diagnostic, never make a unit Broken and never change the exit code.
 
 A unit never appears in both `broken` and `impacted`. Following `via` from
 any `impacted[]` or `broken[]` entry reaches its `source` through entries of
@@ -1028,9 +1057,14 @@ per index with the same code `check` uses; `report` only copies those bytes.
   line and column, so two findings that differ only by position collapse
   into one, and only a finding with a new code, unit, file or message is
   Broken.
-- `blast` Impacted compares variable and output NAMES only. An added
-  required variable shows up only as a `+variable` change, never as Broken;
-  a changed type, default, `sensitive` flag or output value is invisible.
+- `blast` type-level reasons read `default` presence only (never its
+  value), treat an absent variable `type` as `any`, compare an output `type`
+  only when both sides declare it, and stay silent on override files,
+  conflicting duplicate declarations and non-literal values. They give no
+  compatible or breaking verdict. A new required variable is an Impacted
+  reason, never Broken, because inputs can come from includes, tfvars or the
+  environment. A changed default value, description or output value is
+  invisible.
 - `blast` Impacted is a lower bound: a non-literal `enabled` or
   `skip_outputs` and a `dependencies { paths }` entry stop propagation, and
   propagation is not gated on which outputs a dependent reads.
