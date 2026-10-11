@@ -267,11 +267,13 @@ func TestCheckNativeDepthRejects(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			if err := hclconv.CheckNativeDepth(c.src); !errors.Is(err, hclconv.ErrNestingTooDeep) {
-				t.Fatalf("CheckNativeDepth(%s) = %v, want ErrNestingTooDeep", c.name, err)
-			}
-		})
+		for _, chk := range depthCheckers {
+			t.Run(chk.name+" "+c.name, func(t *testing.T) {
+				if err := chk.fn(c.src); !errors.Is(err, hclconv.ErrNestingTooDeep) {
+					t.Fatalf("%s(%s) = %v, want ErrNestingTooDeep", chk.name, c.name, err)
+				}
+			})
+		}
 	}
 }
 
@@ -424,6 +426,11 @@ func TestCheckNativeDepthTernary(t *testing.T) {
 			case !c.deep && err != nil:
 				t.Fatalf("CheckNativeDepth = %v, want nil", err)
 			}
+			if c.deep {
+				if err := hclconv.CheckNativeExprDepth([]byte("x = " + c.expr + "\n")); !errors.Is(err, hclconv.ErrNestingTooDeep) {
+					t.Fatalf("CheckNativeExprDepth = %v, want ErrNestingTooDeep", err)
+				}
+			}
 		})
 	}
 }
@@ -492,6 +499,11 @@ func TestCheckNativeDepthChain(t *testing.T) {
 				t.Fatalf("CheckNativeDepth = %v, want ErrNestingTooDeep", err)
 			case !c.deep && err != nil:
 				t.Fatalf("CheckNativeDepth = %v, want nil", err)
+			}
+			if c.deep {
+				if err := hclconv.CheckNativeExprDepth([]byte(c.src)); !errors.Is(err, hclconv.ErrNestingTooDeep) {
+					t.Fatalf("CheckNativeExprDepth = %v, want ErrNestingTooDeep", err)
+				}
 			}
 		})
 	}
@@ -584,11 +596,13 @@ func TestCheckNativeDepthTemplateControl(t *testing.T) {
 		{"newline before for", nestTemplate("%{\nfor x in [1]}", "x", "%{endfor}", deep)},
 	}
 	for _, c := range rejects {
-		t.Run("rejects "+c.name, func(t *testing.T) {
-			if err := hclconv.CheckNativeDepth(c.src); !errors.Is(err, hclconv.ErrNestingTooDeep) {
-				t.Fatalf("CheckNativeDepth = %v, want ErrNestingTooDeep", err)
-			}
-		})
+		for _, chk := range depthCheckers {
+			t.Run("rejects "+chk.name+" "+c.name, func(t *testing.T) {
+				if err := chk.fn(c.src); !errors.Is(err, hclconv.ErrNestingTooDeep) {
+					t.Fatalf("%s = %v, want ErrNestingTooDeep", chk.name, err)
+				}
+			})
+		}
 	}
 
 	realistic := []byte(`x = <<EOT
@@ -627,4 +641,51 @@ EOT
 			}
 		}
 	})
+}
+
+// --- CheckNativeExprDepth (sec #272) ------------------------------------------
+
+// depthCheckers runs the shared reject tables against both scanners: every
+// input CheckNativeDepth refuses, CheckNativeExprDepth refuses too.
+var depthCheckers = []struct {
+	name string
+	fn   func([]byte) error
+}{
+	{"CheckNativeDepth", hclconv.CheckNativeDepth},
+	{"CheckNativeExprDepth", hclconv.CheckNativeExprDepth},
+}
+
+// TestCheckNativeExprDepth pins the one documented difference between the
+// two modes: at the root, a newline releases pending `?` in config mode
+// (CheckNativeDepth, matching ParseConfig) but not in expression mode
+// (CheckNativeExprDepth, matching ParseExpression, which hcl/json uses on a
+// .tf.json type string).
+func TestCheckNativeExprDepth(t *testing.T) {
+	newlineChain := []byte(strings.Repeat("a?b:\n", hclconv.MaxNestingDepth+1) + "c")
+	if err := hclconv.CheckNativeDepth(newlineChain); err != nil {
+		t.Fatalf("CheckNativeDepth(newline ternary chain) = %v, want nil (config mode releases at the newline)", err)
+	}
+	if err := hclconv.CheckNativeExprDepth(newlineChain); !errors.Is(err, hclconv.ErrNestingTooDeep) {
+		t.Fatalf("CheckNativeExprDepth(newline ternary chain) = %v, want ErrNestingTooDeep", err)
+	}
+
+	realistic := []byte(`object({
+  name    = string
+  tags    = optional(map(string), {})
+  subnets = list(object({
+    cidr = string
+    az   = optional(string, "a")
+  }))
+  flag    = optional(bool, true)
+})`)
+	for _, chk := range depthCheckers {
+		if err := chk.fn(realistic); err != nil {
+			t.Fatalf("%s(realistic multi-line type) = %v, want nil", chk.name, err)
+		}
+	}
+
+	heredocIf := []byte("object({a=optional(string,<<EOT\n" + strings.Repeat("%{if a}\n", hclconv.MaxNestingDepth+1) + "x\n" + strings.Repeat("%{endif}\n", hclconv.MaxNestingDepth+1) + "EOT\n)})")
+	if err := hclconv.CheckNativeExprDepth(heredocIf); !errors.Is(err, hclconv.ErrNestingTooDeep) {
+		t.Fatalf("CheckNativeExprDepth(heredoc with nested %%{if}) = %v, want ErrNestingTooDeep", err)
+	}
 }
