@@ -204,7 +204,8 @@ func TestBlastJSONGolden(t *testing.T) {
       "added_outputs": [],
       "removed_outputs": [
         "id"
-      ]
+      ],
+      "type_changes": []
     }
   ],
   "summary": {
