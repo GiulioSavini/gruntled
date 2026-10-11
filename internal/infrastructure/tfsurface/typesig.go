@@ -8,6 +8,7 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/ext/typeexpr"
+	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/zclconf/go-cty/cty"
 
 	"github.com/GiulioSavini/gruntled/internal/infrastructure/hclconv"
@@ -125,9 +126,17 @@ func writeCollection(b *strings.Builder, open string, elem cty.Type, depth int) 
 // parse a `${...}` template) and returns ("", false), without calling
 // typeexpr, when the decoded string exceeds maxJSONTypeBytes,
 // jsonTypeNesting exceeds maxJSONTypeNesting, or hclconv.CheckNativeExprDepth
-// refuses it, in that order. A native .tf expression was already bounded by
-// the whole-file CheckNativeDepth pre-scan, and typeexpr walks the AST that
-// ParseConfig built without re-parsing it.
+// refuses it, or the string holds a `for` keyword (hasForKeyword), in that
+// order. A native .tf expression was already bounded by the whole-file
+// CheckNativeDepth pre-scan, and typeexpr walks the AST that ParseConfig
+// built without re-parsing it; it is unknown, without calling typeexpr,
+// when it holds a for-expression anywhere (hclconv.HasForExpr).
+//
+// The for refusal is sec #317: typeexpr evaluates every optional() default
+// with Value(nil), which stops variables and functions but not a for over
+// a literal list, and nested fors multiply (1.3 KB took 45 s, the list form
+// 6.7 GB). A type constraint never needs a for and defaults are discarded,
+// so no real type is lost.
 //
 // It has no recover: FuzzTypeSig calls it directly so a library panic
 // surfaces in CI. The reader calls it through safeTypeAttrSig.
@@ -143,6 +152,11 @@ func typeAttrSig(expr hcl.Expression, src []byte, fromJSON bool) (string, bool) 
 		if hclconv.CheckNativeExprDepth([]byte(s)) != nil {
 			return "", false
 		}
+		if hasForKeyword(s) {
+			return "", false
+		}
+	} else if hclconv.HasForExpr(expr) {
+		return "", false
 	}
 	ty, _, diags := typeConstraint(expr)
 	if diags.HasErrors() {
@@ -169,6 +183,21 @@ func jsonTypeString(expr hcl.Expression, src []byte) (string, bool) {
 		return "", false
 	}
 	return s, true
+}
+
+// hasForKeyword reports whether s, lexed as hcl/json hands it to
+// hclsyntax.ParseExpression, holds an identifier token `for`: the keyword
+// of every for-expression spelling ([for, {for and the template %{for}).
+// A `for` inside a quoted literal is not an identifier and does not count;
+// an attribute named for counts, which only makes the type unknown.
+func hasForKeyword(s string) bool {
+	toks, _ := hclsyntax.LexExpression([]byte(s), "", hcl.InitialPos)
+	for _, t := range toks {
+		if t.Type == hclsyntax.TokenIdent && string(t.Bytes) == "for" {
+			return true
+		}
+	}
+	return false
 }
 
 // jsonTypeNesting is a linear byte scan returning the maximum ( [ {

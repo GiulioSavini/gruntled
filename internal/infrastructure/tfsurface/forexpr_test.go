@@ -138,3 +138,26 @@ func TestReadSurfaceForExprSensitive(t *testing.T) {
 		}
 	}
 }
+
+// TestTypeSigForWordKept: the word for inside a quoted default, a
+// heredoc or a comment is no for-expression; the type stays known in
+// .tf and .tf.json.
+func TestTypeSigForWordKept(t *testing.T) {
+	for _, typ := range []string{
+		`object({a=optional(string, "for v in x")})`,
+		`object({a=optional(string, "%%{for v in x}")})`,
+		"object({a=optional(string, <<EOT\nfor\nEOT\n)})",
+		"object({a=optional(string) /* for */})",
+	} {
+		for _, file := range []string{"main.tf", "main.tf.json"} {
+			t.Run(file+" "+typ, func(t *testing.T) {
+				data := "variable \"x\" {\n  type = " + typ + "\n}\n"
+				if file == "main.tf.json" {
+					data = `{"variable":{"x":{"type":` + jsonQuote(typ) + `}}}`
+				}
+				s := readForBomb(t, file, data)
+				wantVar(t, s, repograph.VariableDecl{Name: "x", Required: tTrue, Type: `object({"a"=optional(string)})`})
+			})
+		}
+	}
+}
