@@ -8,6 +8,7 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
+	"github.com/hashicorp/hcl/v2/json"
 
 	"github.com/GiulioSavini/gruntled/internal/domain/repograph"
 	"github.com/GiulioSavini/gruntled/internal/infrastructure/hclconv"
@@ -89,5 +90,37 @@ func TestLiteralBoolForExpr(t *testing.T) {
 			}
 			t.Run("5x100", func(t *testing.T) { check(t, 5, 100) })
 		})
+	}
+}
+
+// TestHasForExpr: every for spelling is found at any depth, a plain
+// literal (including the word for in a string or a traversal) is not, and
+// a .tf.json expression is never one.
+func TestHasForExpr(t *testing.T) {
+	for _, kind := range forKinds {
+		expr, diags := hclsyntax.ParseExpression([]byte("{a = [1, ("+nestedFor(kind, 1, 2)+")]}"), "t.hcl", hcl.InitialPos)
+		if diags.HasErrors() {
+			t.Fatalf("%s: parse: %v", kind, diags)
+		}
+		if !hclconv.HasForExpr(expr) {
+			t.Fatalf("%s: HasForExpr = false, want true", kind)
+		}
+	}
+	for _, src := range []string{"true", `"for"`, `[1, 2, {a = "x"}]`, "local.for", `"%{if a}x%{endif}"`} {
+		expr, diags := hclsyntax.ParseExpression([]byte(src), "t.hcl", hcl.InitialPos)
+		if diags.HasErrors() {
+			t.Fatalf("%s: parse: %v", src, diags)
+		}
+		if hclconv.HasForExpr(expr) {
+			t.Fatalf("%s: HasForExpr = true, want false", src)
+		}
+	}
+	f, diags := json.Parse([]byte(`{"a": "%{for v in [1]}x%{endfor}"}`), "main.tf.json")
+	if diags.HasErrors() {
+		t.Fatalf("parse json: %v", diags)
+	}
+	attrs, _ := f.Body.JustAttributes()
+	if hclconv.HasForExpr(attrs["a"].Expr) {
+		t.Fatal("HasForExpr on a .tf.json expression = true")
 	}
 }
