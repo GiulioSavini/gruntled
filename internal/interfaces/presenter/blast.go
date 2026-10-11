@@ -67,13 +67,26 @@ type blastImpacted struct {
 	RemovedOutputs   *[]string `json:"removed_outputs,omitempty"`
 }
 
-// blastChange is one changed module's surface names, once per module.
+// blastChange is one changed module's surface names and type-level
+// changes, once per module: the only place type strings are written, so
+// they never repeat per Impacted unit.
 type blastChange struct {
-	Module           string   `json:"module"`
-	AddedVariables   []string `json:"added_variables"`
-	RemovedVariables []string `json:"removed_variables"`
-	AddedOutputs     []string `json:"added_outputs"`
-	RemovedOutputs   []string `json:"removed_outputs"`
+	Module           string            `json:"module"`
+	AddedVariables   []string          `json:"added_variables"`
+	RemovedVariables []string          `json:"removed_variables"`
+	AddedOutputs     []string          `json:"added_outputs"`
+	RemovedOutputs   []string          `json:"removed_outputs"`
+	TypeChanges      []blastTypeChange `json:"type_changes"`
+}
+
+// blastTypeChange is one type-level change: kind is variable_required,
+// variable_type, output_type or output_sensitive; old/new are canonical
+// type strings, "absent"/"optional"/"required", or "false"/"true".
+type blastTypeChange struct {
+	Kind string `json:"kind"`
+	Name string `json:"name"`
+	Old  string `json:"old"`
+	New  string `json:"new"`
 }
 
 type blastSummary struct {
@@ -90,6 +103,19 @@ type blastSummary struct {
 //	Impacted (M):
 //	  <unit> (distance 1, module <m>: -variable a, +variable b, -output c, +output d)
 //	  <unit> (distance <d>, from module <m>, path <unit> -> <hop> -> ... -> <source>)
+//	Type changes (K):
+//	  <m> variable <n>: now required
+//	  <m> variable <n>: type <old> -> <new>
+//	  <m> output <n>: type <old> -> <new>
+//	  <m> output <n>: sensitive <old> -> <new>
+//
+// After the name tokens, a distance-1 line lists its module's type-level
+// reasons as short tokens without type strings: "required variable n",
+// "type variable n", "type output n", "sensitive output n". The type
+// strings print once per module, in the Type changes section, which is
+// written only when at least one changed module has a type-level change
+// (and never without a baseline). Type-level changes are Impacted reasons
+// only: they never add to Broken.
 //
 // A distance-1 unit uses the changed module m. A unit at distance 2 or more
 // does not; the change reached it from m, and the path runs from the unit
@@ -168,6 +194,7 @@ func BlastText(w io.Writer, res impact.Result, baselineLabel string) error {
 			writePath(&b, u.Unit, u.Reach, reach)
 			b.WriteString(")\n")
 		}
+		writeTypeChanges(&b, res.Changes)
 	}
 
 	_, err := w.Write(b.Bytes())
@@ -233,12 +260,72 @@ func writeChangeTokens(b *bytes.Buffer, c impact.SurfaceChange) {
 	group("+variable ", c.AddedVariables)
 	group("-output ", c.RemovedOutputs)
 	group("+output ", c.AddedOutputs)
+	for _, tc := range c.TypeChanges {
+		if !first {
+			b.WriteString(", ")
+		}
+		first = false
+		b.WriteString(typeToken[tc.Kind])
+		b.WriteString(escapeTerm(tc.Name))
+	}
+}
+
+// typeToken is the short reason token of each type-level change kind on a
+// distance-1 Impacted line.
+var typeToken = map[impact.TypeChangeKind]string{
+	impact.VariableRequired: "required variable ",
+	impact.VariableType:     "type variable ",
+	impact.OutputType:       "type output ",
+	impact.OutputSensitive:  "sensitive output ",
+}
+
+// writeTypeChanges writes the Type changes section: every type-level change
+// of every changed module, in Changes order then the domain's kind/name
+// order, each type string once. Nothing is written when there is none.
+func writeTypeChanges(b *bytes.Buffer, changes []impact.SurfaceChange) {
+	n := 0
+	for _, c := range changes {
+		n += len(c.TypeChanges)
+	}
+	if n == 0 {
+		return
+	}
+	b.WriteString("Type changes (")
+	b.WriteString(strconv.Itoa(n))
+	b.WriteString("):\n")
+	for _, c := range changes {
+		for _, tc := range c.TypeChanges {
+			b.WriteString("  ")
+			b.WriteString(escapeTerm(c.Module.String()))
+			switch tc.Kind {
+			case impact.VariableRequired, impact.VariableType:
+				b.WriteString(" variable ")
+			default:
+				b.WriteString(" output ")
+			}
+			b.WriteString(escapeTerm(tc.Name))
+			switch tc.Kind {
+			case impact.VariableRequired:
+				b.WriteString(": now required\n")
+				continue
+			case impact.OutputSensitive:
+				b.WriteString(": sensitive ")
+			default:
+				b.WriteString(": type ")
+			}
+			b.WriteString(escapeTerm(tc.Old))
+			b.WriteString(" -> ")
+			b.WriteString(escapeTerm(tc.New))
+			b.WriteByte('\n')
+		}
+	}
 }
 
 // BlastJSON writes a blast radius as an indented JSON document (version 2,
 // kind "blast"). Version 2 only adds keys to version 1: changes[] (one
-// entry per changed module with its four name lists), distance, source and
-// via (omitted at distance 1) on impacted[] entries, and optional
+// entry per changed module with its four name lists and its type_changes
+// list of {kind, name, old, new}, [] when none), distance, source and via
+// (omitted at distance 1) on impacted[] entries, and optional
 // distance/source/via on broken[] entries that propagation traversed. An
 // impacted entry carries the four name lists only at distance 1; at
 // distance 2 or more its change is the changes[] entry for its module.
@@ -294,6 +381,7 @@ func BlastJSON(w io.Writer, res impact.Result) error {
 				RemovedVariables: nonNil(c.RemovedVariables),
 				AddedOutputs:     nonNil(c.AddedOutputs),
 				RemovedOutputs:   nonNil(c.RemovedOutputs),
+				TypeChanges:      blastTypeChanges(c.TypeChanges),
 			})
 		}
 	}
@@ -308,6 +396,15 @@ func BlastJSON(w io.Writer, res impact.Result) error {
 	}
 	_, err := w.Write(escapeJSON(b.Bytes()))
 	return err
+}
+
+// blastTypeChanges converts tcs, in domain order; [] when none, never null.
+func blastTypeChanges(tcs []impact.TypeChange) []blastTypeChange {
+	out := make([]blastTypeChange, 0, len(tcs))
+	for _, tc := range tcs {
+		out = append(out, blastTypeChange{Kind: tc.Kind.String(), Name: tc.Name, Old: tc.Old, New: tc.New})
+	}
+	return out
 }
 
 func blastFindingOf(d diagnostic.Diagnostic) blastFinding {
