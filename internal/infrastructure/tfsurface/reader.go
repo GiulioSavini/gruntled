@@ -1,8 +1,9 @@
 // Package tfsurface implements ports.SurfaceReader: it reads a module
 // directory's declared variable and output names, and their type-level
-// facts (facts.go), from its .tf, .tf.json, .tofu and .tofu.json files. A .tf/.tofu pair of the same name is read as
-// a union of both files, since which binary (Terraform or OpenTofu) runs
-// the module is unknown statically (02-REVIEW G20).
+// facts (facts.go), from its .tf, .tf.json, .tofu and .tofu.json files.
+// A .tf/.tofu pair of the same name is read as a union of both files,
+// since which binary (Terraform or OpenTofu) runs the module is unknown
+// statically (02-REVIEW G20).
 //
 // The reader never under-counts silently: anything it cannot read
 // completely makes the whole surface unknown, because an under-counted
