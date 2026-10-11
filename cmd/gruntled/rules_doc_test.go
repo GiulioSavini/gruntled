@@ -159,6 +159,11 @@ func TestRuleRegistryDoc(t *testing.T) {
 			if !strings.Contains(p, "distance") || !strings.Contains(p, "path") || !strings.Contains(p, "--depth") {
 				t.Errorf("README blast paragraph does not mention distance, path and --depth: %q", p)
 			}
+			for _, want := range []string{"required variable", "types", "`sensitive`", "never change the exit code"} {
+				if !strings.Contains(p, want) {
+					t.Errorf("README blast paragraph does not mention the type-level reasons (%q): %q", want, p)
+				}
+			}
 		}
 	}
 	// Paragraph-scoped (blank-line separated, whitespace folded), so a
