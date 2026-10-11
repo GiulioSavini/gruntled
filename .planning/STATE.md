@@ -2,20 +2,20 @@
 gsd_state_version: "1.0"
 milestone: v0.4
 milestone_name: Blast-aware Diagnostics
-current_phase: 15
-current_phase_name: Type-Level Surface Facts
+current_phase: 16
+current_phase_name: Daemon Baseline, `report --blast` & `rebase`
 status: planning
-stopped_at: "Phase 15 plan 15-01 Task 2 (paused, see phases/15-type-level-surface-facts/.continue-here.md)"
-last_updated: "2026-10-10T20:45:06.546Z"
-last_activity: 2026-10-10
-last_activity_desc: Phase 14 complete, transitioned to Phase 15
-state_head: 435e106c028dee48b4699be4625cb28d73458529
+stopped_at: Phase 15 complete, ready to plan Phase 16
+last_updated: "2026-10-11T17:03:08.776Z"
+last_activity: 2026-10-11
+last_activity_desc: Phase 15 complete, transitioned to Phase 16
+state_head: 9de687d6d82bbd6a934b9da9d3f115422733484f
 progress:
   total_phases: 5
-  completed_phases: 10
+  completed_phases: 11
   total_plans: 12
-  completed_plans: 6
-  percent: 77
+  completed_plans: 12
+  percent: 85
 ---
 
 # Project State
@@ -29,12 +29,12 @@ See: .planning/PROJECT.md (updated 2026-10-10)
 
 ## Current Position
 
-Phase: 15 of 17 (Type-Level Surface Facts)
+Phase: 16 of 17 (Daemon Baseline, `report --blast` & `rebase`)
 Plan: Not started
 Status: Ready to plan
-Last activity: 2026-10-10 — Phase 14 complete, transitioned to Phase 15
+Last activity: 2026-10-11 — Phase 15 complete, transitioned to Phase 16
 
-Progress: [████████░░] 77%
+Progress: [█████████░] 85%
 
 ## Performance Metrics
 
@@ -85,7 +85,7 @@ Items acknowledged and deferred, most recent first:
 ## Session Continuity
 
 Last session: 2026-10-10 13:26
-Stopped at: Phase 14 complete, ready to plan Phase 15
+Stopped at: Phase 15 complete, ready to plan Phase 16
 Resume file: None
 
 ## Operator Next Steps

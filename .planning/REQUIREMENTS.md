@@ -26,12 +26,12 @@ Milestone v0.4 Blast-aware Diagnostics. Each maps to one roadmap phase.
 
 ### Type-level surface
 
-- [ ] **BLAST-06**: A variable that is new without a `default`, or that loses its `default`, makes the module's instantiating units Impacted with a "now required" reason. Required = no `default` attribute present in the merged declaration; `default = null` is a default; `nullable`, `validation`, `ephemeral` and `deprecated` never count.
-- [ ] **BLAST-07**: A variable whose `type` constraint changes makes instantiating units Impacted with a "type changed" reason. Constraints are compared structurally in canonical form: formatting, attribute order and `optional()` defaults never count; absent `type` equals `any`. Type facts are extracted only from files that passed the existing size and depth pre-scan; the canonical renderer is iterative or depth-capped (over the cap or an unrecognised cty kind is unknown, never a panic), with a fuzz test in CI.
-- [ ] **BLAST-08**: An output whose declared `type` changes (only when both sides declare a parseable type, never inferred from `value`), or whose `sensitive` flips (absent = literal false; non-literal is unknown and silent), makes instantiating units Impacted with that reason.
-- [ ] **BLAST-09**: Type-level reasons are Impacted facts only: they never create a diagnostic, never make a unit Broken and never change the exit code. With `--depth 1`, every v0.3 blast golden produces the same Broken and Impacted sets and the same exit code; text differs only by the distance/path tokens and, where the golden itself changes a module's type-level surface, the type-level reason tokens and the `Type changes` section (D-15-05); JSON only by `"version": 2` (existing key, D-14-01) and the additive fields.
-- [ ] **BLAST-10**: Each type-level fact (required, variable type, output type, output sensitive) is per name and is unknown when the name is declared in more than one kept file, or in any Terraform override file (`override.tf`, `*_override.tf` and their `.tf.json`/`.tofu`/`.tofu.json` forms), with differing facts, or is non-literal or unparseable. Unknown on either side reports nothing. Names stay known, so `GRT001` and name-level Impacted are unchanged.
-- [ ] **BLAST-11**: `blast` and `report --blast` memory and output size are O(units + edges + surface text). Each type-level change is rendered once per module. The per-unit path representation is linear (JSON: distance, source, `via` = predecessor; text: full path up to a fixed hop count with deterministic elision). A test on a synthetic 5,000-unit linear chain and a 4 MiB type expression bounds RSS and output bytes.
+- [x] **BLAST-06**: A variable that is new without a `default`, or that loses its `default`, makes the module's instantiating units Impacted with a "now required" reason. Required = no `default` attribute present in the merged declaration; `default = null` is a default; `nullable`, `validation`, `ephemeral` and `deprecated` never count.
+- [x] **BLAST-07**: A variable whose `type` constraint changes makes instantiating units Impacted with a "type changed" reason. Constraints are compared structurally in canonical form: formatting, attribute order and `optional()` defaults never count; absent `type` equals `any`. Type facts are extracted only from files that passed the existing size and depth pre-scan; the canonical renderer is iterative or depth-capped (over the cap or an unrecognised cty kind is unknown, never a panic), with a fuzz test in CI.
+- [x] **BLAST-08**: An output whose declared `type` changes (only when both sides declare a parseable type, never inferred from `value`), or whose `sensitive` flips (absent = literal false; non-literal is unknown and silent), makes instantiating units Impacted with that reason.
+- [x] **BLAST-09**: Type-level reasons are Impacted facts only: they never create a diagnostic, never make a unit Broken and never change the exit code. With `--depth 1`, every v0.3 blast golden produces the same Broken and Impacted sets and the same exit code; text differs only by the distance/path tokens and, where the golden itself changes a module's type-level surface, the type-level reason tokens and the `Type changes` section (D-15-05); JSON only by `"version": 2` (existing key, D-14-01) and the additive fields.
+- [x] **BLAST-10**: Each type-level fact (required, variable type, output type, output sensitive) is per name and is unknown when the name is declared in more than one kept file, or in any Terraform override file (`override.tf`, `*_override.tf` and their `.tf.json`/`.tofu`/`.tofu.json` forms), with differing facts, or is non-literal or unparseable. Unknown on either side reports nothing. Names stay known, so `GRT001` and name-level Impacted are unchanged.
+- [x] **BLAST-11**: `blast` and `report --blast` memory and output size are O(units + edges + surface text). Each type-level change is rendered once per module. The per-unit path representation is linear (JSON: distance, source, `via` = predecessor; text: full path up to a fixed hop count with deterministic elision). A test on a synthetic 5,000-unit linear chain and a 4 MiB type expression bounds RSS and output bytes.
 
 ### Daemon blast
 
@@ -42,7 +42,7 @@ Milestone v0.4 Blast-aware Diagnostics. Each maps to one roadmap phase.
 
 ### Security
 
-- [ ] **SEC-01**: Every string added to text output in v0.4 passes through `presenter.escapeTerm`, and every JSON document keeps the whole-buffer `escapeJSON` pass. The canonical type renderer quotes names with `strconv.Quote`. The phase-12 e2e escape test is extended to `blast` and `report --blast` with a module whose variable name, output name and object attribute name contain C0, C1, U+202E and invalid UTF-8.
+- [x] **SEC-01**: Every string added to text output in v0.4 passes through `presenter.escapeTerm`, and every JSON document keeps the whole-buffer `escapeJSON` pass. The canonical type renderer quotes names with `strconv.Quote`. The phase-12 e2e escape test is extended to `blast` and `report --blast` with a module whose variable name, output name and object attribute name contain C0, C1, U+202E and invalid UTF-8.
 
 ### Proof
 
@@ -83,13 +83,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BLAST-03 | Phase 14 | Complete |
 | BLAST-04 | Phase 14 | Complete |
 | BLAST-05 | Phase 14 | Complete |
-| BLAST-06 | Phase 15 | Pending |
-| BLAST-07 | Phase 15 | Pending |
-| BLAST-08 | Phase 15 | Pending |
-| BLAST-09 | Phase 15 | Pending |
-| BLAST-10 | Phase 15 | Pending |
-| BLAST-11 | Phase 15 | Pending |
-| SEC-01 | Phase 15 | Pending |
+| BLAST-06 | Phase 15 | Complete |
+| BLAST-07 | Phase 15 | Complete |
+| BLAST-08 | Phase 15 | Complete |
+| BLAST-09 | Phase 15 | Complete |
+| BLAST-10 | Phase 15 | Complete |
+| BLAST-11 | Phase 15 | Complete |
+| SEC-01 | Phase 15 | Complete |
 | DAEMON-07 | Phase 16 | Pending |
 | DAEMON-08 | Phase 16 | Pending |
 | DAEMON-09 | Phase 16 | Pending |

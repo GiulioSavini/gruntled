@@ -46,7 +46,7 @@ See `milestones/v0.3-ROADMAP.md`.
 
 - [x] **Phase 13: Removed-Output Diagnostic & Shared Blast Core** - `GRT004` replaces `GRT001` at every reference to an output the change removed; `check` stays byte-identical to v0.3.0 (completed 2026-10-10)
 - [x] **Phase 14: Transitive Impact with Paths** - Impacted follows dependents past one hop, with a distance, one connecting path and `--depth` (completed 2026-10-10)
-- [ ] **Phase 15: Type-Level Surface Facts** - New required variables and variable/output type or `sensitive` changes put instantiating units in Impacted, never in Broken
+- [x] **Phase 15: Type-Level Surface Facts** - New required variables and variable/output type or `sensitive` changes put instantiating units in Impacted, never in Broken (completed 2026-10-11)
 - [ ] **Phase 16: Daemon Baseline, `report --blast` & `rebase`** - The daemon answers blast against its in-memory baseline over IPC v2, and the baseline moves only on `rebase`
 - [ ] **Phase 17: Corpus Mutation Proof & Cross-Phase Audit** - No noise and 100% mutation catch on the three corpora, plus an independent audit across phase boundaries
 
@@ -101,15 +101,15 @@ Plans:
   4. An ambiguous fact reports nothing: a name declared in more than one kept file with differing facts, any Terraform override file, a non-literal or unparseable value, or an unknown fact on either side stays silent, while names stay known so `GRT001` and name-level Impacted are unchanged
   5. Hostile or huge input is safe and bounded: variable, output and object attribute names containing C0, C1, U+202E and invalid UTF-8 print escaped in `blast` text and JSON; a 4 MiB type expression and a 5,000-unit linear chain keep RSS and output size within the asserted bounds; the canonical type renderer never panics (fuzz test in CI); the six-target no-net/no-exec proof passes on the first commit that imports `hcl/v2/ext/typeexpr`
 
-**Plans**: 6 plans
+**Plans**: 6/6 plans complete
 
 Plans:
-- [ ] 15-00-PLAN.md — (wave 0, cherry-pickable onto v0.3.0) CheckNativeDepth counts nested %{if}/%{for} template blocks: closes the pre-existing stack-overflow crash (sec #261)
-- [ ] 15-01-PLAN.md — repograph declaration facts (names unchanged) + hclconv.LiteralBool, zero observable change
-- [ ] 15-02-PLAN.md — tfsurface: typeexpr + bounded canonical renderer (fuzz in CI), facts with override/duplicate rules, metamorphic proof, typeexpr-only rule + six-target proof
-- [ ] 15-03-PLAN.md — impact: TypeChange diff, type-only seeds, never Broken/exit (property)
-- [ ] 15-04-PLAN.md — presenter type_changes/tokens/Type changes section, blast_types e2e, depth-1 normaliser, docs
-- [ ] 15-05-PLAN.md — SEC-01 e2e escape, BLAST-11 5,000-unit + 4 MiB bound on the built binary, README, phase gate
+- [x] 15-00-PLAN.md — (wave 0, cherry-pickable onto v0.3.0) CheckNativeDepth counts nested %{if}/%{for} template blocks: closes the pre-existing stack-overflow crash (sec #261)
+- [x] 15-01-PLAN.md — repograph declaration facts (names unchanged) + hclconv.LiteralBool, zero observable change
+- [x] 15-02-PLAN.md — tfsurface: typeexpr + bounded canonical renderer (fuzz in CI), facts with override/duplicate rules, metamorphic proof, typeexpr-only rule + six-target proof
+- [x] 15-03-PLAN.md — impact: TypeChange diff, type-only seeds, never Broken/exit (property)
+- [x] 15-04-PLAN.md — presenter type_changes/tokens/Type changes section, blast_types e2e, depth-1 normaliser, docs
+- [x] 15-05-PLAN.md — SEC-01 e2e escape, BLAST-11 5,000-unit + 4 MiB bound on the built binary, README, phase gate
 
 **Research flag**: yes — spike before planning: `typeexpr` over `.tf.json` string form and legacy bare `list`/`map`; Terraform 1.15 output `type` release note and OpenTofu parity; `override.tf` and `.tf` + `.tofu` duplicate declarations; the six-target proof with `ext/typeexpr` linked
 
@@ -155,6 +155,6 @@ Plans:
 | 12. Gap Closure — Watcher Dir Ignore & Audit Findings | v0.3 | 5/5 | Complete | 2026-10-10 |
 | 13. Removed-Output Diagnostic & Shared Blast Core | v0.4 | 3/3 | Complete    | 2026-10-10 |
 | 14. Transitive Impact with Paths | v0.4 | 3/3 | Complete    | 2026-10-10 |
-| 15. Type-Level Surface Facts | v0.4 | 0/TBD | Not started | - |
+| 15. Type-Level Surface Facts | v0.4 | 6/6 | Complete    | 2026-10-11 |
 | 16. Daemon Baseline, `report --blast` & `rebase` | v0.4 | 0/TBD | Not started | - |
 | 17. Corpus Mutation Proof & Cross-Phase Audit | v0.4 | 0/TBD | Not started | - |
