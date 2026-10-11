@@ -519,6 +519,60 @@ package repograph
 EOF
 run_case "hcl-mention-in-comment-allowed" "$copy" zero
 
+# --- typeexpr-in-terragrunt: typeexpr outside tfsurface (D-15-01) ----------
+copy=$(mkcopy)
+cat >"$copy/internal/infrastructure/terragrunt/zz_probe.go" <<'EOF'
+package terragrunt
+
+import _ "github.com/hashicorp/hcl/v2/ext/typeexpr"
+EOF
+run_case "typeexpr-in-terragrunt" "$copy" typeexpr-only-in-tfsurface
+
+# --- typeexpr-in-terragrunt-test: a test import counts too -----------------
+copy=$(mkcopy)
+cat >"$copy/internal/infrastructure/terragrunt/zz_probe_test.go" <<'EOF'
+package terragrunt_test
+
+import _ "github.com/hashicorp/hcl/v2/ext/typeexpr"
+EOF
+run_case "typeexpr-in-terragrunt-test" "$copy" typeexpr-only-in-tfsurface
+
+# --- typeexpr-windows-file: only the source scan sees it on linux ----------
+copy=$(mkcopy)
+cat >"$copy/internal/infrastructure/hclconv/zz_windows.go" <<'EOF'
+package hclconv
+
+import _ "github.com/hashicorp/hcl/v2/ext/typeexpr"
+EOF
+run_case "typeexpr-windows-file" "$copy" typeexpr-only-in-tfsurface
+
+# --- typeexpr-in-tfsurface-subpackage: only tfsurface itself is exempt ----
+copy=$(mkcopy)
+mkdir -p "$copy/internal/infrastructure/tfsurface/zz"
+cat >"$copy/internal/infrastructure/tfsurface/zz/zz.go" <<'EOF'
+package zz
+
+import _ "github.com/hashicorp/hcl/v2/ext/typeexpr"
+EOF
+run_case "typeexpr-in-tfsurface-subpackage" "$copy" typeexpr-only-in-tfsurface
+
+# --- typeexpr-guard-vacuous: tfsurface stops importing typeexpr directly ---
+# A shim package takes over the import; the shim is itself a violation, and
+# the non-vacuous guard must report that tfsurface no longer imports it.
+copy=$(mkcopy)
+mkdir -p "$copy/internal/infrastructure/zzshim"
+cat >"$copy/internal/infrastructure/zzshim/shim.go" <<'EOF'
+package zzshim
+
+import "github.com/hashicorp/hcl/v2/ext/typeexpr"
+
+var TypeConstraintWithDefaults = typeexpr.TypeConstraintWithDefaults
+EOF
+sed -i "s|\"github.com/hashicorp/hcl/v2/ext/typeexpr\"|typeexpr \"${MODULE}/internal/infrastructure/zzshim\"|" "$copy/internal/infrastructure/tfsurface/typesig.go"
+run_case_msg "typeexpr-guard-vacuous" "$copy" typeexpr-only-in-tfsurface \
+  '+non-vacuous guard: internal/infrastructure/tfsurface does not import' \
+  '+internal/infrastructure/zzshim -> github.com/hashicorp/hcl/v2/ext/typeexpr'
+
 # --- interfaces-infra-dep: presenter imports internal/infrastructure -----
 # infrastructure-importers (Step 7) already forbids the import; the new
 # interfaces-external-deps rule must fire too.
