@@ -594,6 +594,11 @@ func TestCheckNativeDepthTemplateControl(t *testing.T) {
 		{"newline before keyword", nestTemplate("%{\nif a}", "x", "%{endif}", deep)},
 		{"strip marker and comment", nestTemplate("%{~/**/if a}", "x", "%{endif}", deep)},
 		{"newline before for", nestTemplate("%{\nfor x in [1]}", "x", "%{endfor}", deep)},
+		// sec #319 (F3): else is neutral, so if+else still nets one level
+		// (an else that decrements would reopen #261); and stray endifs
+		// are floored at zero, so they bank no credit for later ifs.
+		{"nested if with else", nestTemplate("%{if a}%{else}", "x", "%{endif}", deep)},
+		{"stray endifs before nested ifs", []byte(`x = "` + strings.Repeat("%{endif}", 5) + strings.Repeat("%{if a}", deep) + "x" + strings.Repeat("%{endif}", deep) + `"` + "\n")},
 	}
 	for _, c := range rejects {
 		for _, chk := range depthCheckers {
