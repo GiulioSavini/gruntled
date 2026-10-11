@@ -15,6 +15,10 @@ import (
 // directives gets an unknown surface (module-file-too-deep) instead of a
 // fatal stack overflow (sec #261, #271); a sibling module is unaffected.
 // The hostile sources are built here, never committed.
+// hostileBound is the test bound for reading one hostile ~4 MB module file,
+// scaled under the race detector.
+const hostileBound = 10 * time.Second * tfsurface.RaceSlowdown
+
 func TestNestedTemplateDirectiveModule(t *testing.T) {
 	cases := []struct {
 		name string
@@ -37,8 +41,8 @@ func TestNestedTemplateDirectiveModule(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ReadSurface: %v", err)
 			}
-			if took > 10*time.Second {
-				t.Fatalf("took %v, over the 10s bound", took)
+			if took > hostileBound {
+				t.Fatalf("took %v, over the %v bound", took, hostileBound)
 			}
 			if res.UnknownReason != tfsurface.ReasonModuleFileTooDeep {
 				t.Fatalf("UnknownReason = %q, want %q", res.UnknownReason, tfsurface.ReasonModuleFileTooDeep)

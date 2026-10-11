@@ -11,8 +11,9 @@ import (
 	"github.com/GiulioSavini/gruntled/internal/infrastructure/terragrunt"
 )
 
-// hostileBound is the test bound for loading one hostile ~4 MB file.
-const hostileBound = 10 * time.Second
+// hostileBound is the test bound for loading one hostile ~4 MB file,
+// scaled under the race detector.
+const hostileBound = 10 * time.Second * raceSlowdown
 
 // TestNestedTemplateDirectiveUnit: nested %{if}/%{for} directives in a unit
 // make that unit config-unknown (config-too-deep) instead of driving HCL

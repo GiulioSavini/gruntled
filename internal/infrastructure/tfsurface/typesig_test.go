@@ -384,7 +384,7 @@ func assertJSONRefused(t *testing.T, s string) {
 	if *calls != 0 {
 		t.Fatalf("typeexpr called %d times, want 0", *calls)
 	}
-	if took > time.Second {
+	if took > time.Second*raceSlowdown {
 		t.Fatalf("took %v, over 1 s", took)
 	}
 }
@@ -565,7 +565,7 @@ func TestTypeSigNativeDeepBounded(t *testing.T) {
 	if ok || got != "" {
 		t.Fatalf("typeAttrSig = (%q, %v), want (\"\", false)", got, ok)
 	}
-	if took > 50*time.Millisecond {
+	if took > 50*time.Millisecond*raceSlowdown {
 		t.Fatalf("took %v, over 50 ms", took)
 	}
 	if err := hclconv.CheckNativeDepth([]byte("variable \"v\" {\n  type = " + deepList(1000) + "\n}\n")); err == nil {

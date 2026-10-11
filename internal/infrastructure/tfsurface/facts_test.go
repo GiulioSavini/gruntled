@@ -358,7 +358,7 @@ func TestReadSurfaceJSONDepthBomb(t *testing.T) {
 			if *calls != 1 { // only "ok"
 				t.Fatalf("typeexpr called %d times, want 1 (the benign variable only)", *calls)
 			}
-			if took > 2*time.Second {
+			if took > 2*time.Second*raceSlowdown {
 				t.Fatalf("took %v, over 2 s", took)
 			}
 		})
