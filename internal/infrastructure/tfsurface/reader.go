@@ -1,6 +1,6 @@
 // Package tfsurface implements ports.SurfaceReader: it reads a module
-// directory's declared variable and output names from its .tf, .tf.json,
-// .tofu and .tofu.json files. A .tf/.tofu pair of the same name is read as
+// directory's declared variable and output names, and their type-level
+// facts (facts.go), from its .tf, .tf.json, .tofu and .tofu.json files. A .tf/.tofu pair of the same name is read as
 // a union of both files, since which binary (Terraform or OpenTofu) runs
 // the module is unknown statically (02-REVIEW G20).
 //
@@ -122,7 +122,7 @@ func (r *Reader) ReadSurface(ctx context.Context, module repograph.RepoPath) (po
 
 	var (
 		diags                                                  []diagnostic.Diagnostic
-		vars, outs                                             = map[string]struct{}{}, map[string]struct{}{}
+		facts                                                  = newFactSet()
 		unreadable, tooLarge, tooDeep, syntaxErr, invalidBlock bool
 	)
 
@@ -188,12 +188,9 @@ func (r *Reader) ReadSurface(ctx context.Context, module repograph.RepoPath) (po
 			if len(b.Labels) == 0 || b.Labels[0] == "" {
 				continue
 			}
-			switch b.Type {
-			case "variable":
-				vars[b.Labels[0]] = struct{}{}
-			case "output":
-				outs[b.Labels[0]] = struct{}{}
-			}
+			// Facts are read only here: src passed the size cap and the
+			// depth pre-scan and parsed without errors.
+			facts.add(b, name, src)
 		}
 	}
 
@@ -210,7 +207,8 @@ func (r *Reader) ReadSurface(ctx context.Context, module repograph.RepoPath) (po
 		return ports.SurfaceResult{UnknownReason: ReasonInvalidModuleBlock}, nil
 	}
 
-	surface, err := repograph.NewSurface(setKeys(vars), setKeys(outs))
+	vars, outs := facts.decls()
+	surface, err := repograph.NewSurfaceFacts(vars, outs)
 	if err != nil {
 		return ports.SurfaceResult{}, err
 	}
@@ -291,14 +289,4 @@ func sortedDiags(ds []diagnostic.Diagnostic) []diagnostic.Diagnostic {
 		return nil
 	}
 	return diagnostic.NewSet(ds...).All()
-}
-
-// setKeys returns m's keys as a slice in map order; repograph.NewSurface
-// sorts and validates them, so no ordering is needed here.
-func setKeys(m map[string]struct{}) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	return out
 }
