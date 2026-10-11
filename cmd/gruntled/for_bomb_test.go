@@ -9,11 +9,7 @@ import (
 	"testing/fstest"
 	"time"
 
-	"github.com/hashicorp/hcl/v2"
-	"github.com/hashicorp/hcl/v2/hclsyntax"
-
 	"github.com/GiulioSavini/gruntled/internal/domain/repograph"
-	"github.com/GiulioSavini/gruntled/internal/infrastructure/hclconv"
 	"github.com/GiulioSavini/gruntled/internal/infrastructure/tfsurface"
 )
 
@@ -53,11 +49,32 @@ func forBombSizes(t *testing.T, guarded func() bool, check func(t *testing.T, le
 	t.Run("5x100", func(t *testing.T) { check(t, 5, 100) })
 }
 
-// literalBoolGuarded reports whether hclconv.LiteralBool refuses a small
-// nested for-expression (sec #318).
+// literalBoolGuarded reports whether hclconv.LiteralBool, shared by the
+// dependency facts and the module reader, refuses a small nested
+// for-expression (sec #318); read through an output's sensitive, as cmd
+// may not import HCL.
 func literalBoolGuarded() bool {
-	expr, diags := hclsyntax.ParseExpression([]byte("("+nestedForList(2, 10)+") == []"), "g.hcl", hcl.InitialPos)
-	return !diags.HasErrors() && hclconv.LiteralBool(expr) == repograph.TristateUnknown
+	src := "output \"o\" {\n  value = 1\n  sensitive = (" + nestedForList(2, 10) + ") == []\n}\n"
+	o, ok := readGuardModule(src).Output("o")
+	return ok && o.Sensitive == repograph.TristateUnknown
+}
+
+// typeFactGuarded reports whether the module reader refuses a small
+// nested for-expression in an optional() default (sec #317).
+func typeFactGuarded() bool {
+	src := "variable \"x\" {\n  type = object({a=optional(any, " + nestedForList(2, 10) + ")})\n}\n"
+	v, ok := readGuardModule(src).Variable("x")
+	return ok && v.Type == ""
+}
+
+// readGuardModule reads a one-file module; the zero Surface on any error.
+func readGuardModule(src string) repograph.Surface {
+	fsys := fstest.MapFS{"m/main.tf": {Data: []byte(src)}}
+	res, err := tfsurface.NewReader(fsys).ReadSurface(context.Background(), repograph.MustRepoPath("m"))
+	if err != nil || res.UnknownReason != "" {
+		return repograph.Surface{}
+	}
+	return res.Surface
 }
 
 // timedRun runs the CLI and fails the test when it exceeds forBombBound.
@@ -102,19 +119,6 @@ func TestCheckDependencyForBomb(t *testing.T) {
 			})
 		}
 	}
-}
-
-// typeFactGuarded reports whether the module reader refuses a small
-// nested for-expression in an optional() default (sec #317).
-func typeFactGuarded() bool {
-	src := "variable \"x\" {\n  type = object({a=optional(any, " + nestedForList(2, 10) + ")})\n}\n"
-	fsys := fstest.MapFS{"m/main.tf": {Data: []byte(src)}}
-	res, err := tfsurface.NewReader(fsys).ReadSurface(context.Background(), repograph.MustRepoPath("m"))
-	if err != nil || res.UnknownReason != "" {
-		return false
-	}
-	v, ok := res.Surface.Variable("x")
-	return ok && v.Type == ""
 }
 
 // TestBlastForBomb (sec #317): nested for-expressions in an optional()
