@@ -169,10 +169,32 @@ func ReadFileLimited(fsys fs.FS, name string) ([]byte, error) {
 // MaxFileBytes); the chain cap removes the deep AST and its walks, not
 // that peak.
 func CheckNativeDepth(src []byte) error {
+	return checkNativeDepth(src, true)
+}
+
+// CheckNativeExprDepth is CheckNativeDepth for a standalone expression, as
+// hclsyntax.ParseExpression parses it: the same scanner (brackets, unary
+// runs, pending `?`, chains and the open %{if}/%{for} counter), except that
+// a newline at the root never releases a pending `?`, because
+// ParseExpression ignores newlines there while ParseConfig ends the
+// attribute at one. hcl/json hands a .tf.json type string to
+// ParseExpression, so `a?b:<NL>` repeated 690,000 times passes the
+// config-mode scan and still recursed once per `?` into a fatal stack
+// overflow (sec #272). Use this, never CheckNativeDepth, on text that will
+// be parsed as one expression.
+func CheckNativeExprDepth(src []byte) error {
+	return checkNativeDepth(src, false)
+}
+
+// checkNativeDepth is the scanner behind CheckNativeDepth and
+// CheckNativeExprDepth; rootNewlines says whether a newline in the root
+// frame ends an expression (config mode) or not (expression mode).
+func checkNativeDepth(src []byte, rootNewlines bool) error {
 	toks, _ := hclsyntax.LexConfig(src, "", hcl.InitialPos)
 
-	// frames[0] is the file body, where newlines are significant.
-	frames := []depthFrame{{open: hclsyntax.TokenNil, newlines: true}}
+	// frames[0] is the file body (newlines significant) or the root of a
+	// standalone expression (newlines ignored).
+	frames := []depthFrame{{open: hclsyntax.TokenNil, newlines: rootNewlines}}
 	run := 0     // current run of unary operators
 	pending := 0 // pending `?` summed over every frame
 	ctl := 0     // open %{if}/%{for} template control blocks
