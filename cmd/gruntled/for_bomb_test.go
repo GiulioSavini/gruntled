@@ -2,9 +2,11 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"strconv"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/hashicorp/hcl/v2"
@@ -12,6 +14,7 @@ import (
 
 	"github.com/GiulioSavini/gruntled/internal/domain/repograph"
 	"github.com/GiulioSavini/gruntled/internal/infrastructure/hclconv"
+	"github.com/GiulioSavini/gruntled/internal/infrastructure/tfsurface"
 )
 
 // forBombBound is the wall-clock bound for one command on a for-bomb repo.
@@ -98,5 +101,57 @@ func TestCheckDependencyForBomb(t *testing.T) {
 				})
 			})
 		}
+	}
+}
+
+// typeFactGuarded reports whether the module reader refuses a small
+// nested for-expression in an optional() default (sec #317).
+func typeFactGuarded() bool {
+	src := "variable \"x\" {\n  type = object({a=optional(any, " + nestedForList(2, 10) + ")})\n}\n"
+	fsys := fstest.MapFS{"m/main.tf": {Data: []byte(src)}}
+	res, err := tfsurface.NewReader(fsys).ReadSurface(context.Background(), repograph.MustRepoPath("m"))
+	if err != nil || res.UnknownReason != "" {
+		return false
+	}
+	v, ok := res.Surface.Variable("x")
+	return ok && v.Type == ""
+}
+
+// TestBlastForBomb (sec #317): nested for-expressions in an optional()
+// default and in an output's sensitive, on both sides of blast --base,
+// cost nothing and read as unknown facts: text and JSON output are
+// exactly those of a module whose default and sensitive are references
+// (local.d, local.s), so the type-level reasons stay silent and every
+// name is kept.
+func TestBlastForBomb(t *testing.T) {
+	// extra is an attribute only the current side declares: a type change
+	// that only a read type fact could report.
+	module := func(def, extra, sens string) string {
+		return "variable \"x\" {\n  type = object({a=optional(any, " + def + ")" + extra + "})\n}\noutput \"o\" {\n  value = 1\n  sensitive = " + sens + "\n}\n"
+	}
+	guarded := func() bool { return literalBoolGuarded() && typeFactGuarded() }
+	for _, format := range []string{"text", "json"} {
+		t.Run(format, func(t *testing.T) {
+			forBombSizes(t, guarded, func(t *testing.T, levels, n int) {
+				bomb := nestedForList(levels, n)
+				hostileBase, hostileCur := shortBase(t), shortBase(t)
+				plainBase, plainCur := shortBase(t), shortBase(t)
+				writeFiles(t, hostileBase, chainTree(module(bomb, "", "("+bomb+") == []")))
+				writeFiles(t, hostileCur, chainTree(module(bomb, ", b=optional(number)", "("+bomb+") != []")))
+				writeFiles(t, plainBase, chainTree(module("local.d", "", "local.s")))
+				writeFiles(t, plainCur, chainTree(module("local.d", ", b=optional(number)", "local.s")))
+
+				want, wantErr, wantCode := timedRun(t, "blast", "--format", format, "--base", plainBase, plainCur)
+				got, gotErr, code := timedRun(t, "blast", "--format", format, "--base", hostileBase, hostileCur)
+				got = strings.ReplaceAll(got, hostileBase, "<base>")
+				want = strings.ReplaceAll(want, plainBase, "<base>")
+				if wantCode != exitOK || code != wantCode || got != want || gotErr != wantErr {
+					t.Fatalf("exit %d, want %d (plain %d)\n--- hostile:\n%s%s\n--- plain:\n%s%s", code, exitOK, wantCode, got, gotErr, want, wantErr)
+				}
+				if strings.Contains(got, "variable x") || strings.Contains(got, "output o") {
+					t.Fatalf("a name or a type-level reason changed:\n%s", got)
+				}
+			})
+		})
 	}
 }
