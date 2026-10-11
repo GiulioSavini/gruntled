@@ -39,6 +39,19 @@ const (
 	// no raw control bytes and it never turns config-unknown (sec #208).
 	deepUnit = "deep"
 	deepHCL  = "dependency \"c\" {\n  config_path = \"../c\\u009b2Jd\\u007fe\"\n}\n"
+	// typesUnit is a clean unit whose own module changes type-level facts
+	// of crafted names (Phase 15, SEC-01); rawbadUnit's module file holds a
+	// raw 0xff byte in the current tree.
+	typesUnit  = "types"
+	rawbadUnit = "rawbad"
+	// The crafted names as decoded, and as escapeTerm prints them.
+	typesVar      = "v\x1bx\u009by\u202ez"
+	typesVarText  = `v\x1bx\u009by\u202ez`
+	typesOut      = "o\x1b\u202e"
+	typesOutText  = `o\x1b\u202e`
+	typesJSON     = "j\x1b\u202e"
+	typesJSONText = `j\x1b\u202e`
+	typesFFFD     = "k\ufffd"
 )
 
 // consumerOf is a unit that reads output ref of the producer unit.
@@ -66,7 +79,34 @@ func craftedRepo(t *testing.T, dir string, ok bool) {
 		deepUnit + "/terragrunt.hcl": deepHCL,
 		deepUnit + "/main.tf":        "# reads no output\n",
 	}
+	// Phase 15 (SEC-01): a module with crafted variable and output names
+	// whose type-level facts change. The names are written with HCL and
+	// JSON \u escapes, so this file holds no raw control or bidi rune.
+	// Variable w's object attribute name holds U+202E, which typeexpr
+	// rejects (quoted key), so w's type is unknown on both sides.
+	files[typesUnit+"/terragrunt.hcl"] = ""
+	files[typesUnit+"/main.tf"] = `variable "v\u001bx\u009by\u202ez" { type = number }
+output "o\u001b\u202e" {
+  value     = 1
+  sensitive = true
+}
+variable "w" { type = object({ "a\u202eb" = number }) }
+`
+	files[typesUnit+"/vars.tf.json"] = `{"variable": {"j\u001b\u202e": {}}}` + "\n"
+	// sec #249a: a raw 0xff byte in a .tf.json key decodes to U+FFFD.
+	files[typesUnit+"/bad.tf.json"] = "{\"variable\": {\"k\xff\": {}}}\n"
+	// sec #249a: a raw 0xff byte in a .tf is a GRT100; the surface is
+	// unknown, so no type change is reported for rawbad.
+	files[rawbadUnit+"/terragrunt.hcl"] = ""
+	files[rawbadUnit+"/main.tf"] = "variable \"x\" {\n  type    = number\n  default = \"\xff\"\n}\n"
 	if ok {
+		files[typesUnit+"/main.tf"] = `variable "v\u001bx\u009by\u202ez" { type = string }
+output "o\u001b\u202e" { value = 1 }
+variable "w" { type = object({ "a\u202eb" = string }) }
+`
+		delete(files, typesUnit+"/vars.tf.json")
+		delete(files, typesUnit+"/bad.tf.json")
+		files[rawbadUnit+"/main.tf"] = "variable \"x\" {\n  type = string\n}\n"
 		files[producer+"/main.tf"] = "output \"vpc_id\" { value = \"x\" }\noutput \"old\" { value = \"y\" }\n"
 		files[escUnit+"/terragrunt.hcl"] = ""
 		files[bidiUnit+"/terragrunt.hcl"] = consumerOf("vpc_id")
@@ -176,6 +216,28 @@ func TestTextOutputsEscapeControls(t *testing.T) {
 				t.Errorf("blast stdout lacks %q:\n%s", want, out)
 			}
 		}
+		// Phase 15: type-level tokens and the Type changes section escape
+		// every crafted name; w (unparseable on both sides) and rawbad
+		// (unknown surface in cur) report nothing type-level.
+		for _, want := range []string{
+			"type variable " + typesVarText,
+			"sensitive output " + typesOutText,
+			"required variable " + typesJSONText,
+			"required variable " + typesFFFD,
+			"\nType changes (",
+			"  " + typesUnit + " variable " + typesJSONText + ": now required\n",
+			"  " + typesUnit + " variable " + typesFFFD + ": now required\n",
+			"  " + typesUnit + " variable " + typesVarText + ": type string -> number\n",
+			"  " + typesUnit + " output " + typesOutText + ": sensitive false -> true\n",
+			"    " + rawbadUnit + "/main.tf:",
+		} {
+			if !strings.Contains(out, want) {
+				t.Errorf("blast stdout lacks %q:\n%s", want, out)
+			}
+		}
+		if strings.Contains(out, "variable w") || strings.Contains(out, " "+rawbadUnit+" variable") || strings.Contains(out, "("+"distance 1, module "+rawbadUnit) {
+			t.Errorf("blast reports a type change for w or rawbad:\n%s", out)
+		}
 		if strings.Contains(out, "\n  "+deepUnit+"\n") || strings.Contains(out, deepUnit+"/terragrunt.hcl:") {
 			t.Errorf("deep must be Impacted, not Broken:\n%s", out)
 		}
@@ -221,7 +283,21 @@ func TestTextOutputsEscapeControls(t *testing.T) {
 				anyItem(v, "impacted", func(m map[string]any) bool {
 					return m["unit"] == deepUnit && m["distance"] == float64(3) && m["via"] == c1Unit && m["source"] == producer && m["module"] == producer
 				}) &&
-				!anyItem(v, "broken", func(m map[string]any) bool { return m["unit"] == deepUnit })
+				!anyItem(v, "broken", func(m map[string]any) bool { return m["unit"] == deepUnit }) &&
+				anyItem(v, "changes", func(m map[string]any) bool {
+					tc := func(kind, name, old, new string) bool {
+						return anyItem(m, "type_changes", func(c map[string]any) bool {
+							return c["kind"] == kind && c["name"] == name && c["old"] == old && c["new"] == new
+						})
+					}
+					return m["module"] == typesUnit &&
+						tc("variable_type", typesVar, "string", "number") &&
+						tc("output_sensitive", typesOut, "false", "true") &&
+						tc("variable_required", typesJSON, "absent", "required") &&
+						tc("variable_required", typesFFFD, "absent", "required") &&
+						!tc("variable_type", "w", "", "")
+				}) &&
+				!anyItem(v, "changes", func(m map[string]any) bool { return m["module"] == rawbadUnit })
 		}},
 	}
 	for _, r := range jsonRuns {
