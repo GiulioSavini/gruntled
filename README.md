@@ -210,8 +210,8 @@ running, or while the first index is still in progress, it exits 3.
 output names, required variables, types or `sensitive` flags changed and,
 transitively, the units that depend on them through dependency blocks, each
 with its distance and one shortest path (`--depth N` stops at distance N).
-Type-level changes are Impacted reasons only, never Broken. Without
-`--base` every finding is Broken.
+Type-level changes are Impacted reasons only: they are never Broken and
+never change the exit code. Without `--base` every finding is Broken.
 
 **Windows limitation.** There is no native watcher on Windows: `watch`
 always uses stat polling. There is no socket either: the daemon rewrites a
