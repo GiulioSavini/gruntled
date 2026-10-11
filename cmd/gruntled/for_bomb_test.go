@@ -159,3 +159,104 @@ func TestBlastForBomb(t *testing.T) {
 		})
 	}
 }
+
+// nestedForString returns levels nested for-expressions over [0..n-1]
+// whose value is the string val: an indexed list for, or a quoted
+// template %{for} (val repeated n^levels times) (sec #327).
+func nestedForString(kind string, levels, n int, val string) string {
+	elems := make([]string, n)
+	for i := range elems {
+		elems[i] = strconv.Itoa(i)
+	}
+	list := "[" + strings.Join(elems, ",") + "]"
+	var b strings.Builder
+	if kind == "quoted" {
+		b.WriteString(`"`)
+		for l := range levels {
+			b.WriteString("%{for v" + strconv.Itoa(l) + " in " + list + "}")
+		}
+		b.WriteString(val + strings.Repeat("%{endfor}", levels) + `"`)
+		return b.String()
+	}
+	for l := range levels {
+		b.WriteString("[for v" + strconv.Itoa(l) + " in " + list + " : ")
+	}
+	b.WriteString(strconv.Quote(val) + strings.Repeat("]", levels) + strings.Repeat("[0]", levels))
+	return b.String()
+}
+
+// stringCallers are the attributes whose value terragrunt reads with
+// literalString or evalPath, as an app/terragrunt.hcl template with X in
+// place of the value and the string X would evaluate to.
+var stringCallers = []struct{ name, unit, val string }{
+	{"dependency config_path", "dependency \"vpc\" {\n  config_path = X\n}\n", "../vpc"},
+	{"mock_outputs_merge_strategy_with_state", "dependency \"vpc\" {\n  config_path = \"../vpc\"\n  mock_outputs = { vpc_idd = \"m\" }\n  mock_outputs_merge_strategy_with_state = X\n}\n", "shallow"},
+	{"mock_outputs key", "dependency \"vpc\" {\n  config_path = \"../vpc\"\n  mock_outputs = { (X) = \"m\" }\n}\n", "vpc_idd"},
+	{"mock_outputs_allowed_terraform_commands", "dependency \"vpc\" {\n  config_path = \"../vpc\"\n  mock_outputs = { vpc_idd = \"m\" }\n  mock_outputs_allowed_terraform_commands = [X]\n}\n", "validate"},
+	{"include path", "include \"root\" {\n  path = X\n}\n", "../root.hcl"},
+	{"include merge_strategy", "include \"root\" {\n  path = \"../root.hcl\"\n  merge_strategy = X\n}\n", "deep"},
+	{"find_in_parent_folders argument", "include \"root\" {\n  path = find_in_parent_folders(X)\n}\n", "root.hcl"},
+	{"dynamic include file name", "include \"root\" {\n  path = \"${local.d}/${X}\"\n}\n", "root.hcl"},
+	{"dependencies paths", "dependencies {\n  paths = [X]\n}\n", "../vpc"},
+	{"terraform source", "terraform {\n  source = X\n}\n", "../vpc"},
+}
+
+// stringRepo writes a repo whose app/terragrunt.hcl is unit with X
+// replaced by x, reading dependency.vpc.outputs.vpc_idd.
+func stringRepo(t *testing.T, unit, x string) string {
+	t.Helper()
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{
+		"root.hcl":           "",
+		"vpc/terragrunt.hcl": "",
+		"vpc/main.tf":        "output \"vpc_id\" { value = \"x\" }\n",
+		"app/terragrunt.hcl": strings.ReplaceAll(unit, "X", x) + "inputs = { id = dependency.vpc.outputs.vpc_idd }\n",
+		"app/main.tf":        "variable \"id\" {}\n",
+	})
+	return dir
+}
+
+// checkSame runs check on a repo with X = shape and on the same repo with
+// X = local.x and fails unless both are byte-identical (paths aside).
+func checkSame(t *testing.T, unit, shape string) {
+	t.Helper()
+	plain, hostile := stringRepo(t, unit, "local.x"), stringRepo(t, unit, shape)
+	want, wantErr, wantCode := timedRun(t, "check", plain)
+	got, gotErr, code := timedRun(t, "check", hostile)
+	norm := func(s, dir string) string { return strings.ReplaceAll(s, dir, "<repo>") }
+	if code != wantCode || norm(got, hostile) != norm(want, plain) || norm(gotErr, hostile) != norm(wantErr, plain) {
+		t.Fatalf("exit %d, want %d\n--- hostile:\n%s%s\n--- local.x:\n%s%s", code, wantCode, got, gotErr, want, wantErr)
+	}
+}
+
+// stringGuarded reports whether both readers refuse a small for-built
+// string: probed through config_path (evalPath) and include
+// merge_strategy (literalString), whose check output differs from the
+// local.x one whenever the value is evaluated.
+func stringGuarded(t *testing.T) bool {
+	for _, i := range []int{0, 5} {
+		c := stringCallers[i]
+		ok := t.Run("guard "+c.name, func(t *testing.T) { checkSame(t, c.unit, nestedForString("list", 2, 10, c.val)) })
+		if !ok {
+			return false
+		}
+	}
+	return true
+}
+
+// TestCheckStringForBomb (sec #327, pre-existing in v0.3.0): a value read
+// by literalString or evalPath that holds a for-expression is never
+// evaluated; check is byte-identical to the same repo with local.x there,
+// for every caller of the two readers.
+func TestCheckStringForBomb(t *testing.T) {
+	guarded := stringGuarded(t)
+	for _, c := range stringCallers {
+		for _, kind := range []string{"list", "quoted"} {
+			t.Run(c.name+" "+kind, func(t *testing.T) {
+				forBombSizes(t, func() bool { return guarded }, func(t *testing.T, levels, n int) {
+					checkSame(t, c.unit, nestedForString(kind, levels, n, c.val))
+				})
+			})
+		}
+	}
+}
