@@ -1,20 +1,76 @@
 ---
 phase: 15-type-level-surface-facts
 audited: 2026-10-11
-auditor: gruntled-sec (code-audit, bus findings #317-#320, verdict #321)
-scope: "git diff e6fca35..2e6c6f8 -- ':!.planning'"
-verdict: OPEN_THREATS
-threats_total: 32
-threats_mitigated: 28
+auditor: gruntled-sec (code-audit, bus findings #317-#320, verdict #321; re-audit of 5739ed6..3ed44ae, verdict #332)
+scope: "git diff e6fca35..3ed44ae -- ':!.planning'"
+verdict: SECURED
+threats_total: 34
+threats_mitigated: 32
 threats_accepted: 2
 threats_na: 0
-threats_open: 2
-findings: { blocker: 1, high: 1, medium: 0, low: 1, info: 1 }
+threats_open: 0
+findings: { blocker: 1, high: 2, medium: 0, low: 1, info: 1 }  # all closed in 5739ed6..3ed44ae
 ---
 
 # Phase 15 Security
 
-Verdict **OPEN_THREATS (2)**: one BLOCKER new in this phase (F1) and one HIGH that already
+## Re-audit (5739ed6..3ed44ae)
+
+Verdict **SECURED**, 0 open threats. F1, F2, F3 and F5 are closed, and T-15-02-1, T-15-02-5,
+T-15-02-11 and T-15-02-12 are verified in code and by mutation. F4 is INFO and needs no action.
+
+- **Guards.** `hclconv.HasForExpr` (`literal.go:40-53`) uses `hclsyntax.VisitAll` and returns
+  true for any `*hclsyntax.ForExpr`. Four functions use it before evaluating anything:
+  - `LiteralBool` (`literal.go:23`);
+  - `typeAttrSig` for native expressions (`typesig.go:158`);
+  - `evalPath` (`terragrunt/eval.go:25`);
+  - `literalString` (`eval.go:73`).
+
+  For a `.tf.json` type string, `hasForKeyword` (`typesig.go:193-201`) runs after the cap, the
+  bracket scan and the depth check.
+- **Evaluation sites.** These five calls are the only `Value`/typeexpr calls in `internal`
+  outside tests, and each is guarded. `terragrunt.hcl.json` is `json-config-unsupported`, so a
+  JSON template is never evaluated with a non-nil context.
+- **Mutation.** 9 mutants in a throwaway copy (`git archive 3ed44ae`), all killed:
+  - remove the guard in `LiteralBool`, in `typeAttrSig` (native), in `typeAttrSig` (JSON), in
+    `literalString` and in `evalPath`;
+  - make `HasForExpr` check only the root node;
+  - make `hasForKeyword` scan only the first three tokens;
+  - remove the `controlDepth` floor;
+  - make `else` decrement.
+
+  The tests run a 2 x 10 shape first and skip the 5 x 100 one if it fails, so a mutant fails
+  fast instead of exhausting memory.
+- **Fixed binary at 5 x 100.** Under `ulimit -v 3.5 GB` and `timeout 60`, these shapes all take
+  at most 0.01 s and 8.5 MB through `check` and `blast --base`:
+  - `%{for}` default in `.tf` and in `.tf.json`;
+  - list default; object `{for}` default;
+  - output `sensitive`;
+  - dependency `enabled`; `config_path`, plain and inside `get_terragrunt_dir()`;
+  - `terraform.source`; include `path`; `[for][0]` as `config_path`.
+
+  The same shapes at 4 x 100 took 45-54 s before the fix.
+- **Oracle deviation in 74af933 (accepted).** For include `path` and the
+  `find_in_parent_folders` argument, the expected output is that of `values.x`, not `local.x`.
+  The reason: `rejectedByTerragrunt` (`include_targets.go:245-276`) treats any non-`values`
+  variable as rejected by Terragrunt, so `local.x` there provably reaches no unit. A for-built
+  path references no outer variable (only iterator variables), so it is classed as dynamic, like
+  `values.x`, and may name any include-free unit. That is the conservative direction, so the
+  deviation is sound.
+- **Baseline at 3ed44ae.**
+  - `go vet ./...` is clean, and `go test ./internal/...` passes with the 4 MB hostile tests
+    skipped.
+  - `cmd/gruntled`: `TestCheckDependencyForBomb`, `TestBlastForBomb` and
+    `TestCheckStringForBomb` pass, as does the `-short` set.
+  - `check-architecture.sh` is OK, and the six targets have 0 forbidden packages.
+  - `go mod verify` is OK, go.mod/go.sum are unchanged, and `compare-ref.sh v0.3.0` is 244/244.
+- **v0.3.1.** The F2 and F5 fixes do not cherry-pick onto v0.3.0 because `hclconv/literal.go`
+  does not exist there. Backport the same `HasForExpr` guard by hand into v0.3.0
+  `terragrunt/eval.go` (`literalBool`, `evalPath`, `literalString`).
+
+## Initial audit (2e6c6f8)
+
+Initial verdict (2e6c6f8, superseded by the re-audit above) **OPEN_THREATS (2)**: one BLOCKER new in this phase (F1) and one HIGH that already
 existed in v0.3.0 (F2). One fix closes both. The recursion work holds. Every crash shape from
 plan review (#245, #260, #261, #271, #272, round 4) runs on a binary built from 2e6c6f8 through
 `check`, `blast --base` and `blast --base --format json` (26 shapes x 3 = 78 runs). None crashed.
@@ -61,25 +117,25 @@ worktree (removed afterwards). On that worktree:
 |----|-------------|--------|----------|
 | T-15-00-1 | mitigate | CLOSED | `ctl` in the depth sum `limits.go:267`, `controlDepth` `:281-297`, called at `:208`. Dropping `+ctl` is caught by `TestCheckNativeDepthTemplateControl`. #261 repro refused on HEAD and on v0.3.0+cherry-pick (see above) |
 | T-15-00-2 | accept | CLOSED | 50,000 siblings and 990 nested are accepted (`limits_test.go` accepts table); a refusal is the existing unknown reason |
-| T-15-00-3 | mitigate | CLOSED (test gap F3 fixed, re-check pending) | floor `limits.go:289`, `%%{` lex assertion in the test. The code is correct, but no test catches the no-floor mutant (F3). Pinned since adc2797: `nested if with else` and `stray endifs before nested ifs` in `TestCheckNativeDepthTemplateControl`, both checkers |
+| T-15-00-3 | mitigate | CLOSED (F3 fixed, re-verified) | floor `limits.go:289`, `%%{` lex assertion in the test. The code is correct, but no test catches the no-floor mutant (F3). Pinned since adc2797: `nested if with else` and `stray endifs before nested ifs` in `TestCheckNativeDepthTemplateControl`, both checkers |
 | T-15-00-4 | accept | CLOSED | lexer pre-scan cost: 0.5-1.1 s, 480-740 MB on the 4 MB repros |
 | T-15-00-5 | mitigate | CLOSED | recursion audit spot-checked: no recursion crash found in 26 shapes. Non-recursive evaluation cost is a different class (F1) |
 | T-15-00-6 | mitigate | CLOSED | trivia skip `limits.go:283`; anything else increments `:295-297`. Trivia-neutral and unknown-keyword-neutral mutants are caught. Four trivia forms x {terragrunt.hcl, module local, optional() default} at about 4 MB on the binary: no crash |
 | T-15-01-1 | mitigate | CLOSED | name views independent of facts (`repograph/surface.go`); views mutant caught by `TestNewSurfaceFacts`; compare-ref 244/244 |
 | T-15-01-2 | mitigate | CLOSED | `hclconv.LiteralBool` `literal.go:15-21` is the v0.3.0 `eval.go:75` body; a string-"true" mutant is caught by `TestLiteralBool`. Its pre-existing evaluation cost is F2 |
 | T-15-01-3 | mitigate | CLOSED | `NewSurface` facts zero = `TristateUnknown`/"" (`options.go:11`); `TestNewSurfaceFactsUnknownByDefault` |
-| T-15-02-1 | mitigate | **OPEN** (F1) | depth part closed (`typesig.go:137/140/143`, renderer cap `:50`, single builder). Stall part open: nested for-expressions in an `optional()` default are evaluated by `typeConstraint` `typesig.go:147`, 45 s for 1,339 bytes |
+| T-15-02-1 | mitigate | CLOSED (re-audit) | depth part: `typesig.go:137/140/143`, renderer cap `:50`, single builder. Stall part (F1): was open because nested for-expressions in an `optional()` default were evaluated (45 s for 1,339 bytes). Closed by `HasForExpr` `typesig.go:158` and `hasForKeyword` `:155`; 5 x 100 runs in 0.00-0.01 s on the fixed binary; guard-removal mutants are caught |
 | T-15-02-2 | mitigate | CLOSED | `TypeString` unused; capsule/unknown kind -> false `typesig.go:105-106`; renderer depth mutant caught by `TestTypeSigCapsuleAndDepth` |
 | T-15-02-3 | mitigate | CLOSED | sorted attribute names `typesig.go:85`; the no-sort mutant is caught by `TestReadSurfaceMetamorphic` |
 | T-15-02-4 | mitigate | CLOSED | override -> unknown `facts.go:107`; per-fact agreement `:110-119`; mutants caught by `TestReadSurfaceOverride` and `TestReadSurfaceDuplicates` |
-| T-15-02-5 | mitigate | fixed, re-check pending (F1) | Was accept, on the basis that a nil EvalContext makes variables and functions error. That holds, but for-expressions over literals still evaluated (F1). Now mitigate: a type expression with a for-expression never reaches typeexpr (`typesig.go` `typeAttrSig`, `hclconv.HasForExpr` / `hasForKeyword`, 45f93cf), and `LiteralBool` never evaluates one (`literal.go`, 43a4dd6). See T-15-02-11 |
+| T-15-02-5 | mitigate | CLOSED (re-audit) | Was accept, on the basis that a nil EvalContext makes variables and functions error. That holds, but for-expressions over literals still evaluated (F1). Now mitigate: a type expression with a for-expression never reaches typeexpr (`typesig.go` `typeAttrSig`, `hclconv.HasForExpr` / `hasForKeyword`, 45f93cf), and `LiteralBool` never evaluates one (`literal.go`, 43a4dd6). See T-15-02-11 |
 | T-15-02-6 | mitigate | CLOSED | Step 6b `check-architecture.sh:395-436` with non-vacuous guard; two probes fail as expected; six targets 0 forbidden packages |
 | T-15-02-7 | mitigate | CLOSED | names from the same blocks `reader.go:184-193`; compare-ref 244/244 |
 | T-15-02-8 | mitigate | CLOSED | 64 KiB cap `typesig.go:137`, bracket scan `:140`, `CheckNativeExprDepth` `:143`, encoding/json extraction `:158-172`. Each guard mutant is caught (`TestTypeSigJSONNewlineTernary` benign/2,000, `TestTypeSigJSONDeepString` list x500). The #245 and #260 JSON shapes run on the binary in 0.06-0.13 s and up to 28 MB |
 | T-15-02-9 | mitigate | CLOSED | narrow recover `typesig.go:204-211`; mutant caught by `TestReadSurfacePanickingParser`; doc says it cannot catch a stack overflow |
 | T-15-02-10 | mitigate | CLOSED | `CheckNativeExprDepth` root newlines off `limits.go:185-187`; config-mode mutants caught by `TestCheckNativeExprDepth` and `TestTypeSigJSONNewlineTernary`; #272 repro (4.14 MB) 0.14 s, 29 MB |
-| T-15-02-11 | mitigate | fixed, re-check pending (F1, F2) | Evaluation blowup: nested for-expressions over literal lists in an `optional()` default (typeexpr) or in a literal bool (`sensitive`, dependency `enabled` / `skip_outputs` / `mock_outputs_merge_with_state`) cost n^levels under a nil EvalContext. Native: `hclconv.HasForExpr` (`hclsyntax.VisitAll`, any `*hclsyntax.ForExpr`) makes the fact unknown before typeexpr or `Value` (`typesig.go` `typeAttrSig`, `literal.go` `LiteralBool`). `.tf.json` type string: `hasForKeyword` lexes the decoded string after the cap, bracket and depth guards and refuses any `for` identifier; a `.tf.json` literal bool is returned verbatim under nil ctx. Tests at 5 x 100 (small 2 x 10 shape first, big only once guarded): `TestLiteralBoolForExpr`, `TestDependencyOptionsForExpr`, `TestReadSurfaceForExprDefault` (list, object, quoted and heredoc `%{for}`, `.tf` and `.tf.json`, typeexpr calls 0, name kept), `TestReadSurfaceForExprSensitive`, `TestTypeSigForWordKept`, `TestCheckDependencyForBomb` (no false GRT001), `TestBlastForBomb` (`blast --base` text and JSON). Both guard-removal mutants in `typeAttrSig` are caught. Commits 5739ed6, 43a4dd6, 1216b3b, 8ac4781, 45f93cf |
-| T-15-02-12 | mitigate | fixed, re-check pending (F5, pre-existing in v0.3.0) | Same evaluation blowup through the Terragrunt string readers: `literalString` (`Value(nil)`) and `evalPath` (`Value` with the six path functions) evaluated a template `%{for}` or an indexed `[for]`/`{for}`, whose result is a string and passed their `cty.String` check. `hclconv.HasForExpr` now makes both return not-literal / dynamic before `Value` (`terragrunt/eval.go`, 6dc6537). Tests at 5 x 100, small shape first: `TestLiteralStringForExpr`, `TestEvalPathForExpr` (4 spellings, plain and inside `get_terragrunt_dir()`), `TestCheckStringForBomb` (check byte-identical to the `local.x` repo, `values.x` for include paths, on config_path, mock_outputs key, mock_outputs_merge_strategy_with_state, mock_outputs_allowed_terraform_commands, include path and merge_strategy, find_in_parent_folders argument, dynamic include file name, dependencies paths, terraform source). Removing either guard is caught. Commits 4a4688d, 74af933, 6dc6537 |
+| T-15-02-11 | mitigate | CLOSED (re-audit) | Evaluation blowup: nested for-expressions over literal lists in an `optional()` default (typeexpr) or in a literal bool (`sensitive`, dependency `enabled` / `skip_outputs` / `mock_outputs_merge_with_state`) cost n^levels under a nil EvalContext. Native: `hclconv.HasForExpr` (`hclsyntax.VisitAll`, any `*hclsyntax.ForExpr`) makes the fact unknown before typeexpr or `Value` (`typesig.go` `typeAttrSig`, `literal.go` `LiteralBool`). `.tf.json` type string: `hasForKeyword` lexes the decoded string after the cap, bracket and depth guards and refuses any `for` identifier; a `.tf.json` literal bool is returned verbatim under nil ctx. Tests at 5 x 100 (small 2 x 10 shape first, big only once guarded): `TestLiteralBoolForExpr`, `TestDependencyOptionsForExpr`, `TestReadSurfaceForExprDefault` (list, object, quoted and heredoc `%{for}`, `.tf` and `.tf.json`, typeexpr calls 0, name kept), `TestReadSurfaceForExprSensitive`, `TestTypeSigForWordKept`, `TestCheckDependencyForBomb` (no false GRT001), `TestBlastForBomb` (`blast --base` text and JSON). Both guard-removal mutants in `typeAttrSig` are caught. Commits 5739ed6, 43a4dd6, 1216b3b, 8ac4781, 45f93cf |
+| T-15-02-12 | mitigate | CLOSED (re-audit; F5, pre-existing in v0.3.0) | Same evaluation blowup through the Terragrunt string readers: `literalString` (`Value(nil)`) and `evalPath` (`Value` with the six path functions) evaluated a template `%{for}` or an indexed `[for]`/`{for}`, whose result is a string and passed their `cty.String` check. `hclconv.HasForExpr` now makes both return not-literal / dynamic before `Value` (`terragrunt/eval.go`, 6dc6537). Tests at 5 x 100, small shape first: `TestLiteralStringForExpr`, `TestEvalPathForExpr` (4 spellings, plain and inside `get_terragrunt_dir()`), `TestCheckStringForBomb` (check byte-identical to the `local.x` repo, `values.x` for include paths, on config_path, mock_outputs key, mock_outputs_merge_strategy_with_state, mock_outputs_allowed_terraform_commands, include path and merge_strategy, find_in_parent_folders argument, dynamic include file name, dependencies paths, terraform source). Removing either guard is caught. Commits 4a4688d, 74af933, 6dc6537 |
 | T-15-03-1 | mitigate | CLOSED | Broken = `groupBroken(NewFindings(baseD, curD))` `impact.go:134`, independent of SurfaceDiff; facts read only in `impact/surface.go:131-172` and the presenter (grep); `TestTypeFactsNeverBroken`, property test `typefacts_test.go:343` |
 | T-15-03-2 | mitigate | CLOSED | silence on "" / Unknown `surface.go:139,144,147,157,160`; five unknown-compared mutants caught by `TestTypeChangeMatrix`; unknown surface skipped `:99-106` |
 | T-15-03-3 | mitigate | CLOSED | `slices.SortFunc` `surface.go:166`; no-sort mutant caught by `TestTypeChangeOrder` |
@@ -98,11 +154,11 @@ worktree (removed afterwards). On that worktree:
 
 | # | Severity | Ref | Finding | Disposition |
 |---|----------|-----|---------|-------------|
-| F1 | BLOCKER | `tfsurface/facts.go:77`, `typesig.go:147`, `facts.go:94` -> `hclconv/literal.go:16` | Unbounded CPU/RAM in `check`, `report`, `watch` and the daemon from a module file of about 1.3 KB. The cause is new in this phase. `typeexpr.TypeConstraintWithDefaults` evaluates every `optional()` default with `Value(nil)`, and `LiteralBool` evaluates an output's `sensitive`. Nested for-expressions over literal lists need no variables or functions, so they run, and each level multiplies the cost. Measurements (4 levels x 100 elements): `%{for}` template default in `.tf`: 1,339 bytes, 45.6 s, 561 MB. The same in `.tf.json`: 45.0 s, 755 MB. `optional(any, [for ...])`: 54 s, 6.7 GB RSS (OOM-killed the 8 GB VM). `sensitive = [for ...] == []`: over 90 s. v0.3.0 on the same trees: 0.00-0.04 s. Five levels would take about 75 min, six about days. `blast --base` pays the cost for both trees, and `ReadSurface` ignores ctx, so `watch` cannot cancel it | Fix: (1) before `parseTypeFact` on a native expression, `hclsyntax.VisitAll` it; any `*hclsyntax.ForExpr` (`[for]`, `{for}`, template `%{for}`) makes the type fact unknown and typeexpr is not called. For a `.tf.json` type string, after the existing guards, lex the decoded string and refuse on any `for` identifier token. (2) `hclconv.LiteralBool` returns `TristateUnknown` without calling `Value` when a native expression contains a `ForExpr`. Every v0.3 literal result stays the same, so compare-ref is unaffected. (3) Tests at 5 x 100 for list, object and template `%{for}` (quoted and heredoc), `.tf` and `.tf.json` defaults, and output `sensitive`: each under 1 s, fact unknown, name kept, typeexpr not called; plus one `blast --base` e2e. Add row T-15-02-11; T-15-02-5 becomes mitigate. **Fixed:** red 1216b3b (+ 8ac4781 guard via tfsurface), fix 45f93cf; `LiteralBool` part fixed in 43a4dd6 (F2). Re-check pending |
-| F2 | HIGH (pre-existing, v0.3.0) | `terragrunt/depfacts.go:23,26,92` -> `hclconv/literal.go:16` (v0.3.0 `eval.go:75`) | `dependency "b" { enabled = [for ...[for ...[for ...]]] == [] }` in a `terragrunt.hcl` is evaluated in full. At 1e6 iterations it takes 0.86 s on v0.3.0 and 0.69 s on HEAD, and each extra level multiplies the cost by 100, as in F1. This affects check, watch and the daemon | Same fix as F1 (2). Test: 5 x 100 in `enabled` and `skip_outputs`, under 1 s, edge facts unknown, no false GRT001. Cherry-pickable to v0.3.1 with 15-00. **Fixed:** red 5739ed6, fix 43a4dd6. Does not cherry-pick cleanly onto v0.3.0 (+ 15-00): `hclconv/literal.go` does not exist there (modify/delete conflict); the same guard applied to v0.3.0 `terragrunt/eval.go` `literalBool` passes `TestDependencyOptionsForExpr` at 5 x 100, so v0.3.1 needs a hand backport. Re-check pending |
-| F3 | LOW | `hclconv/limits_test.go:580-630`, rule at `limits.go:289-291` | Two mutants survive every hclconv test. (a) The floor: `max(ctl-1,0)` changed to `ctl-1`. T-15-00-3 says a test pins it, but none does. (b) `else` changed to decrement, which would reopen #261: nested `%{if a}%{else}` nets 0 per level. The code is correct today | Add reject cases for both `depthCheckers`: `nestTemplate("%{if a}%{else}", "x", "%{endif}", deep)`, and `strings.Repeat("%{endif}", 5)` followed by `deep` nested ifs. **Fixed:** adc2797 (test only; each mutant now fails both checkers). Re-check pending |
+| F1 | BLOCKER | `tfsurface/facts.go:77`, `typesig.go:147`, `facts.go:94` -> `hclconv/literal.go:16` | Unbounded CPU/RAM in `check`, `report`, `watch` and the daemon from a module file of about 1.3 KB. The cause is new in this phase. `typeexpr.TypeConstraintWithDefaults` evaluates every `optional()` default with `Value(nil)`, and `LiteralBool` evaluates an output's `sensitive`. Nested for-expressions over literal lists need no variables or functions, so they run, and each level multiplies the cost. Measurements (4 levels x 100 elements): `%{for}` template default in `.tf`: 1,339 bytes, 45.6 s, 561 MB. The same in `.tf.json`: 45.0 s, 755 MB. `optional(any, [for ...])`: 54 s, 6.7 GB RSS (OOM-killed the 8 GB VM). `sensitive = [for ...] == []`: over 90 s. v0.3.0 on the same trees: 0.00-0.04 s. Five levels would take about 75 min, six about days. `blast --base` pays the cost for both trees, and `ReadSurface` ignores ctx, so `watch` cannot cancel it | Fix: (1) before `parseTypeFact` on a native expression, `hclsyntax.VisitAll` it; any `*hclsyntax.ForExpr` (`[for]`, `{for}`, template `%{for}`) makes the type fact unknown and typeexpr is not called. For a `.tf.json` type string, after the existing guards, lex the decoded string and refuse on any `for` identifier token. (2) `hclconv.LiteralBool` returns `TristateUnknown` without calling `Value` when a native expression contains a `ForExpr`. Every v0.3 literal result stays the same, so compare-ref is unaffected. (3) Tests at 5 x 100 for list, object and template `%{for}` (quoted and heredoc), `.tf` and `.tf.json` defaults, and output `sensitive`: each under 1 s, fact unknown, name kept, typeexpr not called; plus one `blast --base` e2e. Add row T-15-02-11; T-15-02-5 becomes mitigate. **Fixed:** red 1216b3b (+ 8ac4781 guard via tfsurface), fix 45f93cf; `LiteralBool` part fixed in 43a4dd6 (F2). Re-verified (re-audit) |
+| F2 | HIGH (pre-existing, v0.3.0) | `terragrunt/depfacts.go:23,26,92` -> `hclconv/literal.go:16` (v0.3.0 `eval.go:75`) | `dependency "b" { enabled = [for ...[for ...[for ...]]] == [] }` in a `terragrunt.hcl` is evaluated in full. At 1e6 iterations it takes 0.86 s on v0.3.0 and 0.69 s on HEAD, and each extra level multiplies the cost by 100, as in F1. This affects check, watch and the daemon | Same fix as F1 (2). Test: 5 x 100 in `enabled` and `skip_outputs`, under 1 s, edge facts unknown, no false GRT001. Cherry-pickable to v0.3.1 with 15-00. **Fixed:** red 5739ed6, fix 43a4dd6. Does not cherry-pick cleanly onto v0.3.0 (+ 15-00): `hclconv/literal.go` does not exist there (modify/delete conflict); the same guard applied to v0.3.0 `terragrunt/eval.go` `literalBool` passes `TestDependencyOptionsForExpr` at 5 x 100, so v0.3.1 needs a hand backport. Re-verified (re-audit) |
+| F3 | LOW | `hclconv/limits_test.go:580-630`, rule at `limits.go:289-291` | Two mutants survive every hclconv test. (a) The floor: `max(ctl-1,0)` changed to `ctl-1`. T-15-00-3 says a test pins it, but none does. (b) `else` changed to decrement, which would reopen #261: nested `%{if a}%{else}` nets 0 per level. The code is correct today | Add reject cases for both `depthCheckers`: `nestTemplate("%{if a}%{else}", "x", "%{endif}", deep)`, and `strings.Repeat("%{endif}", 5)` followed by `deep` nested ifs. **Fixed:** adc2797 (test only; each mutant now fails both checkers). Re-verified (re-audit) |
 | F4 | INFO | `cmd/gruntled/blast_bound_test.go:165` | The BLAST-11 RSS bound is control + 64 x typeBytes (about +256 MiB), and the measured big run stayed at or under the control. It catches per-unit copies of the type string (5,000 x 4 MiB would be about 20 GB) but nothing smaller. Accepted in #311. Self-correction: plan review round 4 (#280/#281) checked recursion only and accepted T-15-02-5, which is how F1 got through | None required |
-| F5 | HIGH (pre-existing, v0.3.0) | `terragrunt/eval.go:18,62` (v0.3.0 `eval.go:19,63`); callers `depfacts.go`, `include_targets.go`, `merge.go`, `parse.go`, `loader.go` | Found while fixing F2 (bus #327). `literalString` and `evalPath` evaluate a for-expression too, and a template `%{for}` or an indexed for yields a string that passes their check. Measured on a HEAD binary through `config_path` and `mock_outputs_merge_strategy_with_state`: 3 x 50 takes 0.08 s and the cost grows 50x per level. At 5 x 100 the joined string alone is 1e10 bytes | Same fix as F2, decided by the orchestrator for this round (T-15-02-12). **Fixed:** red 4a4688d, oracle correction 74af933, fix 6dc6537. The backport to v0.3.0 is the same guard in `eval.go` `evalPath` and `literalString`. Re-check pending |
+| F5 | HIGH (pre-existing, v0.3.0) | `terragrunt/eval.go:18,62` (v0.3.0 `eval.go:19,63`); callers `depfacts.go`, `include_targets.go`, `merge.go`, `parse.go`, `loader.go` | Found while fixing F2 (bus #327). `literalString` and `evalPath` evaluate a for-expression too, and a template `%{for}` or an indexed for yields a string that passes their check. Measured on a HEAD binary through `config_path` and `mock_outputs_merge_strategy_with_state`: 3 x 50 takes 0.08 s and the cost grows 50x per level. At 5 x 100 the joined string alone is 1e10 bytes | Same fix as F2, decided by the orchestrator for this round (T-15-02-12). **Fixed:** red 4a4688d, oracle correction 74af933, fix 6dc6537. The backport to v0.3.0 is the same guard in `eval.go` `evalPath` and `literalString`. Re-verified (re-audit) |
 
 ## Crash repros (binary from 2e6c6f8; check / blast --base / blast --base --format json)
 
