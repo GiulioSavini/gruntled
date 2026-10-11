@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -125,10 +126,45 @@ func decodeJSON(t *testing.T, s string) map[string]any {
 	return v
 }
 
+// typeTokenRe matches one Phase 15 type-level reason token after the name
+// tokens of a distance-1 Impacted line, in its four exact forms.
+var typeTokenRe = regexp.MustCompile(`, (?:required variable|type variable|type output|sensitive output) [^,)\n]+`)
+
+// typeSectionRe matches the whole Phase 15 "Type changes (N):" section: its
+// header and its indented lines.
+var typeSectionRe = regexp.MustCompile(`(?m)^Type changes \(\d+\):\n((?:  [^\n]*\n)*)`)
+
+// typeLevelDeletions is what the D-15-05 normaliser must delete from each
+// case's HEAD text: blast_impacted's cur tree adds variable "name" with no
+// default, a new required variable, so its two distance-1 lines gain
+// "required variable name" and the output gains a one-line section. Every
+// other case deletes nothing (sec #248).
+var typeLevelDeletions = map[string][3]int{ // tokens, sections, section lines
+	"blast_impacted__base__cur": {2, 1, 1},
+}
+
+// stripTypeLevel removes the Phase 15 type-level tokens and section from a
+// HEAD blast text and returns the counts it removed.
+func stripTypeLevel(s string) (string, [3]int) {
+	var n [3]int
+	s = typeTokenRe.ReplaceAllStringFunc(s, func(string) string { n[0]++; return "" })
+	s = typeSectionRe.ReplaceAllStringFunc(s, func(m string) string {
+		n[1]++
+		n[2] += strings.Count(m, "\n") - 1
+		return ""
+	})
+	return s, n
+}
+
 // TestBlastDepth1MatchesV1 pins BLAST-05: blast --depth 1 equals the
 // pre-Phase-14 output on every blast fixture that existed before Phase 14,
 // apart from the "distance 1, " token in text and version 2 plus additive
 // keys in JSON. The snapshots are checked for provenance first (sec #192).
+//
+// D-15-05: the Phase 15 type-level reason tokens and the Type changes
+// section are also removed, from the HEAD output only, and the number of
+// removals per case must equal typeLevelDeletions, so the normaliser can
+// never hide anything else. The snapshots must contain none of those forms.
 func TestBlastDepth1MatchesV1(t *testing.T) {
 	prov, err := os.ReadFile(filepath.Join(snapshotDir, "PROVENANCE"))
 	if err != nil {
@@ -189,6 +225,11 @@ func TestBlastDepth1MatchesV1(t *testing.T) {
 			if strings.Contains(wantText, "distance ") {
 				t.Fatalf("snapshot text carries a distance token")
 			}
+			for _, form := range []string{"required variable ", "type variable ", "type output ", "sensitive output ", "Type changes"} {
+				if strings.Contains(wantText, form) {
+					t.Fatalf("snapshot text carries the Phase 15 form %q", form)
+				}
+			}
 
 			script, pair, _ := strings.Cut(c, "__")
 			base, cur, _ := strings.Cut(pair, "__")
@@ -210,7 +251,11 @@ func TestBlastDepth1MatchesV1(t *testing.T) {
 			if strconv.Itoa(code) != wantExit {
 				t.Fatalf("exit %d, snapshot %s", code, wantExit)
 			}
-			if got := strings.ReplaceAll(gotText, "distance 1, ", ""); got != wantText {
+			stripped, removed := stripTypeLevel(gotText)
+			if removed != typeLevelDeletions[c] {
+				t.Fatalf("type-level normaliser removed %v (tokens, sections, section lines), want %v", removed, typeLevelDeletions[c])
+			}
+			if got := strings.ReplaceAll(stripped, "distance 1, ", ""); got != wantText {
 				t.Fatalf("--depth 1 text differs beyond the distance token:\n got:\n%s\nwant:\n%s", got, wantText)
 			}
 			gotJSON, _, _ := runCLI(t, "blast", "--base", base, "--depth", "1", "--format", "json", cur)
@@ -247,5 +292,10 @@ func TestBlastDepth1MatchesV1(t *testing.T) {
 	}
 	if !sawEdge {
 		t.Fatal("no blast_impacted__base__cur snapshot")
+	}
+	for c := range typeLevelDeletions {
+		if !slices.Contains(cases, c) {
+			t.Fatalf("typeLevelDeletions names %s, which has no snapshot", c)
+		}
 	}
 }
