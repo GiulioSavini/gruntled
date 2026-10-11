@@ -26,6 +26,14 @@ const (
 	// limitation.
 	blastEdgeRule   = "A dependent is reached only through a `dependency` block whose `enabled` is absent or literally `true` and whose `skip_outputs` is absent or literally `false`."
 	blastLowerBound = "`blast` Impacted is a lower bound: a non-literal `enabled` or `skip_outputs` and a `dependencies { paths }` entry stop propagation, and propagation is not gated on which outputs a dependent reads."
+	// Phase 15 (15-04): type-level reasons.
+	blastTypeOnly        = "Type-level changes are Impacted reasons only: they never create a diagnostic, never make a unit Broken and never change the exit code."
+	blastMayBeAffected   = "Impacted beyond distance 1 is a may-be-affected set: dependents read outputs, so a change to a module's variables reaches them only through the outputs of the units that use it."
+	blastTypeTokenLine   = "  live/cache (distance 1, module modules/vpc: +variable name, -output id, required variable name)"
+	blastTypeSection     = "Type changes (1):\n  modules/vpc variable name: now required\n"
+	blastTypeSectionWhen = "printed only when at least one changed module has a type-level change"
+	blastTypeLimits      = "`blast` type-level reasons read `default` presence only (never its value), treat an absent variable `type` as `any`, compare an output `type` only when both sides declare it, and stay silent on override files, conflicting duplicate declarations and non-literal values. They give no compatible or breaking verdict."
+	blastOldInvisible    = "a changed type, default, `sensitive` flag or output value is invisible"
 )
 
 func readDoc(t *testing.T, path string) string {
@@ -121,6 +129,27 @@ func TestRuleRegistryDoc(t *testing.T) {
 	limits := strings.Join(strings.Fields(section(t, doc, "## Known limitations")), " ")
 	if strings.Contains(limits, "`blast` Impacted is one hop") || !strings.Contains(limits, blastLowerBound) {
 		t.Errorf("Known limitations must drop the one-hop bullet and state %q", blastLowerBound)
+	}
+
+	// Phase 15: type-level reasons in text, JSON, intro and limitations.
+	if !strings.Contains(bt, "\n"+blastTypeTokenLine+"\n") || !strings.Contains(bt, "\n"+blastTypeSection) {
+		t.Errorf("Blast text example lacks the type reason token %q or the section %q", blastTypeTokenLine, blastTypeSection)
+	}
+	for _, want := range []string{blastTypeSectionWhen, blastTypeOnly, "`required variable <name>`", "`type variable <name>`", "`type output <name>`", "`sensitive output <name>`"} {
+		if !strings.Contains(btFolded, want) {
+			t.Errorf("Blast text lacks %q", want)
+		}
+	}
+	for _, want := range []string{"`type_changes`", "`variable_required`", "`variable_type`", "`output_type`", "`output_sensitive`", "`absent`", "`optional`", "`required`", blastTypeOnly} {
+		if !strings.Contains(bj, want) {
+			t.Errorf("Blast JSON lacks %q", want)
+		}
+	}
+	if !strings.Contains(intro, blastMayBeAffected) {
+		t.Errorf("blast intro lacks %q", blastMayBeAffected)
+	}
+	if strings.Contains(limits, blastOldInvisible) || !strings.Contains(limits, blastTypeLimits) {
+		t.Errorf("Known limitations must drop %q and state %q", blastOldInvisible, blastTypeLimits)
 	}
 
 	readme := readDoc(t, "../../README.md")
