@@ -96,6 +96,18 @@ func TestCIDoc(t *testing.T) {
 		if i, j := strings.Index(job, userns), strings.Index(job, "bash scripts/corpus-gate.sh"); i < 0 || j < 0 || i > j {
 			t.Errorf("corpus.yml: the userns sysctl must come before the gate step")
 		}
+		// The gate runs with GOPROXY=off and setup-go has cache: false, so the
+		// module cache must be filled (networked) and verified against go.sum
+		// before the gate (17-05 sec F1). go.mod/go.sum are identical at
+		// v0.3.0 and HEAD, so one download covers both builds.
+		dl := workflowStep(job, "download modules")
+		di, vi := strings.Index(dl, "go mod download"), strings.Index(dl, "go mod verify")
+		if di < 0 || vi < 0 || di > vi {
+			t.Errorf("corpus.yml: step %q must run go mod download, then go mod verify:\n%s", "download modules", dl)
+		}
+		if i, j := strings.Index(job, "- name: download modules"), strings.Index(job, "bash scripts/corpus-gate.sh"); i < 0 || j < 0 || i > j {
+			t.Errorf("corpus.yml: the module download must come before the gate step")
+		}
 		for _, p := range ciPins[:2] {
 			if uses := "uses: " + p.action + "@" + p.sha + " # " + p.version; !strings.Contains(cw, uses) {
 				t.Errorf("corpus.yml: missing %q (the same action version as ci.yml)", uses)
