@@ -126,6 +126,13 @@ func Run(ctx context.Context, cfg Config) error {
 			}
 			arm()
 			// A spurious Ready after a skip must not leave the status stale.
+			// Defence in depth: unreachable with the current debouncer. A
+			// skip happens only while a change is pending, which leaves the
+			// debouncer armed; only a successful Flush disarms it, and that
+			// Flush is always followed by Index and then a publish or a new
+			// skip (pending again). So unpublished && !pend never holds here
+			// (TestRunSpuriousReadyAfterSkipEndsPublished; assessed in
+			// 16-SECURITY F3). Kept in case the debouncer changes.
 			if _, pend := deb.Due(); unpublished && !pend {
 				publish(Event{Kind: EventReady, Report: last})
 				unpublished = false
