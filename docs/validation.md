@@ -1082,6 +1082,8 @@ about 150 MB per shard.
   them on both sides.
 - **The daemon sample is one site per class, not the full set.** The windows report-file
   path is covered by phase 16 CI.
-- **The gate needs unprivileged user namespaces for `network=isolated`.** The CI workflow
-  sets `CORPUS_GATE_NONET=1`, so a runner without them fails instead of running with
-  network.
+- **The gate needs unprivileged user namespaces for `network=isolated`.** ubuntu-latest's
+  AppArmor blocks them by default (run 38262035294). corpus.yml therefore runs
+  `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0` before the gate, and it
+  keeps `CORPUS_GATE_NONET=1`, so a runner where isolation still fails stops instead of
+  running with network.
