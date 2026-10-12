@@ -1,20 +1,50 @@
 ---
 phase: 16-daemon-baseline-report-blast-rebase
 audited: 2026-10-12
-auditor: gruntled-sec (code-audit; plan-review findings F1-F9 #348-#373 re-checked in code)
-scope: "git diff 56c0e39..f05cecc -- ':!.planning'"
-verdict: OPEN_THREATS (0 blocking)
+auditor: gruntled-sec (code-audit #388-#392; re-audit of e685454..57d74d8)
+scope: "git diff 56c0e39..f05cecc -- ':!.planning'; re-audit e685454..ce737ea"
+verdict: SECURED
 threats_total: 45
-threats_mitigated: 41
+threats_mitigated: 42
 threats_accepted: 3
 threats_na: 0
-threats_open: 1  # T-16-03-8 partial (F1, LOW); executor: closed by 0efc333, verdict pending sec re-check
-findings: { blocker: 0, high: 0, medium: 0, low: 1, info: 5 }
+threats_open: 0
+findings: { blocker: 0, high: 0, medium: 0, low: 1, info: 5 }  # F1 and F2 fixed in 0efc333/ce737ea
 ---
 
 # Phase 16 Security
 
-## Verdict
+## Re-audit (e685454..57d74d8)
+
+Verdict **SECURED**, 0 open threats. F1 (LOW) and F2 (INFO) are fixed. T-16-03-8 is closed.
+
+- **F1** (`report.go:132-136`, 0efc333).
+  - A new `case errors.As(err, &rerr)` prints `presenter.SanitizeReason(rerr.Msg)` and exits 3.
+  - The generic branch now prints `SanitizeReason(err.Error())`.
+  - TestReportRefusalSanitised (e685454, red first) sends ESC and C1 in a `malformed` refusal.
+    It checks text, json, `--blast` and `--blast --format json`: stderr exact, no raw control,
+    exit 3, empty stdout.
+  - Mutation:
+    - removing `SanitizeReason` from the refusal case is caught by all four subtests;
+    - removing the new case is caught, because the generic text differs;
+    - removing `SanitizeReason` from the generic branch **survives**. That is defence in depth
+      and no test pins it. No daemon-controlled raw text reaches that branch: refusals take the
+      new case, and json and syscall errors quote or are fixed. No action needed.
+- **Test placement.** The F1 rows are in TestReportRefusalSanitised (`fakev1_unix_test.go`,
+  linux||darwin) instead of TestReportBlastRefusals. This is acceptable. A refusal exists only
+  over the socket, and only the raw-syscall fake daemon in that file can send an arbitrary one.
+  The windows report-file path has no refusal: its daemon strings are LastError and the view
+  error, already covered by M22, M26 and TestReportBlastRefusals. `--format sarif` is not a
+  row, but it takes the same branch.
+- **F2** (`compat-v1.sh:139`, ce737ea). After the `wait`, `stop()` runs
+  `unset 'pids[${#pids[@]}-1]'`, so `cleanup` never signals a reaped pid. Indices stay
+  contiguous because only the last element is removed. The empty-array expansion in `cleanup`
+  is safe under `set -u`. A run alone gave 7/7 with no daemon left, the worktree removed, and
+  master clean.
+- **Tests.** `go test -short -run 'TestReport|TestRebase|TestScripts' ./cmd/gruntled` passes.
+- **Docs** (57d74d8). The executor's T-16-03-8 row is accurate and is kept.
+
+## Initial audit verdict (f05cecc, superseded by the re-audit above)
 
 **OPEN_THREATS (0 blocking).** One LOW finding and five INFO. 41 of the 42 mitigate rows are
 closed with file:line evidence, and the important ones are also closed by mutation. T-16-03-8 is
@@ -213,7 +243,7 @@ answered in #360-#369:
 | T-16-03-5 | mitigate | CLOSED | `rebase.go:68` (M20) |
 | T-16-03-6 | mitigate | CLOSED | no EnsureRepoDir and CheckDir only. TestRebaseWritesNothing and TestReportBlastNoDaemonCreatesNothing pass |
 | T-16-03-7 | mitigate | CLOSED | VersionError, missing view and empty view all exit 3 on both transports (M11). compat-v1 7/7 |
-| T-16-03-8 | mitigate | CLOSED (F1 fixed in 0efc333) | sanitised: LastError (M22, M26), the view error (`report.go:188`), every rebase refusal, and now every report refusal (`report.go:131`, `presenter.SanitizeReason(rerr.Msg)`) and the generic query error (`SanitizeReason(err.Error())`). TestReportRefusalSanitised (fakev1_unix_test.go, red first in e685454): ESC and C1 in a `malformed` refusal for report text/json and report --blast text/json give exit 3, empty stdout, `gruntled: the daemon refused the request: [2Jpwn`, no raw control |
+| T-16-03-8 | mitigate | CLOSED (re-audit; F1 fixed in 0efc333) | sanitised: LastError (M22, M26), the view error (`report.go:188`), every rebase refusal, and now every report refusal (`report.go:131`, `presenter.SanitizeReason(rerr.Msg)`) and the generic query error (`SanitizeReason(err.Error())`). TestReportRefusalSanitised (fakev1_unix_test.go, red first in e685454): ESC and C1 in a `malformed` refusal for report text/json and report --blast text/json give exit 3, empty stdout, `gruntled: the daemon refused the request: [2Jpwn`, no raw control |
 | T-16-03-9 | mitigate | CLOSED | TestDaemonDocs and TestHelpMatchesDocs pass. The docs claims were checked against the code (above) |
 | T-16-03-10 | mitigate | CLOSED | the parity tests pass. compare-ref v0.3.0 was 244/244 at the executor gate, and the plain report path is unchanged apart from the warning refactor |
 | T-16-04-1 | mitigate | CLOSED | TestNormaliseDaemonBlast passes. The executor's three mutants are recorded, including the off-by-one label |
