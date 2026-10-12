@@ -53,6 +53,8 @@ type instance struct {
 	server *ipc.Server
 	info   ipc.Info
 	snap   atomic.Pointer[ipc.Snapshot]
+	// rebaseHook is the publisher's rebase, set before watch.Run starts.
+	rebaseHook atomic.Pointer[func(*uint64) (ipc.RebaseResult, error)]
 
 	// dump is the report file path in report-file mode, else empty.
 	dump       string
@@ -123,7 +125,7 @@ func acquireInstance(root, statusPath string, deps watchDeps, stdout, stderr io.
 		ln, err := ipc.Listen(sock)
 		switch {
 		case err == nil:
-			inst.server = ipc.Serve(ln, inst.info, inst.snap.Load)
+			inst.server = ipc.ServeHandler(ln, inst.info, inst)
 			return inst, exitOK, false
 		case !errors.Is(err, ipc.ErrUnsupported):
 			_ = lock.Release()
@@ -165,9 +167,34 @@ func alreadyDump(root, dump string, stdout io.Writer) {
 	fmt.Fprintf(stdout, "gruntled: already watching %s; report: %s\n", root, dump)
 }
 
-// store publishes s to the socket handlers and, in report-file mode,
-// rewrites the report file. Called from one goroutine at a time.
+// Snapshot is the served snapshot (ipc.Handler).
+func (in *instance) Snapshot() *ipc.Snapshot { return in.snap.Load() }
+
+// Rebase delegates to the publisher's rebase (ipc.Handler). It refuses
+// with unsupported in report-file mode, where there is no socket client,
+// and with indexing before the publisher is wired.
+func (in *instance) Rebase(expect *uint64) (ipc.RebaseResult, error) {
+	if in.dumpW != nil {
+		return ipc.RebaseResult{}, ipc.Refuse(ipc.CodeUnsupported, "rebase needs the daemon socket; nothing changed")
+	}
+	h := in.rebaseHook.Load()
+	if h == nil {
+		return ipc.RebaseResult{}, ipc.Refuse(ipc.CodeIndexing, "the daemon is still indexing; nothing changed")
+	}
+	return (*h)(expect)
+}
+
+// setRebase wires the publisher's rebase into the socket handler.
+func (in *instance) setRebase(f func(*uint64) (ipc.RebaseResult, error)) {
+	in.rebaseHook.Store(&f)
+}
+
+// store seals s (its blast response is encoded once, and an over-cap view
+// becomes too large here), publishes it to the socket handlers and, in
+// report-file mode, rewrites the report file. Called from one goroutine at
+// a time, before s is shared.
 func (in *instance) store(s *ipc.Snapshot) {
+	ipc.Seal(in.info, s)
 	in.snap.Store(s)
 	if in.dumpW != nil {
 		in.writeDump(s)

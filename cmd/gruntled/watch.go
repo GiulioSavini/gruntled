@@ -176,6 +176,7 @@ func runWatchWith(ctx context.Context, args []string, stdout, stderr io.Writer, 
 		status:    statusfile.NewWriter(statusPath),
 		snapshots: inst.store,
 	}
+	inst.setRebase(pub.rebase)
 	err = watch.Run(ctx, watch.Config{
 		Watcher: w,
 		Indexer: watching.NewIndexer(loader, tfsurface.NewReader(fsys)),
