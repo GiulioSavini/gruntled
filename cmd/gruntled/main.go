@@ -54,12 +54,14 @@ Commands:
   blast   report which units a change breaks (Broken) or puts at risk (Impacted) against --base
   watch   reindex on every save and keep a one-line status file outside the repository
   report  print the result of the running watch daemon, like check
+  rebase  move the running watch daemon's blast baseline to its last result
 
 Flags:
   --version   print the version and commit, then exit
 
 Run "gruntled check -h", "gruntled graph -h", "gruntled blast -h",
-"gruntled watch -h" or "gruntled report -h" for details.
+"gruntled watch -h", "gruntled report -h" or "gruntled rebase -h" for
+details.
 `
 
 const blastUsage = `usage: gruntled blast [--base dir] [--format text|json] [--depth N] [path]
@@ -158,6 +160,8 @@ func runCtx(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return runWatch(ctx, args[1:], stdout, stderr)
 	case "report":
 		return runReport(args[1:], stdout, stderr)
+	case "rebase":
+		return runRebase(args[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "gruntled: unknown command %q\n", args[0])
 		fmt.Fprint(stderr, topUsage)

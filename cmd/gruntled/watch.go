@@ -367,7 +367,8 @@ func (p *watchPublisher) rebase(expect *uint64) (ipc.RebaseResult, error) {
 	case last == nil:
 		return ipc.RebaseResult{}, ipc.Refuse(ipc.CodeIndexing, "the daemon is still indexing; nothing changed")
 	case last.State == ipc.StateFailed:
-		return ipc.RebaseResult{}, ipc.Refuse(ipc.CodeFailed, "the last reindex failed; nothing changed")
+		// The message is the (already sanitised) reason; the CLI frames it.
+		return ipc.RebaseResult{}, ipc.Refuse(ipc.CodeFailed, last.LastError)
 	case last.Blast == nil || last.Blast.Error != "":
 		return ipc.RebaseResult{}, ipc.Refuse(ipc.CodeUnavailable, "the blast view could not be computed; nothing changed")
 	case expect != nil && *expect != last.Generation:
