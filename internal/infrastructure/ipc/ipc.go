@@ -14,7 +14,6 @@
 package ipc
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
@@ -197,15 +196,6 @@ type Handler interface {
 	Rebase(expect *uint64) (RebaseResult, error)
 }
 
-// getHandler serves a snapshot getter and refuses rebase.
-type getHandler func() *Snapshot
-
-func (g getHandler) Snapshot() *Snapshot { return g() }
-
-func (getHandler) Rebase(*uint64) (RebaseResult, error) {
-	return RebaseResult{}, Refuse(CodeUnsupported, "rebase is not supported by this server")
-}
-
 // CheckSockPath returns nil when path fits in sun_path on every supported
 // platform, otherwise an error naming the length and how to shorten it.
 func CheckSockPath(path string) error {
@@ -282,23 +272,6 @@ func encodeLine(v any) ([]byte, error) {
 }
 
 var errLineTooLong = errors.New("ipc: line too long")
-
-// readLine reads one newline-terminated line of at most max bytes
-// (newline excluded). A missing newline or a longer line is an error.
-func readLine(r io.Reader, max int) ([]byte, error) {
-	br := bufio.NewReader(io.LimitReader(r, int64(max)+1))
-	line, err := br.ReadBytes('\n')
-	if err != nil {
-		if len(line) > max {
-			return nil, errLineTooLong
-		}
-		if errors.Is(err, io.EOF) {
-			return nil, io.ErrUnexpectedEOF
-		}
-		return nil, err
-	}
-	return line, nil
-}
 
 // respond builds the answer to one request line and returns the op it
 // served ("" when the request was refused before the op was known). It
@@ -493,29 +466,4 @@ func answer(line []byte, info Info, h Handler) []byte {
 		}
 	}
 	return b
-}
-
-// noReplyError is a read failure after the request was written. Its text
-// is the v1 one; it matches ErrNoReply.
-type noReplyError struct {
-	sock string
-	err  error
-}
-
-func (e *noReplyError) Error() string        { return fmt.Sprintf("ipc: read from %s: %v", e.sock, e.err) }
-func (e *noReplyError) Unwrap() error        { return e.err }
-func (e *noReplyError) Is(target error) bool { return target == ErrNoReply }
-
-// readReply reads one response line from r after a request was sent to
-// sock. An over-cap line names the cap and wraps errLineTooLong; any other
-// read error is a noReplyError.
-func readReply(r io.Reader, sock string) ([]byte, error) {
-	line, err := readLine(r, responseCap)
-	switch {
-	case errors.Is(err, errLineTooLong):
-		return nil, fmt.Errorf("ipc: read from %s: response over the %s cap: %w", sock, capString(responseCap), err)
-	case err != nil:
-		return nil, &noReplyError{sock: sock, err: err}
-	}
-	return line, nil
 }

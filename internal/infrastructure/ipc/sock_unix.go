@@ -3,8 +3,10 @@
 package ipc
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"sync"
@@ -319,4 +321,55 @@ func exchange(sock string, req request, timeout time.Duration) (line []byte, sen
 	}
 	line, err = readReply(f, sock)
 	return line, true, err
+}
+
+// noReplyError is a read failure after the request was written. Its text
+// is the v1 one; it matches ErrNoReply.
+type noReplyError struct {
+	sock string
+	err  error
+}
+
+func (e *noReplyError) Error() string        { return fmt.Sprintf("ipc: read from %s: %v", e.sock, e.err) }
+func (e *noReplyError) Unwrap() error        { return e.err }
+func (e *noReplyError) Is(target error) bool { return target == ErrNoReply }
+
+// readReply reads one response line from r after a request was sent to
+// sock. An over-cap line names the cap and wraps errLineTooLong; any other
+// read error is a noReplyError.
+func readReply(r io.Reader, sock string) ([]byte, error) {
+	line, err := readLine(r, responseCap)
+	switch {
+	case errors.Is(err, errLineTooLong):
+		return nil, fmt.Errorf("ipc: read from %s: response over the %s cap: %w", sock, capString(responseCap), err)
+	case err != nil:
+		return nil, &noReplyError{sock: sock, err: err}
+	}
+	return line, nil
+}
+
+// getHandler serves a snapshot getter and refuses rebase.
+type getHandler func() *Snapshot
+
+func (g getHandler) Snapshot() *Snapshot { return g() }
+
+func (getHandler) Rebase(*uint64) (RebaseResult, error) {
+	return RebaseResult{}, Refuse(CodeUnsupported, "rebase is not supported by this server")
+}
+
+// readLine reads one newline-terminated line of at most max bytes
+// (newline excluded). A missing newline or a longer line is an error.
+func readLine(r io.Reader, max int) ([]byte, error) {
+	br := bufio.NewReader(io.LimitReader(r, int64(max)+1))
+	line, err := br.ReadBytes('\n')
+	if err != nil {
+		if len(line) > max {
+			return nil, errLineTooLong
+		}
+		if errors.Is(err, io.EOF) {
+			return nil, io.ErrUnexpectedEOF
+		}
+		return nil, err
+	}
+	return line, nil
 }

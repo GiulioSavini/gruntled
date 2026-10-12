@@ -297,3 +297,14 @@ func (n *native) Close() error {
 func WarnPollAdvised(root string) bool {
 	return runtime.GOOS == "linux" && strings.HasPrefix(root, "/mnt/")
 }
+
+// editorPattern reports whether the base name of rel matches an editor
+// swap/backup/probe pattern, regardless of the entry type. The native
+// adapter uses it to decide when an event path needs an Lstat to learn its
+// type: normal names never pay that syscall.
+func editorPattern(rel string) bool {
+	if i := strings.LastIndexByte(rel, '/'); i >= 0 {
+		rel = rel[i+1:]
+	}
+	return ignoredBase(rel)
+}
