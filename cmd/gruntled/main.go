@@ -53,7 +53,7 @@ Commands:
   graph   print the repository graph as JSON (--json)
   blast   report which units a change breaks (Broken) or puts at risk (Impacted) against --base
   watch   reindex on every save and keep a one-line status file outside the repository
-  report  print the result of the running watch daemon, like check
+  report  print the running watch daemon's result, like check, or its blast view (--blast)
   rebase  move the running watch daemon's blast baseline to its last result
 
 Flags:
