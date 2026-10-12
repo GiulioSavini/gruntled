@@ -193,6 +193,29 @@ func TestTextOutputsEscapeControls(t *testing.T) {
 	}
 	craftedRepo(t, base, true)
 
+	// Every line blast prints for the crafted names, except the label line
+	// (also required of report --blast, whose label differs). The Phase 15
+	// type-level tokens and the Type changes section escape every name too.
+	blastWant := []string{
+		"  " + escUnitText + "/terragrunt.hcl\n",
+		"  " + `c\u009b2Jd\x7fe` + "\n",
+		"  " + `r\u202el` + "\n",
+		`  v\u202ep (distance 1, module v\u202ep: -output old)` + "\n",
+		`  deep (distance 3, from module v\u202ep, path deep -> c\u009b2Jd\x7fe -> v\u202ep)` + "\n",
+		"  " + rmUnit + "\n",
+		"    " + rmUnit + "/terragrunt.hcl:4:17: GRT004 " + rmGRT004 + "\n",
+		"type variable " + typesVarText,
+		"sensitive output " + typesOutText,
+		"required variable " + typesJSONText,
+		"required variable " + typesFFFD,
+		"\nType changes (",
+		"  " + typesUnit + " variable " + typesJSONText + ": now required\n",
+		"  " + typesUnit + " variable " + typesFFFD + ": now required\n",
+		"  " + typesUnit + " variable " + typesVarText + ": type string -> number\n",
+		"  " + typesUnit + " output " + typesOutText + ": sensitive false -> true\n",
+		"    " + rawbadUnit + "/main.tf:",
+	}
+
 	t.Run("blast", func(t *testing.T) {
 		out, stderr, code := runCLI(t, "blast", "--base", base, dir)
 		if code != exitFindings {
@@ -203,38 +226,13 @@ func TestTextOutputsEscapeControls(t *testing.T) {
 		if want := "baseline: " + filepath.Dir(base) + `/base\x1b[2Jx`; first != want {
 			t.Fatalf("blast first line %q, want %q", first, want)
 		}
-		for _, want := range []string{
-			"  " + escUnitText + "/terragrunt.hcl\n",
-			"  " + `c\u009b2Jd\x7fe` + "\n",
-			"  " + `r\u202el` + "\n",
-			`  v\u202ep (distance 1, module v\u202ep: -output old)` + "\n",
-			`  deep (distance 3, from module v\u202ep, path deep -> c\u009b2Jd\x7fe -> v\u202ep)` + "\n",
-			"  " + rmUnit + "\n",
-			"    " + rmUnit + "/terragrunt.hcl:4:17: GRT004 " + rmGRT004 + "\n",
-		} {
+		for _, want := range blastWant {
 			if !strings.Contains(out, want) {
 				t.Errorf("blast stdout lacks %q:\n%s", want, out)
 			}
 		}
-		// Phase 15: type-level tokens and the Type changes section escape
-		// every crafted name; w (unparseable on both sides) and rawbad
-		// (unknown surface in cur) report nothing type-level.
-		for _, want := range []string{
-			"type variable " + typesVarText,
-			"sensitive output " + typesOutText,
-			"required variable " + typesJSONText,
-			"required variable " + typesFFFD,
-			"\nType changes (",
-			"  " + typesUnit + " variable " + typesJSONText + ": now required\n",
-			"  " + typesUnit + " variable " + typesFFFD + ": now required\n",
-			"  " + typesUnit + " variable " + typesVarText + ": type string -> number\n",
-			"  " + typesUnit + " output " + typesOutText + ": sensitive false -> true\n",
-			"    " + rawbadUnit + "/main.tf:",
-		} {
-			if !strings.Contains(out, want) {
-				t.Errorf("blast stdout lacks %q:\n%s", want, out)
-			}
-		}
+		// Phase 15: w (unparseable on both sides) and rawbad (unknown
+		// surface in cur) report nothing type-level.
 		if strings.Contains(out, "variable w") || strings.Contains(out, " "+rawbadUnit+" variable") || strings.Contains(out, "("+"distance 1, module "+rawbadUnit) {
 			t.Errorf("blast reports a type change for w or rawbad:\n%s", out)
 		}
@@ -245,6 +243,36 @@ func TestTextOutputsEscapeControls(t *testing.T) {
 			t.Errorf("blast reports both codes at the rm site:\n%s", out)
 		}
 	})
+
+	// blastJSONHas holds when a blast document decodes back to the exact
+	// crafted names: blast json and report --blast json share it.
+	blastJSONHas := func(v any) bool {
+		return anyItem(v, "broken", func(m map[string]any) bool { return m["unit"] == c1Unit }) &&
+			anyItem(v, "impacted", func(m map[string]any) bool { return m["unit"] == producer && m["module"] == producer }) &&
+			anyItem(v, "broken", func(m map[string]any) bool {
+				return m["unit"] == rmUnit && anyItem(m, "findings", func(f map[string]any) bool {
+					return f["code"] == "GRT004" && f["message"] == rmGRT004
+				}) && !anyItem(m, "findings", func(f map[string]any) bool { return f["code"] == "GRT001" })
+			}) &&
+			anyItem(v, "impacted", func(m map[string]any) bool {
+				return m["unit"] == deepUnit && m["distance"] == float64(3) && m["via"] == c1Unit && m["source"] == producer && m["module"] == producer
+			}) &&
+			!anyItem(v, "broken", func(m map[string]any) bool { return m["unit"] == deepUnit }) &&
+			anyItem(v, "changes", func(m map[string]any) bool {
+				tc := func(kind, name, old, new string) bool {
+					return anyItem(m, "type_changes", func(c map[string]any) bool {
+						return c["kind"] == kind && c["name"] == name && c["old"] == old && c["new"] == new
+					})
+				}
+				return m["module"] == typesUnit &&
+					tc("variable_type", typesVar, "string", "number") &&
+					tc("output_sensitive", typesOut, "false", "true") &&
+					tc("variable_required", typesJSON, "absent", "required") &&
+					tc("variable_required", typesFFFD, "absent", "required") &&
+					!tc("variable_type", "w", "", "")
+			}) &&
+			!anyItem(v, "changes", func(m map[string]any) bool { return m["module"] == rawbadUnit })
+	}
 
 	// JSON documents: every name escaped, decoded back exactly.
 	jsonRuns := []struct {
@@ -272,33 +300,7 @@ func TestTextOutputsEscapeControls(t *testing.T) {
 		{"graph json", []string{"graph", "--json", dir}, exitOK, func(v any) bool {
 			return anyItem(v, "units", func(m map[string]any) bool { return m["path"] == c1Unit })
 		}},
-		{"blast json", []string{"blast", "--format", "json", "--base", base, dir}, exitFindings, func(v any) bool {
-			return anyItem(v, "broken", func(m map[string]any) bool { return m["unit"] == c1Unit }) &&
-				anyItem(v, "impacted", func(m map[string]any) bool { return m["unit"] == producer && m["module"] == producer }) &&
-				anyItem(v, "broken", func(m map[string]any) bool {
-					return m["unit"] == rmUnit && anyItem(m, "findings", func(f map[string]any) bool {
-						return f["code"] == "GRT004" && f["message"] == rmGRT004
-					}) && !anyItem(m, "findings", func(f map[string]any) bool { return f["code"] == "GRT001" })
-				}) &&
-				anyItem(v, "impacted", func(m map[string]any) bool {
-					return m["unit"] == deepUnit && m["distance"] == float64(3) && m["via"] == c1Unit && m["source"] == producer && m["module"] == producer
-				}) &&
-				!anyItem(v, "broken", func(m map[string]any) bool { return m["unit"] == deepUnit }) &&
-				anyItem(v, "changes", func(m map[string]any) bool {
-					tc := func(kind, name, old, new string) bool {
-						return anyItem(m, "type_changes", func(c map[string]any) bool {
-							return c["kind"] == kind && c["name"] == name && c["old"] == old && c["new"] == new
-						})
-					}
-					return m["module"] == typesUnit &&
-						tc("variable_type", typesVar, "string", "number") &&
-						tc("output_sensitive", typesOut, "false", "true") &&
-						tc("variable_required", typesJSON, "absent", "required") &&
-						tc("variable_required", typesFFFD, "absent", "required") &&
-						!tc("variable_type", "w", "", "")
-				}) &&
-				!anyItem(v, "changes", func(m map[string]any) bool { return m["module"] == rawbadUnit })
-		}},
+		{"blast json", []string{"blast", "--format", "json", "--base", base, dir}, exitFindings, blastJSONHas},
 	}
 	for _, r := range jsonRuns {
 		t.Run(r.name, func(t *testing.T) {
@@ -321,6 +323,58 @@ func TestTextOutputsEscapeControls(t *testing.T) {
 			}
 		})
 	}
+
+	// SEC-01 report --blast half (16-04): a daemon started on a copy of the
+	// crafted baseline, rewritten to the crafted tree, serves a blast view
+	// that escapes every name like blast does, and equals blast --base over
+	// the crafted baseline after normalisation.
+	live := t.TempDir()
+	craftedRepo(t, live, true)
+	deps := testDeps(t)
+	deps.goos = "linux"
+	startWatch(t, live, deps, "--poll")
+	report := func(args ...string) cliResult { return runReportArgs(deps.env, "linux", args...) }
+	var first cliResult
+	eventually(t, func() bool { first = report(live); return first.code != exitFailure },
+		"first report on the crafted baseline", func() string { return first.String() })
+	craftedRepo(t, live, false)
+	waitBlastFinal(t, live, report)
+
+	t.Run("report --blast", func(t *testing.T) {
+		got := report("--blast", live)
+		if got.code != exitFindings || got.stderr != "" {
+			t.Fatalf("report --blast: %s", got)
+		}
+		assertNoRawControls(t, "report --blast", got.stdout)
+		_, rest, _ := strings.Cut(got.stdout, "\n")
+		for _, want := range blastWant {
+			if !strings.Contains(rest, want) {
+				t.Errorf("report --blast stdout lacks %q:\n%s", want, got.stdout)
+			}
+		}
+		assertBlastEquivalent(t, report, base, live)
+	})
+
+	t.Run("report --blast json", func(t *testing.T) {
+		got := report("--blast", "--format", "json", live)
+		if got.code != exitFindings || got.stderr != "" {
+			t.Fatalf("report --blast json: %s", got)
+		}
+		assertNoRawControls(t, "report --blast json", got.stdout)
+		for _, esc := range []string{`\u009b`, `\u007f`, `\u202e`} {
+			if !strings.Contains(got.stdout, esc) {
+				t.Errorf("stdout lacks %s:\n%s", esc, got.stdout)
+			}
+		}
+		var v any
+		if err := json.Unmarshal([]byte(got.stdout), &v); err != nil {
+			t.Fatalf("Unmarshal: %v\n%s", err, got.stdout)
+		}
+		if !blastJSONHas(v) {
+			t.Fatalf("decoded report --blast document does not carry the exact crafted names:\n%s", got.stdout)
+		}
+		assertBlastEquivalent(t, report, base, live)
+	})
 }
 
 // anyItem reports whether some object in the list v[key] satisfies ok.
