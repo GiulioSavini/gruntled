@@ -135,6 +135,8 @@ stop() {
   done
   kill -KILL "$pid" 2>/dev/null || true
   wait "$pid" 2>/dev/null || true
+  # Reaped: forget it, so cleanup never signals a pid the system reused.
+  unset 'pids[${#pids[@]}-1]'
 }
 
 # expect <what> <want-stderr> <rt> <bin> <args...>: exit 3, empty stdout,
