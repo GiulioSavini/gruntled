@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -108,6 +109,30 @@ func TestReportBlastTooLargeRefusal(t *testing.T) {
 	if got.code != exitFailure || got.stdout != "" ||
 		got.stderr != "gruntled: the blast view is 70000123 bytes, over the 64 MiB response cap; run gruntled blast --base <dir>\n" {
 		t.Fatalf("%s", got)
+	}
+}
+
+// TestReportRefusalSanitised (16-SECURITY F1): a daemon refusal other than
+// the blast too_large one reaches report and report --blast stderr with
+// its controls neutralised, in every format, exit 3, empty stdout.
+func TestReportRefusalSanitised(t *testing.T) {
+	fixture := "testdata/sarif-fixture"
+	const want = "gruntled: the daemon refused the request: [2Jpwn\n"
+	for _, args := range [][]string{
+		{"--format", "text"},
+		{"--format", "json"},
+		{"--blast"},
+		{"--blast", "--format", "json"},
+	} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			env := envAt(shortBase(t))
+			rawDaemon(t, env, fixture, answer(`{"v":2,"ok":false,"error":"\u001b[2Jpwn\u009b","code":"malformed"}`+"\n"))
+			got := runReportArgs(env, "linux", append(args, fixture)...)
+			assertNoRawControls(t, "stderr", got.stderr)
+			if got.code != exitFailure || got.stdout != "" || got.stderr != want {
+				t.Fatalf("%s", got)
+			}
+		})
 	}
 }
 
