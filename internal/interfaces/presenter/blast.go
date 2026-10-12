@@ -28,11 +28,35 @@ type blastDoc struct {
 	Version  int             `json:"version"`
 	Kind     string          `json:"kind"`
 	Baseline bool            `json:"baseline"`
+	Daemon   *blastDaemon    `json:"daemon_baseline,omitempty"` // daemon output only
 	Note     string          `json:"note,omitempty"`
 	Broken   []blastBroken   `json:"broken"`
 	Impacted []blastImpacted `json:"impacted"`
 	Changes  []blastChange   `json:"changes"`
 	Summary  blastSummary    `json:"summary"`
+}
+
+// blastDaemon is the daemon_baseline member: present only in a daemon's
+// blast view (BlastJSONDaemon), never in blast --base output.
+type blastDaemon struct {
+	Source            string `json:"source"`
+	Generation        uint64 `json:"generation"`
+	CurrentGeneration uint64 `json:"current_generation"`
+}
+
+// DaemonBaseline names a watch daemon's baseline: where it came from
+// ("watch start" or "rebase"), its generation and the generation it is
+// compared with.
+type DaemonBaseline struct {
+	Source                        string
+	Generation, CurrentGeneration uint64
+}
+
+// DaemonBaselineLabel is the BlastText label of a daemon blast view:
+// "daemon generation <G0> (<source>), current generation <G>". It is plain
+// text; BlastText escapes it.
+func DaemonBaselineLabel(d DaemonBaseline) string {
+	return "daemon generation " + strconv.FormatUint(d.Generation, 10) + " (" + d.Source + "), current generation " + strconv.FormatUint(d.CurrentGeneration, 10)
 }
 
 type blastBroken struct {
@@ -334,10 +358,22 @@ func writeTypeChanges(b *bytes.Buffer, changes []impact.SurfaceChange) {
 // and changes lists. The encoded bytes go through escapeJSON, so DEL, C1,
 // format and line/paragraph separator runes are written as \uXXXX.
 func BlastJSON(w io.Writer, res impact.Result) error {
+	return blastJSON(w, res, nil)
+}
+
+// BlastJSONDaemon is BlastJSON with a daemon_baseline member
+// {source, generation, current_generation} directly after "baseline". Only
+// a watch daemon's blast view carries it.
+func BlastJSONDaemon(w io.Writer, res impact.Result, d DaemonBaseline) error {
+	return blastJSON(w, res, &blastDaemon{Source: d.Source, Generation: d.Generation, CurrentGeneration: d.CurrentGeneration})
+}
+
+func blastJSON(w io.Writer, res impact.Result, daemon *blastDaemon) error {
 	doc := blastDoc{
 		Version:  blastSchemaVersion,
 		Kind:     blastKind,
 		Baseline: res.Baseline,
+		Daemon:   daemon,
 		Broken:   []blastBroken{},
 		Impacted: []blastImpacted{},
 		Changes:  []blastChange{},

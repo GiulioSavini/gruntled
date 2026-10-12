@@ -2,8 +2,6 @@ package presenter_test
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -74,25 +72,35 @@ func TestBlastJSONDaemonMember(t *testing.T) {
 	}
 }
 
-// TestBlastJSONUnchanged pins BlastJSON's bytes for the presenter fixtures
-// as they were before the daemon member existed.
+// fnv64a is FNV-1a 64; the presenter allowlist has no hash package.
+func fnv64a(s string) uint64 {
+	h := uint64(14695981039346656037)
+	for i := 0; i < len(s); i++ {
+		h ^= uint64(s[i])
+		h *= 1099511628211
+	}
+	return h
+}
+
+// TestBlastJSONUnchanged pins BlastJSON's bytes (FNV-1a 64) for the
+// presenter fixtures as they were before the daemon member existed; the
+// values were recorded at 7a0911c, together with their sha256.
 func TestBlastJSONUnchanged(t *testing.T) {
 	g, _ := blastGRT004(t)
 	for name, c := range map[string]struct {
 		res  impact.Result
-		want string
+		want uint64
 	}{
-		"nobaseline": {impact.Result{}, "a4e91394d4d84b970bb9f63218478569771e34dd75e28eb322ea37eda7624a11"},
-		"mixed":      {blastMixed(t), "3a65b44abdcc9109531ef56e14483c21a2e9b9a0d87388531136edd4ba931698"},
-		"chain":      {blastChain(t), "6bf60e33d00d82086e0075454a66dfd8ddbf3a9fd8332114553a478b4bd34926"},
-		"typed":      {typedResult(t), "48fa3b8ad100a7ccdd6fd7d8213512601a9432a40a14f09556f509c16c64e4c7"},
-		"crafted":    {blastCrafted(t), "9b2bb8d56b56c75d8afcdb4f98b08b54d0e992ebd6c0955906f842cf2e3ce2bc"},
-		"grt004":     {g, "2f766d57d86cb68b7a17a8b3f3594c41fe00ebe0dde96a2a853648506681844d"},
+		"nobaseline": {impact.Result{}, 0x8d0186cab214dc64},
+		"mixed":      {blastMixed(t), 0xd7b0de2ae72aa6e1},
+		"chain":      {blastChain(t), 0x9f952f495ba5dcb6},
+		"typed":      {typedResult(t), 0xabc9bfa6c5616ddc},
+		"crafted":    {blastCrafted(t), 0xe6656df9430f0589},
+		"grt004":     {g, 0x6cc24018c5bc8def},
 	} {
 		out := renderBlastJSON(t, c.res)
-		sum := sha256.Sum256([]byte(out))
-		if got := hex.EncodeToString(sum[:]); got != c.want || strings.Contains(out, "daemon_baseline") {
-			t.Errorf("%s: BlastJSON sha256 %s, want %s", name, got, c.want)
+		if got := fnv64a(out); got != c.want || strings.Contains(out, "daemon_baseline") {
+			t.Errorf("%s: BlastJSON fnv64a %#x, want %#x", name, got, c.want)
 		}
 	}
 }
