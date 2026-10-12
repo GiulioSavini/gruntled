@@ -1,20 +1,57 @@
 ---
 phase: 17-corpus-mutation-proof-cross-phase-audit
 audited: 2026-10-12
-auditor: gruntled-sec (cross-phase code-audit for milestone v0.4, 17-05 Task 1 step 1, plus secure-phase 17)
-scope: "git diff v0.3.0..HEAD -- ':!.planning' at master 7bf149c; phase 17 scripts and corpus.yml; integration F1/F2/F4 fixes 0682227..7bf149c"
-verdict: OPEN_THREATS (0 blocking)
+auditor: gruntled-sec (cross-phase code-audit for milestone v0.4, 17-05 Task 1 step 1, plus secure-phase 17; re-audit of 4c42aab..a11dc37)
+scope: "git diff v0.3.0..HEAD -- ':!.planning' at master 7bf149c; phase 17 scripts and corpus.yml; integration F1/F2/F4 fixes 0682227..7bf149c; re-audit 88a62aa..a11dc37"
+verdict: SECURED (1 open condition: F1 closes on corpus run 38264937436)
 threats_total: 46
 threats_mitigated: 45
 threats_accepted: 1
 threats_na: 0
 threats_open: 0
-findings: { blocker: 0, high: 0, medium: 1, low: 0, info: 4 }
+findings: { blocker: 0, high: 0, medium: 1, low: 0, info: 4 }  # F1 fixed in 4c42aab/acf2759 (closes on corpus run 38264937436); F2, F4, F5 closed; F3 accepted
 ---
 
 # Phase 17 Security (cross-phase audit, v0.4)
 
-## Verdict
+## Re-audit (88a62aa..a11dc37)
+
+Verdict **SECURED, with one open condition.** The MEDIUM (F1) is fixed in code and test. It
+closes when corpus run 38264937436 on a11dc37 finishes green. At the time of writing, its
+`download modules`, `fetch corpora` and `allow unprivileged user namespaces` steps had
+passed, and the `corpus gate` step was still running. Every other finding is closed or
+accepted, and all 46 threat rows stay CLOSED.
+
+- **F1** (4c42aab red, acf2759 fix).
+  - 4c42aab: TestCIDoc requires a `download modules` step that runs `go mod download` and
+    then `go mod verify`, placed before `bash scripts/corpus-gate.sh`.
+  - acf2759: corpus.yml adds that step right after setup-go. It keeps `cache: false`. The
+    step runs before `fetch corpora`, so no corpus content is on disk while the job has
+    network for module downloads, and `go mod verify` checks the downloads against go.sum.
+    The gate stays offline (`GOPROXY=off`, `-mod=readonly`, `unshare -rn`, `NONET=1`).
+  - The earlier failure (run 38263198748) came seconds after the gate started. The new run
+    is past that point, but it is not yet green.
+  - docs/validation.md records the step.
+  - TestCIDoc and TestValidationDocPins pass locally.
+- **F2 / row 7 / integration F3.** CI run 38264926783 on a11dc37 is green on every job:
+  check (staticcheck, test, fuzz, govulncheck, release build), architecture, test-os
+  windows and macos, recipe-check and sarif-upload. Its `test` step runs
+  TestBlastSizeBound and TestReportBlastSizeBound, so row 7 now **holds at HEAD**.
+- **F4** (a11dc37). The commit moves `noReplyError`, `readReply`, `getHandler` and
+  `readLine` from ipc.go into `sock_unix.go` (linux || darwin), and `editorPattern` from
+  ignore.go into `native_unix.go` (!windows).
+  - It is a pure move: the sorted removed and added lines are identical except for one
+    added `"io"` import.
+  - Windows needs none of the moved code. It has no socket server or client, and
+    `ReadDump` keeps its own cap.
+  - `GOOS=windows go vet` on ipc and watch is clean, and windows CI is green on
+    38264926783.
+- **F5** (8bdb620). The no-execution claim is now scoped to fetch-corpora.sh, the gate and
+  corpus.yml. The phase 5 terragrunt oracle is named as the exception, gated by
+  `GRUNTLED_TERRAGRUNT_BIN`. This is in validation.md, the script header and the
+  T-17-01-2, T-17-03-7 and T-17-04-5 rows of the SUMMARYs. No code changed.
+
+## Initial audit verdict (7bf149c, superseded by the re-audit above)
 
 **OPEN_THREATS (0 blocking).** 0 BLOCKER, 0 HIGH, 1 MEDIUM, 0 LOW, 4 INFO.
 
@@ -180,8 +217,8 @@ findings: { blocker: 0, high: 0, medium: 1, low: 0, info: 4 }
 | Integration ID | Fix | Status |
 |---|---|---|
 | F1 (staticcheck red) | 0682227: S1011 `append(m.Sites, mu.Sites...)`, S1016 `oracleSource(unit)`, removal of the unused `served`. All three preserve behaviour | **Closed.** The CI `staticcheck` step is green on 7bf149c (run 38263188666) |
-| F2 (corpus.yml cannot pass) | 1a6467b (TestCIDoc pins the sysctl before the gate), 78fa801 (the step), 7bf149c (docs) | **Partly closed.** Isolation now works (`network=isolated` in run 38263198748), but the gate fails offline on an empty module cache. See F1 below |
-| F3 (no CI proof for row 7) | follows F1 | Pending the `test` step of run 38263188666 |
+| F2 (corpus.yml cannot pass) | 1a6467b (TestCIDoc pins the sysctl before the gate), 78fa801 (the step), 7bf149c (docs); then 4c42aab/acf2759 (module download) | **Fixed; closes on corpus run 38264937436.** Isolation works (run 38263198748), and the empty module cache is filled by the new step |
+| F3 (no CI proof for row 7) | follows F1 | **Closed.** CI run 38264926783 on a11dc37 is green, including `test` |
 | F4 (topUsage report line) | ed1ce2f (red: TestTopUsageMatchesDocs), 5ee63ff (`main.go:56`, docs/cli.md) | **Closed.** The test passes |
 
 ## Findings
