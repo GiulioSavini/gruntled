@@ -1,10 +1,11 @@
 ---
 phase: 15
 slug: type-level-surface-facts
-status: approved
+status: validated
 nyquist_compliant: true
-wave_0_complete: false
+wave_0_complete: true
 created: 2026-10-10
+validated: 2026-10-12 (17-00)
 ---
 
 # Phase 15 — Validation Strategy
@@ -52,21 +53,21 @@ PATH for every command: `export PATH=$HOME/.local/go/bin:$HOME/go/bin:$PATH`.
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 15-00-01 | 00 | 0 | BLAST-07 (sec #261) | unit (pre-scan) | `go test -count=1 ./internal/infrastructure/hclconv/` | ✅ limits_test.go (extended) | ⬜ pending |
-| 15-00-02 | 00 | 0 | BLAST-07 (sec #261) | loader regression + byte gate | `go test -count=1 ./internal/infrastructure/... && bash scripts/compare-ref.sh v0.3.0` | ❌ W0 (terragrunt + tfsurface limits_regression_test.go) | ⬜ pending |
-| 15-01-01 | 01 | 1 | BLAST-06..08, 10 | unit | `go test -count=1 ./internal/domain/repograph/` | ✅ surface_test.go (extended) | ⬜ pending |
-| 15-01-02 | 01 | 1 | BLAST-08 | unit + byte gate | `go test -count=1 ./internal/infrastructure/... && bash scripts/compare-ref.sh v0.3.0` | ❌ W0 (hclconv/literal.go, literal_test.go) | ⬜ pending |
-| 15-02-01 | 02 | 2 | BLAST-07, SEC-01 | unit + property + fuzz + six-target | `go test -count=1 -run TestTypeSig ./internal/infrastructure/tfsurface/ && go test -run '^$' -fuzz FuzzTypeSig -fuzztime 20s ./internal/infrastructure/tfsurface/ && bash scripts/check-architecture.sh` | ❌ W0 (typesig.go, typesig_test.go) | ⬜ pending |
-| 15-02-02 | 02 | 2 | BLAST-06..08, 10 | unit + metamorphic | `go test -count=1 ./internal/infrastructure/tfsurface/ && bash scripts/compare-ref.sh v0.3.0` | ❌ W0 (facts.go, facts_test.go) | ⬜ pending |
-| 15-02-03 | 02 | 2 | BLAST-07 (proof) | architecture rule + self-test | `bash scripts/check-architecture.sh && bash scripts/test-check-architecture.sh` | ✅ scripts (extended) | ⬜ pending |
-| 15-03-01 | 03 | 2 | BLAST-06..08, 10 | unit matrix + xorshift | `go test -count=1 -run 'TestTypeChange\|TestSurfaceDiff' ./internal/domain/impact/` | ❌ W0 (typefacts_test.go) | ⬜ pending |
-| 15-03-02 | 03 | 2 | BLAST-09 | unit + property | `go test -count=1 ./internal/domain/... ./internal/application/...` | ✅ | ⬜ pending |
-| 15-04-01 | 04 | 3 | BLAST-11, SEC-01 | presenter unit | `go test -count=1 ./internal/interfaces/presenter/` | ✅ blast_test.go (extended) | ⬜ pending |
-| 15-04-02 | 04 | 3 | BLAST-06..10 | testscript + depth-1 contract | `go test -count=1 -run 'TestScripts/blast\|TestBlastDepth1MatchesV1\|TestBlastTransitive' ./cmd/gruntled/` | ❌ W0 (blast_types.txtar) | ⬜ pending |
-| 15-04-03 | 04 | 3 | all (docs) | doc guard | `go test -count=1 -run 'TestRuleRegistryDoc\|TestHelpMatchesDocs\|TestReadme\|TestSARIFDoc' ./cmd/gruntled/` | ✅ | ⬜ pending |
-| 15-05-01 | 05 | 4 | SEC-01 | e2e escape | `go test -count=1 -run TestTextOutputsEscapeControls ./cmd/gruntled/` | ✅ escape_test.go (extended) | ⬜ pending |
-| 15-05-02 | 05 | 4 | BLAST-11 | built-binary size/RSS | `go test -count=1 -run TestBlastSizeBound -timeout 600s ./cmd/gruntled/` | ❌ W0 (blast_bound_test.go) | ⬜ pending |
-| 15-05-03 | 05 | 4 | all | gate | full suite + compare-ref (+ perturb) + test-txtar-extract + snapshot provenance + 60 s fuzz + build-release + go.mod/go.sum | ✅ | ⬜ pending |
+| 15-00-01 | 00 | 0 | BLAST-07 (sec #261) | unit (pre-scan) | `go test -count=1 ./internal/infrastructure/hclconv/` | ✅ limits_test.go (extended) | ✅ green (local 17-00: hclconv ok) |
+| 15-00-02 | 00 | 0 | BLAST-07 (sec #261) | loader regression + byte gate | `go test -count=1 ./internal/infrastructure/... && bash scripts/compare-ref.sh v0.3.0` | ❌ W0 (terragrunt + tfsurface limits_regression_test.go) | ✅ green (local 17-00: 7 infrastructure packages ok one at a time; compare-ref 244/244) |
+| 15-01-01 | 01 | 1 | BLAST-06..08, 10 | unit | `go test -count=1 ./internal/domain/repograph/` | ✅ surface_test.go (extended) | ✅ green (local 17-00: repograph ok) |
+| 15-01-02 | 01 | 1 | BLAST-08 | unit + byte gate | `go test -count=1 ./internal/infrastructure/... && bash scripts/compare-ref.sh v0.3.0` | ❌ W0 (hclconv/literal.go, literal_test.go) | ✅ green (local 17-00: infrastructure packages ok; compare-ref 244/244) |
+| 15-02-01 | 02 | 2 | BLAST-07, SEC-01 | unit + property + fuzz + six-target | `go test -count=1 -run TestTypeSig ./internal/infrastructure/tfsurface/ && go test -run '^$' -fuzz FuzzTypeSig -fuzztime 20s ./internal/infrastructure/tfsurface/ && bash scripts/check-architecture.sh` | ❌ W0 (typesig.go, typesig_test.go) | ✅ green (local 17-00: TestTypeSig ok, check-architecture OK; fuzz: CI 38157144902, CI 38229787854 FuzzTypeSig step 161,135 execs/30 s) |
+| 15-02-02 | 02 | 2 | BLAST-06..08, 10 | unit + metamorphic | `go test -count=1 ./internal/infrastructure/tfsurface/ && bash scripts/compare-ref.sh v0.3.0` | ❌ W0 (facts.go, facts_test.go) | ✅ green (local 17-00: tfsurface ok; compare-ref 244/244) |
+| 15-02-03 | 02 | 2 | BLAST-07 (proof) | architecture rule + self-test | `bash scripts/check-architecture.sh && bash scripts/test-check-architecture.sh` | ✅ scripts (extended) | ✅ green (local 17-00: check-architecture OK; test-check-architecture: CI architecture job 38157144902, CI 38229787854, no architecture script changed since) |
+| 15-03-01 | 03 | 2 | BLAST-06..08, 10 | unit matrix + xorshift | `go test -count=1 -run 'TestTypeChange\|TestSurfaceDiff' ./internal/domain/impact/` | ❌ W0 (typefacts_test.go) | ✅ green (local 17-00: impact -run TestTypeChange|TestSurfaceDiff ok) |
+| 15-03-02 | 03 | 2 | BLAST-09 | unit + property | `go test -count=1 ./internal/domain/... ./internal/application/...` | ✅ | ✅ green (local 17-00: 4 domain + 4 application packages ok) |
+| 15-04-01 | 04 | 3 | BLAST-11, SEC-01 | presenter unit | `go test -count=1 ./internal/interfaces/presenter/` | ✅ blast_test.go (extended) | ✅ green (local 17-00: presenter ok) |
+| 15-04-02 | 04 | 3 | BLAST-06..10 | testscript + depth-1 contract | `go test -count=1 -run 'TestScripts/blast\|TestBlastDepth1MatchesV1\|TestBlastTransitive' ./cmd/gruntled/` | ❌ W0 (blast_types.txtar) | ✅ green (local 17-00: 31 PASS, 0 FAIL/SKIP) |
+| 15-04-03 | 04 | 3 | all (docs) | doc guard | `go test -count=1 -run 'TestRuleRegistryDoc\|TestHelpMatchesDocs\|TestReadme\|TestSARIFDoc' ./cmd/gruntled/` | ✅ | ✅ green (local 17-00: 4 PASS) |
+| 15-05-01 | 05 | 4 | SEC-01 | e2e escape | `go test -count=1 -run TestTextOutputsEscapeControls ./cmd/gruntled/` | ✅ escape_test.go (extended) | ✅ green (local 17-00: 10 PASS) |
+| 15-05-02 | 05 | 4 | BLAST-11 | built-binary size/RSS | `go test -count=1 -run TestBlastSizeBound -timeout 600s ./cmd/gruntled/` | ❌ W0 (blast_bound_test.go) | ✅ green (CI-only bound test: non-short `go test ./...` in 38157144902 and CI 38229787854: check job linux -race, test-os macos and windows, cmd/gruntled ok) |
+| 15-05-03 | 05 | 4 | all | gate | full suite + compare-ref (+ perturb) + test-txtar-extract + snapshot provenance + 60 s fuzz + build-release + go.mod/go.sum | ✅ | ✅ green (local 17-00: -short suites, vet, compare-ref 244/244, test-txtar-extract, go mod verify; CI-only: -race, fuzz, build-release, non-short suite in 38157144902 and CI 38229787854) |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -119,4 +120,16 @@ step of its own task.
 - [x] Feedback latency < 20s
 - [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending (draft at plan time; set to validated after execution)
+**Approval:** validated 2026-10-12 (17-00): every row re-run locally (`-short`, one package at a time) or cited to a green CI run.
+
+## Validation Audit (17-00, 2026-10-12, master 8f7f441)
+
+| Item | Result |
+|------|--------|
+| Gaps found | 0 (every requirement BLAST-06..11, SEC-01 has an automated command) |
+| Wave 0 files | all present: terragrunt and tfsurface limits_regression_test.go, hclconv/literal.go + literal_test.go, tfsurface typesig.go, typesig_test.go, facts.go, facts_test.go, impact/typefacts_test.go, blast_types.txtar, blast_bound_test.go |
+| Local evidence | per-row in the map above |
+| CI evidence | 38157144902 (3ed44ae, phase 15 close) and 38229787854 (d99714e): check (linux, -race, fuzz), test-os macos and windows, architecture all success |
+| Manual-only rows | `-race` and fuzz: CI runs above; RSS bound: CI linux/macos/windows non-short runs above |
+| Note | check_json_type_bomb.txtar from the Success Criteria table was replaced by cmd/gruntled/type_bomb_test.go (15-02 deviation 1) |
+

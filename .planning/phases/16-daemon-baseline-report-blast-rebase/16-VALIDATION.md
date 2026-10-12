@@ -1,10 +1,11 @@
 ---
 phase: 16
 slug: daemon-baseline-report-blast-rebase
-status: executed
+status: validated
 nyquist_compliant: true
 wave_0_complete: true
 created: 2026-10-12
+validated: 2026-10-12 (17-00)
 revised: 2026-10-12 (sec plan review #348-#357: F1-F9 + INFO)
 ---
 
@@ -68,20 +69,20 @@ SEC-01 report half (`TestTextOutputsEscapeControls` report --blast subtests), T-
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 16-00-01 | 00 | 1 | (CI health, D-16-09) | unit | `go test -count=1 -run 'TestFuzzTypeSigSeedsSmall\|TestTypeSigFormerFuzzSeeds\|FuzzTypeSig' -timeout 120s ./internal/infrastructure/tfsurface/` | ✅ typesig_test.go (extended) | ✅ green |
-| 16-00-02 | 00 | 1 | (CI health) | doc pin + CI log | `go test -count=1 -run TestCIDoc ./cmd/gruntled/` | ✅ ci_doc_test.go (extended) | ✅ green |
-| 16-01-01 | 01 | 1 | DAEMON-09, DAEMON-10 | unit (wire) | `go test -count=1 -run 'TestRespond\|TestRequestFitsMaxRequest\|TestDecodeResponse\|TestSnapshotJSONByteExact' ./internal/infrastructure/ipc/` (canonical form F2, empty view F5) | ✅ ipc_test.go (extended) | ✅ green |
-| 16-01-02 | 01 | 1 | DAEMON-08 (transport), DAEMON-10 | socket + dump + Seal/alloc (F1) + outcome unknown (F6) | `go test -count=1 -timeout 120s ./internal/infrastructure/ipc/ && GOOS=windows GOARCH=arm64 go build ./cmd/gruntled` | ✅ sock_unix_test.go (extended) | ✅ green |
-| 16-01-03 | 01 | 1 | DAEMON-09 | compat matrix | `go test -count=1 -run 'TestCompat\|TestReportResponseHasNoBlast' ./internal/infrastructure/ipc/ && go test -count=1 -run 'TestReport\|TestPublisherSnapshots' ./cmd/gruntled/` | ❌ W0 (compat_unix_test.go, v1frozen_test.go) | ✅ green |
-| 16-02-01 | 02 | 2 | DAEMON-07 | presenter unit | `go test -count=1 ./internal/interfaces/presenter/` | ❌ W0 (blast_daemon_test.go) | ✅ green |
-| 16-02-02 | 02 | 2 | DAEMON-07, 08, 10 | white-box + concurrency (EventFailed interleaved, F4) + atomic commit (F3) | `go test -count=1 -run 'TestPublisher\|TestRebase\|TestBaselineHoldsOnlyReport' -timeout 300s ./cmd/gruntled/` | ❌ W0 (baseline_test.go) | ✅ green |
-| 16-02-03 | 02 | 2 | DAEMON-08 | daemon socket | `go test -count=1 -run 'TestInstance\|TestRebase\|TestDaemonRebaseSocket\|TestShutdownWithRebaseInFlight\|TestWatch\|TestReport' -timeout 300s ./cmd/gruntled/` | ✅ instance_test.go (extended) | ✅ green |
-| 16-03-01 | 03 | 3 | DAEMON-07, 09 | CLI + txtar | `go test -count=1 -run 'TestReport\|TestScripts/report' -timeout 300s ./cmd/gruntled/` | ❌ W0 (fakev1_unix_test.go) | ✅ green |
-| 16-03-02 | 03 | 3 | DAEMON-08 | CLI + txtar | `go test -count=1 -run 'TestRebase\|TestScripts/(rebase\|usage)\|TestRunExitCodes' -timeout 300s ./cmd/gruntled/` | ❌ W0 (rebase.go, rebase_test.go, rebase_usage.txtar) | ✅ green |
-| 16-03-03 | 03 | 3 | DAEMON-08 (docs) | doc guard | `go test -count=1 -run 'TestHelpMatchesDocs\|TestDaemonDocs\|TestReadme\|TestRuleRegistryDoc\|TestCIDoc\|TestScripts' ./cmd/gruntled/` | ❌ W0 (daemon_doc_test.go) | ✅ green |
-| 16-04-01 | 04 | 4 | DAEMON-07, SEC-01, T-13-02-7 | property + e2e | `go test -count=1 -short -run 'TestDaemonBlastEqualsBlastBase\|TestNormaliseDaemonBlast\|TestReportBlastE2E\|TestReportBlastPitfall15\|TestTextOutputsEscapeControls' -timeout 600s ./cmd/gruntled/` | ❌ W0 (daemon_blast_test.go) | ✅ green |
-| 16-04-02 | 04 | 4 | DAEMON-10, BLAST-11 | memory + built-binary bound | `go test -count=1 -short -run 'TestDaemonMemorySynthrepo\|TestValidationDocPins\|TestReportBlastSizeBound' -v -timeout 600s ./cmd/gruntled/` (5,000 units and the bound: CI) | ❌ W0 (daemon_mem_test.go) | ✅ green |
-| 16-04-03 | 04 | 4 | DAEMON-09, all | gate | `bash scripts/compat-v1.sh v0.3.0` + architecture + compare-ref + txtar-extract + mod verify + build-release + vet + `-short` suites + eval-site grep | ❌ W0 (compat-v1.sh) | ✅ green |
+| 16-00-01 | 00 | 1 | (CI health, D-16-09) | unit | `go test -count=1 -run 'TestFuzzTypeSigSeedsSmall\|TestTypeSigFormerFuzzSeeds\|FuzzTypeSig' -timeout 120s ./internal/infrastructure/tfsurface/` | ✅ typesig_test.go (extended) | ✅ green (local 17-00) |
+| 16-00-02 | 00 | 1 | (CI health) | doc pin + CI log | `go test -count=1 -run TestCIDoc ./cmd/gruntled/` | ✅ ci_doc_test.go (extended) | ✅ green (local 17-00: 7 PASS) |
+| 16-01-01 | 01 | 1 | DAEMON-09, DAEMON-10 | unit (wire) | `go test -count=1 -run 'TestRespond\|TestRequestFitsMaxRequest\|TestDecodeResponse\|TestSnapshotJSONByteExact' ./internal/infrastructure/ipc/` (canonical form F2, empty view F5) | ✅ ipc_test.go (extended) | ✅ green (local 17-00) |
+| 16-01-02 | 01 | 1 | DAEMON-08 (transport), DAEMON-10 | socket + dump + Seal/alloc (F1) + outcome unknown (F6) | `go test -count=1 -timeout 120s ./internal/infrastructure/ipc/ && GOOS=windows GOARCH=arm64 go build ./cmd/gruntled` | ✅ sock_unix_test.go (extended) | ✅ green (local 17-00; windows/arm64 build ok) |
+| 16-01-03 | 01 | 1 | DAEMON-09 | compat matrix | `go test -count=1 -run 'TestCompat\|TestReportResponseHasNoBlast' ./internal/infrastructure/ipc/ && go test -count=1 -run 'TestReport\|TestPublisherSnapshots' ./cmd/gruntled/` | ❌ W0 (compat_unix_test.go, v1frozen_test.go) | ✅ green (local 17-00: ipc ok; cmd 66 PASS) |
+| 16-02-01 | 02 | 2 | DAEMON-07 | presenter unit | `go test -count=1 ./internal/interfaces/presenter/` | ❌ W0 (blast_daemon_test.go) | ✅ green (local 17-00) |
+| 16-02-02 | 02 | 2 | DAEMON-07, 08, 10 | white-box + concurrency (EventFailed interleaved, F4) + atomic commit (F3) | `go test -count=1 -run 'TestPublisher\|TestRebase\|TestBaselineHoldsOnlyReport' -timeout 300s ./cmd/gruntled/` | ❌ W0 (baseline_test.go) | ✅ green (local 17-00: 29 PASS) |
+| 16-02-03 | 02 | 2 | DAEMON-08 | daemon socket | `go test -count=1 -run 'TestInstance\|TestRebase\|TestDaemonRebaseSocket\|TestShutdownWithRebaseInFlight\|TestWatch\|TestReport' -timeout 300s ./cmd/gruntled/` | ✅ instance_test.go (extended) | ✅ green (local 17-00: 126 PASS) |
+| 16-03-01 | 03 | 3 | DAEMON-07, 09 | CLI + txtar | `go test -count=1 -run 'TestReport\|TestScripts/report' -timeout 300s ./cmd/gruntled/` | ❌ W0 (fakev1_unix_test.go) | ✅ green (local 17-00: 68 PASS) |
+| 16-03-02 | 03 | 3 | DAEMON-08 | CLI + txtar | `go test -count=1 -run 'TestRebase\|TestScripts/(rebase\|usage)\|TestRunExitCodes' -timeout 300s ./cmd/gruntled/` | ❌ W0 (rebase.go, rebase_test.go, rebase_usage.txtar) | ✅ green (local 17-00: 45 PASS) |
+| 16-03-03 | 03 | 3 | DAEMON-08 (docs) | doc guard | `go test -count=1 -run 'TestHelpMatchesDocs\|TestDaemonDocs\|TestReadme\|TestRuleRegistryDoc\|TestCIDoc\|TestScripts' ./cmd/gruntled/` | ❌ W0 (daemon_doc_test.go) | ✅ green (local 17-00: 37 PASS) |
+| 16-04-01 | 04 | 4 | DAEMON-07, SEC-01, T-13-02-7 | property + e2e | `go test -count=1 -short -run 'TestDaemonBlastEqualsBlastBase\|TestNormaliseDaemonBlast\|TestReportBlastE2E\|TestReportBlastPitfall15\|TestTextOutputsEscapeControls' -timeout 600s ./cmd/gruntled/` | ❌ W0 (daemon_blast_test.go) | ⚠️ flaky (green local 17-00: 20 PASS, and in CI 38225491068 (f05cecc), 38227195245 (a50d203), 38228443297 (c083bef), 38229787854 (d99714e); failed once on macos in CI 38231782360 (d1f79ed): TestReportBlastE2E/linux/type-only_change, see Validation Audit) |
+| 16-04-02 | 04 | 4 | DAEMON-10, BLAST-11 | memory + built-binary bound | `go test -count=1 -short -run 'TestDaemonMemorySynthrepo\|TestValidationDocPins\|TestReportBlastSizeBound' -v -timeout 600s ./cmd/gruntled/` (5,000 units and the bound: CI) | ❌ W0 (daemon_mem_test.go) | ✅ green (local 17-00: 500 units, doc pins; 5,000 units and TestReportBlastSizeBound CI-only, non-short in 38225491068 (f05cecc), 38227195245 (a50d203), 38228443297 (c083bef), 38229787854 (d99714e)) |
+| 16-04-03 | 04 | 4 | DAEMON-09, all | gate | `bash scripts/compat-v1.sh v0.3.0` + architecture + compare-ref + txtar-extract + mod verify + build-release + vet + `-short` suites + eval-site grep | ❌ W0 (compat-v1.sh) | ✅ green (local 17-00: compat-v1 7/7, compare-ref 244/244, check-architecture OK, test-txtar-extract, go mod verify, vet, -short suites; build-release in CI 38225491068 (f05cecc), 38227195245 (a50d203), 38228443297 (c083bef), 38229787854 (d99714e)) |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -152,3 +153,13 @@ targeted `-run`, never `-race` locally.
 - [x] `nyquist_compliant: true` set in frontmatter
 
 **Approval:** local gate green at 16-04 (2026-10-12, evidence in 16-04-SUMMARY.md); the CI items (-race, fuzz rate, windows/macos, bound tests in CI) are confirmed on the push of the 16-04 commits.
+
+## Validation Audit (17-00, 2026-10-12, master 8f7f441)
+
+| Item | Result |
+|------|--------|
+| Gaps found | 1: row 16-04-01 is flaky in CI (below). Listed, not fixed here (outside 17-00 files); reported to the orchestrator on the bus (#440) |
+| Flake | CI 38231782360 (d1f79ed, a config-only commit), test-os macos: TestReportBlastE2E/linux/type-only_change, daemon_blast_test.go:827, report --blast `Impacted (0)` at current generation 2 against blast --base `Impacted (2)`. waitBlastFinal (daemon_blast_test.go:696) compares report and check text, which a type-only change leaves identical, so `CurrentGeneration >= 2` can be met by a poll before the rename lands |
+| CI evidence | 38225491068 (f05cecc), 38227195245 (a50d203), 38228443297 (c083bef), 38229787854 (d99714e): check (linux, -race, fuzz), test-os macos and windows, architecture all success |
+| Manual-only rows | `-race`, fuzz health, bound tests, 5,000-unit memory, windows report-file path: the CI runs above; compat-v1 7/7 re-run locally |
+| Windows | test-os (windows-latest) green on every master run from c083bef: 38228443297, 38229787854, 38231782360, 38233897723 |
