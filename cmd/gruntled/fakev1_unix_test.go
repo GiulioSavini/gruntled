@@ -5,6 +5,7 @@ package main
 import (
 	"bufio"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"sync"
@@ -106,6 +107,48 @@ func TestReportBlastTooLargeRefusal(t *testing.T) {
 	got := runReportArgs(env, "linux", "--blast", fixture)
 	if got.code != exitFailure || got.stdout != "" ||
 		got.stderr != "gruntled: the blast view is 70000123 bytes, over the 64 MiB response cap; run gruntled blast --base <dir>\n" {
+		t.Fatalf("%s", got)
+	}
+}
+
+const outcomeUnknown = "gruntled: no usable answer from the daemon; the baseline may or may not have moved; run gruntled report --blast to check\n"
+
+func TestRebaseOutcomeUnknownCLI(t *testing.T) {
+	fixture := "testdata/sarif-fixture"
+	for name, reply := range map[string]func(*os.File, []byte){
+		"ok without rebase": answer(`{"v":2,"ok":true,"info":{"pid":1}}` + "\n"),
+		"garbage":           answer("garbage\n"),
+		"truncated":         answer(`{"v":2,"ok":true,"info":`),
+	} {
+		t.Run(name, func(t *testing.T) {
+			env := envAt(shortBase(t))
+			rawDaemon(t, env, fixture, reply)
+			got := runRebaseAt(env, "linux", fixture)
+			if got.code != exitFailure || got.stdout != "" || got.stderr != outcomeUnknown {
+				t.Fatalf("%s", got)
+			}
+		})
+	}
+}
+
+func TestRebaseTimeoutUnknown(t *testing.T) {
+	setSeam(t, &rebaseTimeout, 200*time.Millisecond)
+	fixture := "testdata/sarif-fixture"
+	env := envAt(shortBase(t))
+	rawDaemon(t, env, fixture, func(conn *os.File, _ []byte) { _, _ = io.Copy(io.Discard, conn) })
+	got := runRebaseAt(env, "linux", fixture)
+	want := "gruntled: no usable answer from the daemon (no answer within 200ms); the baseline may or may not have moved; run gruntled report --blast to check\n"
+	if got.code != exitFailure || got.stdout != "" || got.stderr != want {
+		t.Fatalf("%s", got)
+	}
+}
+
+func TestRebaseV1(t *testing.T) {
+	fixture := "testdata/sarif-fixture"
+	env := envAt(shortBase(t))
+	rawDaemon(t, env, fixture, answer(v1Reply))
+	got := runRebaseAt(env, "linux", fixture)
+	if got.code != exitFailure || got.stdout != "" || got.stderr != v1Mismatch {
 		t.Fatalf("%s", got)
 	}
 }

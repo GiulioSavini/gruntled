@@ -9,6 +9,8 @@ stderr 'usage: gruntled <command>'
 stderr '^  check   '
 stderr '^  graph   print the repository graph as JSON \(--json\)$'
 stderr '^  blast   '
+stderr '^  rebase  '
+stderr '"gruntled rebase -h"'
 stderr '^  --version   print the version and commit, then exit$'
 exec gruntled-exit 0 --help
 exec gruntled-exit 0 help

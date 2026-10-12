@@ -1,0 +1,60 @@
+# top-level help lists rebase
+exec gruntled-exit 0 help
+stderr '^  rebase  '
+stderr '"gruntled rebase -h"'
+
+# rebase help: exit 0, flag and exit codes
+exec gruntled-exit 0 rebase -h
+stderr '^usage: gruntled rebase \[--expect N\] \[path\]$'
+stderr '--expect N'
+stderr '^  0  baseline moved'
+stderr '^  2  usage error'
+stderr '^  3  no daemon'
+! stderr '^  1  '
+! stdout .
+
+# invalid --expect: exit 2 with usage
+exec gruntled-exit 2 rebase --expect ''
+stderr 'invalid --expect ""'
+stderr '^usage: gruntled rebase '
+! stdout .
+exec gruntled-exit 2 rebase --expect 0
+stderr 'invalid --expect "0"'
+! stdout .
+exec gruntled-exit 2 rebase --expect 01
+stderr 'invalid --expect "01"'
+! stdout .
+exec gruntled-exit 2 rebase --expect +1
+stderr 'invalid --expect "\+1"'
+! stdout .
+exec gruntled-exit 2 rebase --expect -1
+stderr 'invalid --expect "-1"'
+! stdout .
+exec gruntled-exit 2 rebase --expect x
+stderr 'invalid --expect "x"'
+! stdout .
+exec gruntled-exit 2 rebase --expect 18446744073709551616
+stderr 'invalid --expect "18446744073709551616"'
+! stdout .
+
+# unknown flag and two paths: exit 2 with usage
+exec gruntled-exit 2 rebase --bogus
+stderr 'flag provided but not defined'
+stderr '^usage: gruntled rebase '
+! stdout .
+exec gruntled-exit 2 rebase a b
+stderr 'more than one path given'
+stderr '^usage: gruntled rebase '
+! stdout .
+
+# no daemon: exit 3, nothing created
+env XDG_RUNTIME_DIR=$WORK/rt
+mkdir $WORK/rt
+exec gruntled-exit 3 rebase repo
+stderr 'no watch daemon is running for '
+! stdout .
+! exists $WORK/rt/gruntled
+
+-- repo/vpc/terragrunt.hcl --
+-- repo/vpc/main.tf --
+output "vpc_id" { value = "x" }
