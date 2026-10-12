@@ -97,16 +97,6 @@ func (d *corpusDaemon) report(args ...string) cliResult {
 	return d.client(append([]string{"report"}, args...)...)
 }
 
-// served returns the current generation of the daemon's blast view.
-func (d *corpusDaemon) served(dir string) uint64 {
-	r := d.report("--blast", dir)
-	b, ok := servedBaseline(r.stdout)
-	if !ok {
-		return 0
-	}
-	return b.CurrentGeneration
-}
-
 // waitFinal waits until the daemon serves a generation after `after`, its
 // plain report equals check on cur (it indexed the final tree, never a
 // half-written file), and its normalised blast view equals blast --base

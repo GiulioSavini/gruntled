@@ -613,9 +613,7 @@ func buildCorpusModel(t testing.TB, root string) *corpusModel {
 				m.Rev[e.Target] = append(m.Rev[e.Target], u)
 			}
 		}
-		for i := range mu.Sites {
-			m.Sites = append(m.Sites, mu.Sites[i])
-		}
+		m.Sites = append(m.Sites, mu.Sites...)
 	}
 	for k, v := range m.Rev {
 		slices.Sort(v)
@@ -697,7 +695,7 @@ func (m *corpusModel) buildUnit(u string, isUnit map[string]bool) *modelUnit {
 	notes := map[string]int{}
 	srcs := []modelSourceFile{unit}
 	mu.Files = []string{rel}
-	for _, inc := range oracleIncludes(m.Root, u, oracleSource{rel: unit.rel, src: unit.src, mask: unit.mask}, notes) {
+	for _, inc := range oracleIncludes(m.Root, u, oracleSource(unit), notes) {
 		f, err := m.readSource(inc)
 		if err != nil {
 			mu.ConfigOK, mu.ConfigWhy, mu.ConfigAt = false, "include unreadable", inc
