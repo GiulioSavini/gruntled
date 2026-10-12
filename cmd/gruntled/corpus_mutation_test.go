@@ -252,7 +252,7 @@ func (p *typeParser) typ() bool {
 type declInfo struct {
 	count  map[string]int
 	linked map[string]bool
-	block map[string]struct {
+	block  map[string]struct {
 		File string
 		B    tfBlock
 		Src  string
@@ -583,17 +583,44 @@ var mutationClasses = []string{"M1", "M2", "M3", "M4", "M5", "M6", "M7", "M9"}
 // exclusions per corpus and class (sec #418); 17-04 pins the same values
 // in docs/validation.md.
 var corpusMutationPins = map[string]map[string]mutPin{
-	"iso20022": {},
-	"secret":   {},
-	"denis256": {},
+	"iso20022": {
+		"M1": {Sites: 4},
+		"M2": {Sites: 392},
+		"M3": {Sites: 62},
+		"M4": {Sites: 0, Excluded: map[string]int{"declared-in-shared-link": 372}}, // every default is in the shared global.tf (M9)
+		"M5": {Sites: 75, Excluded: map[string]int{"declared-in-shared-link": 372}},
+		"M6": {Sites: 396},
+		"M7": {Sites: 396},
+		"M9": {Sites: 12, Excluded: map[string]int{"linker-of-excluded-units": 3}},
+	},
+	"secret": {
+		"M1": {Sites: 3},
+		"M2": {Sites: 1},
+		"M3": {Sites: 3},
+		"M4": {Sites: 4},
+		"M5": {Sites: 8},
+		"M6": {Sites: 4},
+		"M7": {Sites: 4},
+		"M9": {Sites: 0},
+	},
+	"denis256": {
+		"M1": {Sites: 87, Touch: 8}, // the catRefOther (module, output) pairs
+		"M2": {Sites: 387},
+		"M3": {Sites: 795},
+		"M4": {Sites: 41},
+		"M5": {Sites: 708, Excluded: map[string]int{"type-grammar": 1}},
+		"M6": {Sites: 481, Excluded: map[string]int{"type-declared": 1}},
+		"M7": {Sites: 482},
+		"M9": {Sites: 0},
+	},
 }
 
 // corpusDepthPins pins, per corpus, the mutations whose expected result has
 // an entry at distance >= 2, 3, 4 and 5 (M8).
 var corpusDepthPins = map[string][4]int{
-	"iso20022": {},
-	"secret":   {},
-	"denis256": {},
+	"iso20022": {67, 0, 0, 0},
+	"secret":   {14, 0, 0, 0},
+	"denis256": {667, 147, 67, 12},
 }
 
 // TestCorpusMutation17 runs the mutation set, one class per subtest.
