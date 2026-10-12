@@ -60,6 +60,50 @@ func TestCIDoc(t *testing.T) {
 	wf := readRepoFile(t, ".github/workflows/ci.yml")
 	hooks := readRepoFile(t, ".pre-commit-hooks.yaml")
 
+	// The corpus suite (17-04) runs only in its own workflow, on demand and
+	// weekly, with read-only permissions, no secrets, no persisted token and
+	// no shared Go cache (sec #420); ci.yml never runs it.
+	t.Run("corpus_workflow", func(t *testing.T) {
+		cw := readRepoFile(t, ".github/workflows/corpus.yml")
+		for _, s := range []string{
+			"workflow_dispatch:",
+			"schedule:",
+			"- cron: ",
+			"permissions:\n  contents: read",
+			"timeout-minutes: 150",
+			"persist-credentials: false",
+			"fetch-depth: 0",
+			"cache: false",
+			"go-version-file: go.mod",
+			`bash scripts/fetch-corpora.sh "$RUNNER_TEMP/corpus"`,
+			`>> "$GITHUB_ENV"`,
+			"CORPUS_GATE_NONET: \"1\"",
+			"bash scripts/corpus-gate.sh",
+		} {
+			if !strings.Contains(cw, s) {
+				t.Errorf("corpus.yml: missing %q", s)
+			}
+		}
+		for _, p := range ciPins[:2] {
+			if uses := "uses: " + p.action + "@" + p.sha + " # " + p.version; !strings.Contains(cw, uses) {
+				t.Errorf("corpus.yml: missing %q (the same action version as ci.yml)", uses)
+			}
+		}
+		for _, bad := range []string{"secrets.", "write", "upload-artifact", "pull_request", "push:"} {
+			if strings.Contains(cw, bad) {
+				t.Errorf("corpus.yml: must not contain %q", bad)
+			}
+		}
+		if strings.Count(cw, "uses: ") != 2 {
+			t.Errorf("corpus.yml: %d actions, want exactly checkout and setup-go", strings.Count(cw, "uses: "))
+		}
+		for _, bad := range []string{"GRUNTLED_CORPUS", "corpus-gate", "fetch-corpora"} {
+			if strings.Contains(wf, bad) {
+				t.Errorf("ci.yml must not run the corpus suite: contains %q", bad)
+			}
+		}
+	})
+
 	t.Run("pins", func(t *testing.T) {
 		for _, p := range ciPins {
 			uses := "uses: " + p.action + "@" + p.sha + " # " + p.version
