@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"crypto/sha256"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -109,15 +110,18 @@ func TestRebaseRefusalsCLI(t *testing.T) {
 }
 
 // treeState is path, mode, size, mtime and sha256 of every entry under
-// root, or "" when root does not exist.
+// root, or "" when root does not exist. Metadata comes from os.Lstat, never
+// from the walk's DirEntry: on windows that is the directory listing's
+// copy (FindFirstFile data), which NTFS updates lazily, so a file held
+// open or a directory just written to can show a stale size or mtime.
 func treeState(t *testing.T, root string) string {
 	t.Helper()
 	var b strings.Builder
-	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+	err := filepath.WalkDir(root, func(p string, _ fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		fi, err := d.Info()
+		fi, err := os.Lstat(p)
 		if err != nil {
 			return err
 		}
@@ -126,8 +130,7 @@ func treeState(t *testing.T, root string) string {
 			data, err := os.ReadFile(p)
 			switch {
 			case err == nil:
-				sum := sha256.Sum256(data)
-				b.WriteString(" " + string(sum[:]))
+				b.WriteString(fmt.Sprintf(" %x", sha256.Sum256(data)))
 			case runtime.GOOS == "windows":
 				// A held lock file cannot be opened on windows; its
 				// mode, size and mtime are still compared.
@@ -169,10 +172,35 @@ func TestRebaseWindowsUnsupported(t *testing.T) {
 		if got.code != exitFailure || got.stdout != "" || got.stderr != want {
 			t.Fatalf("%s", got)
 		}
-		if treeState(t, base) != before {
-			t.Fatal("rebase changed the runtime base")
+		if after := treeState(t, base); after != before {
+			t.Fatalf("rebase changed the runtime base:\n%s", lineDiff(before, after))
 		}
 	})
+}
+
+// lineDiff lists the lines only in before ("- ") and only in after
+// ("+ "), so a failed no-write check says what changed.
+func lineDiff(before, after string) string {
+	in := func(s string) map[string]bool {
+		m := map[string]bool{}
+		for _, l := range strings.Split(s, "\n") {
+			m[l] = true
+		}
+		return m
+	}
+	b, a := in(before), in(after)
+	var out strings.Builder
+	for _, l := range strings.Split(before, "\n") {
+		if !a[l] {
+			out.WriteString("- " + l + "\n")
+		}
+	}
+	for _, l := range strings.Split(after, "\n") {
+		if !b[l] {
+			out.WriteString("+ " + l + "\n")
+		}
+	}
+	return out.String()
 }
 
 func TestRebaseWritesNothing(t *testing.T) {
@@ -191,7 +219,7 @@ func TestRebaseWritesNothing(t *testing.T) {
 	for _, args := range [][]string{{dir}, {"--expect", "999", dir}, {dir}} {
 		runRebaseAt(deps.env, "linux", args...)
 		if after := state(); after != before {
-			t.Fatalf("rebase %v changed the repo, runtime base or status file:\nbefore\n%s\nafter\n%s", args, before, after)
+			t.Fatalf("rebase %v changed the repo, runtime base or status file:\n%s", args, lineDiff(before, after))
 		}
 	}
 	t.Run("no daemon", func(t *testing.T) {
