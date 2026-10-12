@@ -48,13 +48,25 @@ jobs:
       - name: test
         run: go test -race -count=1 ./...
       - name: fuzz FuzzTypeSig
-        # 30 s of FuzzTypeSig on top of its seed corpus (sec #250a). A
-        # failing input is written under testdata/fuzz; list it so the path
-        # is in the log. CI never commits it.
+        # 30 s of FuzzTypeSig on top of its seed corpus (sec #250a).
+        # Minimization is bounded by count: 200x is the same budget on every
+        # runner, while the default (60 s per new input) ate the whole 30 s
+        # window and left the step green at 0 execs/s. No rate threshold: it
+        # would flake. The full output goes to fuzz.log; success prints the
+        # last progress line, failure prints the panic and stack and cats the
+        # failing inputs so the reproducer is in the log. CI never commits it.
         timeout-minutes: 5
         run: |
-          if ! go test -run '^$' -fuzz '^FuzzTypeSig$' -fuzztime 30s ./internal/infrastructure/tfsurface/; then
-            ls -R internal/infrastructure/tfsurface/testdata/fuzz || true
+          set -o pipefail
+          log="$RUNNER_TEMP/fuzz.log"
+          if go test -run '^$' -fuzz '^FuzzTypeSig$' -fuzztime 30s -fuzzminimizetime 200x ./internal/infrastructure/tfsurface/ 2>&1 | tee "$log" >/dev/null; then
+            tail -n 5 "$log"
+          else
+            tail -n 200 "$log"
+            for f in internal/infrastructure/tfsurface/testdata/fuzz/FuzzTypeSig/*; do
+              [ -f "$f" ] || continue
+              echo "=== $f"; cat "$f"
+            done
             exit 1
           fi
       - name: sarif-schema
