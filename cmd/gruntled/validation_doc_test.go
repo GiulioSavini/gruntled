@@ -70,9 +70,50 @@ func TestValidationDocPins(t *testing.T) {
 		"VALIDATION-BENCH daemon_mem units=5000 ",
 		"TestDaemonMemorySynthrepo",
 	)
+	want = append(want, rel03DocPins()...)
 	for _, s := range want {
 		if !strings.Contains(doc, s) {
 			t.Errorf("docs/validation.md does not contain %q", s)
 		}
 	}
+}
+
+// rel03DocPins are the REL-03 strings docs/validation.md must hold, built
+// from the package-level values the gated corpus tests assert, so a changed
+// count, category or exception fails until the doc is updated.
+func rel03DocPins() []string {
+	pins := []string{
+		"## v0.4: blast on the real corpora (REL-03)",
+		corpusPinnedCommit, secretPinnedCommit, denisPinnedCommit,
+		"scripts/fetch-corpora.sh", "scripts/corpus-gate.sh",
+		"corpus-gate: network=isolated", "corpus-gate: 31/31",
+		"256/256 identical",
+		"TestCorpusDaemonSample",
+		m17SentinelCanon,
+	}
+	pins = append(pins, rel03Exceptions...)
+	corpora := []string{"iso20022", "secret", "denis256"}
+	for _, c := range corpora {
+		for _, class := range mutationClasses {
+			p := corpusMutationPins[c][class]
+			pins = append(pins, fmt.Sprintf("CORPUS-MUTATION %s %s sites=%d caught=%d excluded_by_touch=%d", c, class, p.Sites, p.Sites, p.Touch))
+		}
+		d := corpusDepthPins[c]
+		pins = append(pins, fmt.Sprintf("CORPUS-MUTATION %s M8 depth>=2=%d depth>=3=%d depth>=4=%d depth>=5=%d", c, d[0], d[1], d[2], d[3]))
+		pins = append(pins, fmt.Sprintf("| %s | %d | %d | %.3f |", c, corpusIncluded[c], corpusGraphKnown[c], float64(corpusIncluded[c])/float64(corpusGraphKnown[c])))
+	}
+	// Exclusion totals per category: | `category` | iso20022 | secret | denis256 | total |
+	count := map[string]map[string]int{}
+	for _, c := range corpora {
+		for _, e := range corpusExclusions[c] {
+			if count[e.Category] == nil {
+				count[e.Category] = map[string]int{}
+			}
+			count[e.Category][c]++
+		}
+	}
+	for cat, byC := range count {
+		pins = append(pins, fmt.Sprintf("| `%s` | %d | %d | %d | %d |", cat, byC["iso20022"], byC["secret"], byC["denis256"], byC["iso20022"]+byC["secret"]+byC["denis256"]))
+	}
+	return pins
 }

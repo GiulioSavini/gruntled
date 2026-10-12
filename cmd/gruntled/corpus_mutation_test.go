@@ -34,6 +34,16 @@ import (
 	"time"
 )
 
+// rel03Exceptions are the four named exceptions to exact equality (sec
+// #419). docs/validation.md states each sentence verbatim next to the claim
+// (TestValidationDocPins).
+var rel03Exceptions = []string{
+	"type_changes.old is compared exactly for an absent type (any) and for the primitives string, number and bool; for any other type it is only checked to be non-empty and different from new.",
+	"GRT004 messages are compared by prefix; the M1 dual oracle against v0.3.0 compares the full message after rewriting `was removed from` to `is not declared by`.",
+	"Text output is checked by tokens once per class; the JSON document is the authority and is compared exactly.",
+	"The M5 SENTINEL canonical string is pinned from HEAD after a hand check against the D-15 rendering rules.",
+}
+
 const refBinVersion = "gruntled v0.3.0 (e870e2984760f0a674bc87697e3f69329613758e)"
 
 var refBinChecked sync.Map // path -> error

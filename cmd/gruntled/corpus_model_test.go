@@ -1901,6 +1901,9 @@ func TestCorpusBlastModel(t *testing.T) {
 				fmt.Fprintf(&b, " excluded_%s=%d", strings.ReplaceAll(c, " ", "_"), counts[c])
 			}
 			t.Log(b.String())
+			if gk := graphKnownModules(t, root); gk != corpusGraphKnown[r.Name] {
+				t.Errorf("graph --json known modules %d, pinned %d", gk, corpusGraphKnown[r.Name])
+			}
 			if len(included) != pin {
 				t.Errorf("included modules %d, pinned %d", len(included), pin)
 			}
@@ -2094,6 +2097,10 @@ var corpusEligibilityGap = map[string]map[string]int{
 	// eligible modules are not gruntled-known (modules of excluded units).
 	"denis256": {"generate-may-change-surface": 14, "not-a-model-module": 1},
 }
+
+// corpusGraphKnown pins the known modules of graph --json per corpus, the
+// denominator of the included share (TestCorpusBlastModel asserts it).
+var corpusGraphKnown = map[string]int{"iso20022": 62, "secret": 3, "denis256": 818}
 
 // corpusIncluded pins the included-module count per corpus.
 var corpusIncluded = map[string]int{
