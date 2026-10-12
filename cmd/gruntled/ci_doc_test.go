@@ -113,6 +113,35 @@ func TestCIDoc(t *testing.T) {
 		}
 	})
 
+	t.Run("fuzz step", func(t *testing.T) {
+		step := workflowStep(workflowJob(wf, "check"), "fuzz FuzzTypeSig")
+		if step == "" {
+			t.Fatal("ci.yml job check: step \"fuzz FuzzTypeSig\" not found")
+		}
+		for _, s := range []string{
+			"timeout-minutes: 5",
+			"set -o pipefail",
+			"-run '^$' -fuzz '^FuzzTypeSig$'",
+			"-fuzztime 30s",
+			"-fuzzminimizetime 200x",
+			`tee "$log"`,
+			`log="$RUNNER_TEMP/fuzz.log"`,
+			`tail -n 5 "$log"`,
+			`tail -n 200 "$log"`,
+			"for f in internal/infrastructure/tfsurface/testdata/fuzz/FuzzTypeSig/*; do",
+			`cat "$f"`,
+		} {
+			if !strings.Contains(step, s) {
+				t.Errorf("ci.yml fuzz step: missing %q", s)
+			}
+		}
+		for _, s := range []string{"secrets.", "permissions:"} {
+			if strings.Contains(step, s) {
+				t.Errorf("ci.yml fuzz step: unexpected %q", s)
+			}
+		}
+	})
+
 	t.Run("hook file", func(t *testing.T) {
 		lines := map[string]bool{}
 		for _, l := range strings.Split(hooks, "\n") {
@@ -144,4 +173,28 @@ func TestCIDoc(t *testing.T) {
 			}
 		}
 	})
+}
+
+// workflowStep returns the text of one step of a job: from its
+// "- name: <name>" line up to the next "- name:" line at the same indent.
+func workflowStep(job, name string) string {
+	lines := strings.Split(job, "\n")
+	start, indent := -1, ""
+	for i, l := range lines {
+		if t := strings.TrimLeft(l, " "); t == "- name: "+name {
+			start, indent = i, l[:len(l)-len(t)]
+			break
+		}
+	}
+	if start < 0 {
+		return ""
+	}
+	end := len(lines)
+	for i := start + 1; i < len(lines); i++ {
+		if strings.HasPrefix(lines[i], indent+"- ") {
+			end = i
+			break
+		}
+	}
+	return strings.Join(lines[start:end], "\n")
 }
