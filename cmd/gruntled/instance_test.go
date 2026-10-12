@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -318,4 +319,194 @@ func TestPublisherSnapshots(t *testing.T) {
 	p.publish(watch.Event{Kind: watch.EventReady, Report: rep})
 	want.Generation = 2
 	assertSnapshot(t, inst.snap.Load(), want)
+}
+
+func skipNoSocket(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("no unix sockets")
+	}
+}
+
+// newInstance acquires an instance for dir with deps and closes it at
+// cleanup; it returns the instance and its socket path.
+func newInstance(t *testing.T, dir string, deps watchDeps) (*instance, string) {
+	t.Helper()
+	root, rt := repoRuntime(t, dir, deps)
+	var out, errb bytes.Buffer
+	inst, code, done := acquireInstance(root, filepath.Join(t.TempDir(), "status"), deps, &out, &errb)
+	if done {
+		t.Fatalf("acquireInstance: exit %d, stderr %s", code, errb.String())
+	}
+	t.Cleanup(inst.close)
+	return inst, filepath.Join(rt, ipc.SockName)
+}
+
+func TestInstanceRebaseHook(t *testing.T) {
+	t.Run("socket", func(t *testing.T) {
+		skipNoSocket(t)
+		a, _ := abReports(t)
+		inst, sock := newInstance(t, repo(t, "vpc_id"), testDeps(t))
+		_, _, err := ipc.Rebase(sock, nil, queryTimeoutAll)
+		wantRefused(t, err, ipc.CodeIndexing)
+
+		p := newTestPublisher(t)
+		p.snapshots = inst.store
+		inst.setRebase(p.rebase)
+		_, _, err = ipc.Rebase(sock, nil, queryTimeoutAll)
+		wantRefused(t, err, ipc.CodeIndexing)
+		p.publish(ready(a))
+		_, res, err := ipc.Rebase(sock, nil, queryTimeoutAll)
+		if err != nil || res != (ipc.RebaseResult{Generation: 1, BrokenErrors: 0}) {
+			t.Fatalf("Rebase = (%+v, %v)", res, err)
+		}
+	})
+	t.Run("report file", func(t *testing.T) {
+		a, _ := abReports(t)
+		deps := testDeps(t)
+		deps.goos = "windows"
+		inst, _ := newInstance(t, repo(t, "vpc_id"), deps)
+		p := newTestPublisher(t)
+		p.snapshots = inst.store
+		inst.setRebase(p.rebase)
+		p.publish(ready(a))
+		before, err := os.ReadFile(inst.dump)
+		mustDo(t, err)
+		_, err = inst.Rebase(nil)
+		wantRefused(t, err, ipc.CodeUnsupported)
+		after, err := os.ReadFile(inst.dump)
+		mustDo(t, err)
+		if !bytes.Equal(before, after) || p.baseSource != sourceWatchStart {
+			t.Fatal("refused rebase changed the dump or the baseline")
+		}
+	})
+}
+
+const queryTimeoutAll = 10 * time.Second
+
+func TestInstanceStoreSeals(t *testing.T) {
+	a, b := abReports(t)
+	t.Run("socket", func(t *testing.T) {
+		skipNoSocket(t)
+		inst, sock := newInstance(t, repo(t, "vpc_id"), testDeps(t))
+		p := newTestPublisher(t)
+		p.snapshots = inst.store
+		p.publish(ready(a))
+		p.publish(ready(b))
+		s := inst.snap.Load()
+		if s == nil || !s.Sealed() {
+			t.Fatal("served snapshot is not sealed")
+		}
+		_, got, err := ipc.Query(sock, ipc.OpBlast, queryTimeoutAll)
+		if err != nil || !bytes.Equal(got.Blast.Text, s.Blast.Text) || !bytes.Equal(got.Blast.JSON, s.Blast.JSON) || got.Blast.BrokenErrors != s.Blast.BrokenErrors {
+			t.Fatalf("Query(blast) = (%+v, %v)", got, err)
+		}
+	})
+	t.Run("report file", func(t *testing.T) {
+		deps := testDeps(t)
+		deps.goos = "windows"
+		inst, _ := newInstance(t, repo(t, "vpc_id"), deps)
+		p := newTestPublisher(t)
+		p.snapshots = inst.store
+		p.publish(ready(a))
+		p.publish(ready(b))
+		s := inst.snap.Load()
+		_, got, err := ipc.ReadDump(inst.dump)
+		if err != nil || !s.Sealed() || got.Blast == nil || !bytes.Equal(got.Blast.Text, s.Blast.Text) || !bytes.Equal(got.Blast.JSON, s.Blast.JSON) {
+			t.Fatalf("dump blast = (%+v, %v)", got, err)
+		}
+	})
+}
+
+// runtimeListing is the names, sizes and modes in dir.
+func runtimeListing(t *testing.T, dir string) string {
+	t.Helper()
+	ents, err := os.ReadDir(dir)
+	mustDo(t, err)
+	var b strings.Builder
+	for _, e := range ents {
+		fi, err := e.Info()
+		mustDo(t, err)
+		b.WriteString(e.Name() + " " + strconv.FormatInt(fi.Size(), 10) + " " + fi.Mode().String() + "\n")
+	}
+	return b.String()
+}
+
+func TestDaemonRebaseSocket(t *testing.T) {
+	skipNoSocket(t)
+	dir := repo(t, "vpc_id")
+	deps := testDeps(t)
+	_, rt := repoRuntime(t, dir, deps)
+	sock := filepath.Join(rt, ipc.SockName)
+	d := startWatch(t, dir, deps)
+	var gen uint64
+	eventually(t, func() bool {
+		_, s, err := ipc.Query(sock, ipc.OpReport, queryTimeoutAll)
+		if err == nil && s != nil {
+			gen = s.Generation
+			return true
+		}
+		return false
+	}, "a report", func() string { return d.stderr.String() })
+	status, err := os.ReadFile(d.status)
+	mustDo(t, err)
+	listing := runtimeListing(t, rt)
+
+	_, res, err := ipc.Rebase(sock, nil, queryTimeoutAll)
+	if err != nil || res.Generation != gen {
+		t.Fatalf("Rebase = (%+v, %v), want generation %d", res, err, gen)
+	}
+	_, s, err := ipc.Query(sock, ipc.OpBlast, queryTimeoutAll)
+	if err != nil || !strings.HasPrefix(string(s.Blast.Text), "baseline: daemon generation "+strconv.FormatUint(gen, 10)+" (rebase), current generation ") {
+		t.Fatalf("Query(blast) = (%v, %v)", s, err)
+	}
+	after, err := os.ReadFile(d.status)
+	mustDo(t, err)
+	if !bytes.Equal(status, after) || runtimeListing(t, rt) != listing {
+		t.Fatal("rebase changed the status file or the runtime directory")
+	}
+}
+
+func TestShutdownWithRebaseInFlight(t *testing.T) {
+	skipNoSocket(t)
+	dir := repo(t, "vpc_id")
+	deps := testDeps(t)
+	_, rt := repoRuntime(t, dir, deps)
+	sock := filepath.Join(rt, ipc.SockName)
+	d := startWatch(t, dir, deps)
+	waitPingAny(t, sock)
+	stop := make(chan struct{})
+	var loops atomic.Int32
+	go func() {
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+				_, _, _ = ipc.Rebase(sock, nil, time.Second)
+				loops.Add(1)
+			}
+		}
+	}()
+	defer close(stop)
+	eventually(t, func() bool { return loops.Load() > 5 }, "rebase calls", nil)
+	d.cancel()
+	select {
+	case code := <-d.done:
+		d.stopped, d.code = true, code
+		if code != exitOK {
+			t.Fatalf("exit %d; stderr:\n%s", code, d.stderr.String())
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("daemon did not exit within 5 s with rebases in flight")
+	}
+}
+
+// waitPingAny waits until something answers a ping on sock.
+func waitPingAny(t *testing.T, sock string) {
+	t.Helper()
+	eventually(t, func() bool {
+		_, _, err := ipc.Query(sock, ipc.OpPing, queryTimeoutAll)
+		return err == nil
+	}, "ping", nil)
 }

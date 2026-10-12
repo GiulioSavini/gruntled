@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
@@ -17,6 +18,7 @@ import (
 	"github.com/GiulioSavini/gruntled/internal/application/checking"
 	"github.com/GiulioSavini/gruntled/internal/domain/diagnostic"
 	"github.com/GiulioSavini/gruntled/internal/domain/impact"
+	"github.com/GiulioSavini/gruntled/internal/domain/repograph"
 	"github.com/GiulioSavini/gruntled/internal/infrastructure/ipc"
 	"github.com/GiulioSavini/gruntled/internal/infrastructure/statusfile"
 	"github.com/GiulioSavini/gruntled/internal/infrastructure/watch"
@@ -453,5 +455,146 @@ func TestRebaseConcurrentPublish(t *testing.T) {
 	v := p.served.Load().Blast
 	if v.BrokenErrors != 0 || !strings.Contains(string(v.Text), "Broken (0):") || !strings.Contains(string(v.Text), "Impacted (0):") {
 		t.Fatalf("final view:\n%s", v.Text)
+	}
+}
+
+// baseGraph reads the baseline's graph under the publisher's mutex.
+func (p *watchPublisher) baseGraph() *repograph.RepositoryGraph {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.base.Graph
+}
+
+// scriptWatcher is a watch.Watcher fed by the test; Take drains Ready.
+type scriptWatcher struct {
+	mu    sync.Mutex
+	ready chan struct{}
+	paths []string
+}
+
+func newScriptWatcher() *scriptWatcher { return &scriptWatcher{ready: make(chan struct{}, 1)} }
+
+func (w *scriptWatcher) Ready() <-chan struct{} { return w.ready }
+func (w *scriptWatcher) Close() error           { return nil }
+
+func (w *scriptWatcher) Take() watch.Changes {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	select {
+	case <-w.ready:
+	default:
+	}
+	c := watch.Changes{Paths: w.paths}
+	w.paths = nil
+	return c
+}
+
+func (w *scriptWatcher) feed(p string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.paths = append(w.paths, p)
+	select {
+	case w.ready <- struct{}{}:
+	default:
+	}
+}
+
+// gate blocks one Index call until released.
+type gate struct{ entered, release chan struct{} }
+
+func newGate() gate { return gate{make(chan struct{}), make(chan struct{})} }
+
+func (g gate) await(t *testing.T) {
+	t.Helper()
+	select {
+	case <-g.entered:
+	case <-time.After(watchTimeout):
+		t.Fatal("Index call not entered")
+	}
+}
+
+// scriptIndexer returns reps[n-1] for its n-th call; gates[n] blocks it.
+type scriptIndexer struct {
+	mu    sync.Mutex
+	n     int
+	reps  []checking.Report
+	gates map[int]gate
+}
+
+func (x *scriptIndexer) Index(ctx context.Context, _ []string, _ bool) (checking.Report, error) {
+	x.mu.Lock()
+	x.n++
+	n := x.n
+	x.mu.Unlock()
+	if g, ok := x.gates[n]; ok {
+		close(g.entered)
+		select {
+		case <-g.release:
+		case <-ctx.Done():
+			return checking.Report{}, ctx.Err()
+		}
+	}
+	return x.reps[min(n, len(x.reps))-1], nil
+}
+
+// TestRebaseNeverSkippedReport: a reindex result skipped because newer
+// changes were pending never becomes the baseline; rebase installs the
+// Report of the last EventReady.
+func TestRebaseNeverSkippedReport(t *testing.T) {
+	dir := repo(t, "vpc_id")
+	r1, r2, r3 := freshReport(t, dir), freshReport(t, dir), freshReport(t, dir)
+	g2, g3 := newGate(), newGate()
+	w := newScriptWatcher()
+	p := newTestPublisher(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		done <- watch.Run(ctx, watch.Config{
+			Watcher: w,
+			Indexer: &scriptIndexer{reps: []checking.Report{r1, r2, r3}, gates: map[int]gate{2: g2, 3: g3}},
+			Publish: p.publish,
+			Quiet:   5 * time.Millisecond,
+			MaxWait: 50 * time.Millisecond,
+		})
+	}()
+	defer func() {
+		cancel()
+		if err := <-done; err != nil {
+			t.Errorf("Run = %v", err)
+		}
+	}()
+	gen := func() uint64 {
+		if s := p.served.Load(); s != nil {
+			return s.Generation
+		}
+		return 0
+	}
+	eventually(t, func() bool { return gen() == 1 }, "generation 1", nil)
+	w.feed("a/terragrunt.hcl")
+	g2.await(t)
+	w.feed("b/terragrunt.hcl") // pending when call 2 returns: R2 is skipped
+	close(g2.release)
+	g3.await(t) // call 3 runs: R2 was skipped and never published
+	res, err := p.rebase(nil)
+	if err != nil || res.Generation != 1 || p.baseGraph() != r1.Graph {
+		t.Fatalf("rebase in the skip window = (%+v, %v); base is R1: %v", res, err, p.baseGraph() == r1.Graph)
+	}
+	close(g3.release)
+	eventually(t, func() bool { return gen() == 2 }, "generation 2", nil)
+	if p.baseGraph() != r1.Graph {
+		t.Fatal("publishing R3 moved the baseline")
+	}
+	if _, err := p.rebase(nil); err != nil || p.baseGraph() != r3.Graph {
+		t.Fatalf("rebase after R3 = %v; base is R3: %v", err, p.baseGraph() == r3.Graph)
+	}
+
+	// Run republishes a skipped result on a spurious Ready (run.go:128-131)
+	// as an EventReady carrying that Report: it is then the Report of the
+	// last EventReady, and rebase installs it.
+	q := newTestPublisher(t)
+	q.publish(ready(r1))
+	q.publish(ready(r2))
+	if _, err := q.rebase(nil); err != nil || q.baseGraph() != r2.Graph {
+		t.Fatalf("rebase after a republish = %v; base is R2: %v", err, q.baseGraph() == r2.Graph)
 	}
 }
