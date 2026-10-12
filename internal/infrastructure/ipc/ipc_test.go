@@ -487,3 +487,197 @@ func TestReadDumpErrors(t *testing.T) {
 		t.Fatalf("version: err = %v", err)
 	}
 }
+
+// setCap lowers responseCap for one test. No test allocates 64 MiB.
+func setCap(t *testing.T, n int) {
+	t.Helper()
+	old := responseCap
+	responseCap = n
+	t.Cleanup(func() { responseCap = old })
+}
+
+// bigBlastSnapshot has a blast view of about n bytes and small check bytes.
+func bigBlastSnapshot(n int) *Snapshot {
+	s := blastSnapshot()
+	s.Blast.Text = bytes.Repeat([]byte("t"), n/2)
+	s.Blast.JSON = bytes.Repeat([]byte("j"), n/2)
+	return s
+}
+
+func TestCapString(t *testing.T) {
+	for n, want := range map[int]string{64 << 20: "64 MiB", 8 << 10: "8 KiB", 1000: "1000 bytes"} {
+		if got := capString(n); got != want {
+			t.Fatalf("capString(%d) = %q, want %q", n, got, want)
+		}
+	}
+}
+
+var blastRequest = []byte(`{"v":2,"op":"blast"}` + "\n")
+
+func TestSealBlast(t *testing.T) {
+	info := sampleInfo()
+	t.Run("in cap keeps bytes, line equals the per-request encoding", func(t *testing.T) {
+		s := blastSnapshot()
+		view := s.Blast
+		Seal(info, s)
+		if !s.Sealed() || s.Blast != view {
+			t.Fatalf("sealed %v, view replaced %v", s.Sealed(), s.Blast != view)
+		}
+		r, _ := respond(blastRequest, info, &fakeHandler{snap: s})
+		want, err := encodeLine(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(s.blastLine, want) {
+			t.Fatalf("sealed line\n%s\nwant\n%s", s.blastLine, want)
+		}
+		if got := answer(blastRequest, info, &fakeHandler{snap: s}); !bytes.Equal(got, want) {
+			t.Fatalf("answer = %s, want %s", got, want)
+		}
+		first := append([]byte(nil), s.blastLine...)
+		Seal(info, s)
+		if !bytes.Equal(s.blastLine, first) {
+			t.Fatal("second Seal changed the line")
+		}
+	})
+	t.Run("over cap swaps in a too-large copy", func(t *testing.T) {
+		setCap(t, 8<<10)
+		s := bigBlastSnapshot(16 << 10)
+		orig := s.Blast
+		origText := append([]byte(nil), orig.Text...)
+		Seal(info, s)
+		v := s.Blast
+		if v == orig || v.Text != nil || v.JSON != nil || v.TooLarge <= int64(8<<10) {
+			t.Fatalf("view after Seal = %+v", v)
+		}
+		if v.BaselineGeneration != orig.BaselineGeneration || v.BaselineSource != orig.BaselineSource ||
+			v.HasErrors != orig.HasErrors || v.BrokenErrors != orig.BrokenErrors || v.Error != "" {
+			t.Fatalf("metadata changed: %+v vs %+v", v, orig)
+		}
+		if !bytes.Equal(orig.Text, origText) || orig.TooLarge != 0 {
+			t.Fatal("Seal mutated the shared view in place")
+		}
+		if len(s.blastLine) > responseCap || !bytes.Contains(s.blastLine, []byte(`"too_large":`)) {
+			t.Fatalf("sealed line %d bytes: %.200s", len(s.blastLine), s.blastLine)
+		}
+		first := append([]byte(nil), s.blastLine...)
+		Seal(info, s)
+		if !bytes.Equal(s.blastLine, first) {
+			t.Fatal("second Seal changed the line")
+		}
+		if _, got, _, err := decodeResponse(answer(blastRequest, info, &fakeHandler{snap: s}), ProtocolVersion, OpBlast); err != nil || got.Blast.TooLarge != v.TooLarge {
+			t.Fatalf("decoded (%+v, %v)", got, err)
+		}
+	})
+	t.Run("struct copy re-sealed as failed", func(t *testing.T) {
+		s := blastSnapshot()
+		Seal(info, s)
+		ready := append([]byte(nil), s.blastLine...)
+		c := *s
+		c.State, c.LastError = StateFailed, "boom"
+		Seal(info, &c)
+		if !bytes.Contains(c.blastLine, []byte(`"state":"failed"`)) || !bytes.Contains(c.blastLine, []byte(`"last_error":"boom"`)) {
+			t.Fatalf("copy line %s", c.blastLine)
+		}
+		if !bytes.Equal(s.blastLine, ready) || c.Blast != s.Blast {
+			t.Fatal("re-sealing the copy changed the original or its view")
+		}
+	})
+}
+
+func TestBlastRequestAllocsConstant(t *testing.T) {
+	info := sampleInfo()
+	measure := func(t *testing.T, s *Snapshot) {
+		t.Helper()
+		h := &fakeHandler{snap: s}
+		_ = answer(blastRequest, info, h) // warm up
+		var before, after runtime.MemStats
+		runtime.GC()
+		runtime.ReadMemStats(&before)
+		for range 20 {
+			if b := answer(blastRequest, info, h); len(b) == 0 {
+				t.Fatal("empty answer")
+			}
+		}
+		runtime.ReadMemStats(&after)
+		d := after.TotalAlloc - before.TotalAlloc
+		t.Logf("20 requests allocated %d bytes (sealed line %d bytes)", d, len(s.blastLine))
+		if d >= 64<<10 {
+			t.Fatalf("20 requests allocated %d bytes, want < 64 KiB", d)
+		}
+	}
+	t.Run("in cap, 2 MiB view", func(t *testing.T) {
+		s := bigBlastSnapshot(2 << 20)
+		Seal(info, s)
+		if s.Blast.TooLarge != 0 {
+			t.Fatal("2 MiB view marked too large")
+		}
+		measure(t, s)
+	})
+	t.Run("over cap", func(t *testing.T) {
+		setCap(t, 8<<10)
+		s := bigBlastSnapshot(64 << 10)
+		Seal(info, s)
+		if s.Blast.TooLarge == 0 {
+			t.Fatal("over-cap view kept")
+		}
+		measure(t, s)
+	})
+}
+
+func TestWriteDumpDropsOversizeView(t *testing.T) {
+	setCap(t, 8<<10)
+	info := sampleInfo()
+	t.Run("over cap", func(t *testing.T) {
+		w, _ := dumpWriter(t)
+		s := bigBlastSnapshot(16 << 10)
+		orig := s.Blast
+		if err := WriteDump(w, info, s); err != nil {
+			t.Fatal(err)
+		}
+		if s.Blast != orig || len(orig.Text) == 0 {
+			t.Fatal("WriteDump changed the caller's snapshot")
+		}
+		raw, err := os.ReadFile(w.Path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(raw) > responseCap {
+			t.Fatalf("dump is %d bytes, over the cap", len(raw))
+		}
+		_, got, err := ReadDump(w.Path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		equalSnapshot(t, got, s)
+		if got.Blast == nil || got.Blast.Text != nil || got.Blast.JSON != nil || got.Blast.TooLarge <= int64(8<<10) ||
+			got.Blast.BaselineGeneration != orig.BaselineGeneration || got.Blast.BrokenErrors != orig.BrokenErrors {
+			t.Fatalf("dumped view = %+v", got.Blast)
+		}
+	})
+	t.Run("in cap", func(t *testing.T) {
+		w, _ := dumpWriter(t)
+		s := blastSnapshot()
+		if err := WriteDump(w, info, s); err != nil {
+			t.Fatal(err)
+		}
+		_, got, err := ReadDump(w.Path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		equalSnapshot(t, got, s)
+		if !reflect.DeepEqual(got.Blast, s.Blast) {
+			t.Fatalf("view = %+v, want %+v", got.Blast, s.Blast)
+		}
+	})
+	t.Run("ReadDump over cap names the cap", func(t *testing.T) {
+		p := filepath.Join(shortDir(t), DumpName)
+		if err := os.WriteFile(p, bytes.Repeat([]byte("x"), 9<<10), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		_, _, err := ReadDump(p)
+		if !errors.Is(err, errLineTooLong) || !strings.Contains(err.Error(), "8 KiB") {
+			t.Fatalf("err = %v", err)
+		}
+	})
+}

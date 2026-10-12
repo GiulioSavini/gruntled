@@ -3,11 +3,14 @@
 package ipc
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -88,7 +91,7 @@ func TestQueryIndexing(t *testing.T) {
 
 func TestQueryVersionMismatch(t *testing.T) {
 	_, sock := serve(t, func() *Snapshot { return sampleSnapshot() })
-	_, _, err := query(sock, OpReport, 1, time.Second)
+	_, _, _, err := query(sock, request{V: 1, Op: OpReport}, time.Second)
 	var ve *VersionError
 	if !errors.As(err, &ve) || ve.Daemon != 2 || ve.Client != 1 {
 		t.Fatalf("err = %v, want *VersionError{2,1}", err)
@@ -299,4 +302,230 @@ func TestConcurrentQueries(t *testing.T) {
 	for err := range errs {
 		t.Fatal(err)
 	}
+}
+
+// serveHandler starts a ServeHandler on a fresh short dir.
+func serveHandler(t *testing.T, h Handler) string {
+	t.Helper()
+	sock := filepath.Join(shortDir(t), SockName)
+	ln, err := Listen(sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := ServeHandler(ln, sampleInfo(), h)
+	t.Cleanup(func() { _ = s.Close() })
+	return sock
+}
+
+// rawServer accepts connections on a fresh socket, reads one request line
+// from each and hands it to reply, then closes the connection.
+func rawServer(t *testing.T, reply func(conn *os.File, req []byte)) string {
+	t.Helper()
+	sock := filepath.Join(shortDir(t), SockName)
+	ln, err := Listen(sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rc, err := ln.f.SyscallConn()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for {
+			conn, err := accept(rc)
+			if err != nil {
+				if errors.Is(err, os.ErrClosed) {
+					return
+				}
+				continue
+			}
+			wg.Go(func() {
+				defer conn.Close()
+				_ = conn.SetDeadline(time.Now().Add(testTimeout))
+				line, err := readLine(conn, maxRequest)
+				if err != nil {
+					return
+				}
+				reply(conn, line)
+			})
+		}
+	}()
+	t.Cleanup(func() {
+		_ = ln.f.Close()
+		<-done
+		wg.Wait()
+		_ = os.Remove(sock)
+	})
+	return sock
+}
+
+func writeLine(s string) func(*os.File, []byte) {
+	return func(conn *os.File, _ []byte) { _, _ = conn.Write([]byte(s + "\n")) }
+}
+
+// neverAnswer reads until the client gives up.
+func neverAnswer(conn *os.File, _ []byte) { _, _ = io.Copy(io.Discard, conn) }
+
+func TestServeHandlerRoundTrip(t *testing.T) {
+	snap := blastSnapshot()
+	h := &fakeHandler{snap: snap, res: RebaseResult{Generation: 11, BrokenErrors: 3}}
+	sock := serveHandler(t, h)
+
+	_, got, err := Query(sock, OpReport, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	equalSnapshot(t, got, snap)
+	if got.Blast != nil {
+		t.Fatalf("report carried a blast view: %+v", got.Blast)
+	}
+
+	_, got, err = Query(sock, OpBlast, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got.Blast, snap.Blast) || got.Text != nil || got.Generation != snap.Generation {
+		t.Fatalf("blast = %+v (view %+v)", got, got.Blast)
+	}
+
+	five := uint64(5)
+	info, res, err := Rebase(sock, &five, time.Second)
+	if err != nil || res != h.res || info != sampleInfo() {
+		t.Fatalf("Rebase = (%+v, %+v, %v)", info, res, err)
+	}
+	if h.expect == nil || *h.expect != 5 {
+		t.Fatalf("handler expect = %v, want 5", h.expect)
+	}
+	if _, _, err := Rebase(sock, nil, time.Second); err != nil || h.expect != nil {
+		t.Fatalf("Rebase(nil) = %v, handler expect %v", err, h.expect)
+	}
+}
+
+func TestServeWrapperRebaseUnsupported(t *testing.T) {
+	_, sock := serve(t, func() *Snapshot { return sampleSnapshot() })
+	_, _, err := Rebase(sock, nil, time.Second)
+	var re *RefusedError
+	if !errors.As(err, &re) || re.Code != CodeUnsupported {
+		t.Fatalf("err = %v, want code unsupported", err)
+	}
+}
+
+func TestBlastResponseCap(t *testing.T) {
+	setCap(t, 8<<10)
+	snap := bigBlastSnapshot(16 << 10)
+	sock := serveHandler(t, &fakeHandler{snap: snap})
+
+	full, err := encodeLine(snapshotResponse(sampleInfo(), snap, OpBlast))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, got, err := Query(sock, OpBlast, time.Second)
+	var re *RefusedError
+	want := "blast view is " + itoa(len(full)) + " bytes, over the 8 KiB response cap; run gruntled blast --base"
+	if !errors.As(err, &re) || re.Code != CodeTooLarge || re.Msg != want || got != nil {
+		t.Fatalf("err = %v (snapshot %v), want too_large %q", err, got, want)
+	}
+
+	if _, got, err := Query(sock, OpReport, time.Second); err != nil || got == nil {
+		t.Fatalf("report with small check bytes: (%v, %v)", got, err)
+	}
+
+	big := sampleSnapshot()
+	big.Text = bytes.Repeat([]byte("x"), 16<<10)
+	sock = serveHandler(t, &fakeHandler{snap: big})
+	_, _, err = Query(sock, OpReport, time.Second)
+	if !errors.Is(err, errLineTooLong) || !strings.Contains(err.Error(), "8 KiB") || errors.As(err, &re) || errors.Is(err, ErrNoReply) {
+		t.Fatalf("over-cap report: err = %v, want the client-side line-too-long naming 8 KiB", err)
+	}
+}
+
+func itoa(n int) string { return strconv.Itoa(n) }
+
+func TestSealedBlastOverSocket(t *testing.T) {
+	setCap(t, 8<<10)
+	s := bigBlastSnapshot(16 << 10)
+	Seal(sampleInfo(), s)
+	sock := serveHandler(t, &fakeHandler{snap: s})
+	_, got, err := Query(sock, OpBlast, time.Second)
+	if err != nil || got == nil || got.Blast.TooLarge != s.Blast.TooLarge || got.Blast.Text != nil {
+		t.Fatalf("Query(blast) = (%+v, %v), want the too-large view", got, err)
+	}
+}
+
+func TestNoReplyAfterSend(t *testing.T) {
+	const short = 200 * time.Millisecond
+	for name, reply := range map[string]func(*os.File, []byte){
+		"never answers":        neverAnswer,
+		"closes after reading": func(*os.File, []byte) {},
+	} {
+		t.Run(name, func(t *testing.T) {
+			sock := rawServer(t, reply)
+			_, _, err := Query(sock, OpReport, short)
+			if !errors.Is(err, ErrNoReply) || !strings.HasPrefix(err.Error(), "ipc: read from ") {
+				t.Fatalf("Query: err = %v, want ErrNoReply", err)
+			}
+			_, _, err = Rebase(sock, nil, short)
+			if !errors.Is(err, ErrNoReply) {
+				t.Fatalf("Rebase: err = %v, want ErrNoReply", err)
+			}
+		})
+	}
+	t.Run("dial failure", func(t *testing.T) {
+		_, _, err := Query(filepath.Join(shortDir(t), SockName), OpReport, short)
+		if !errors.Is(err, ErrNoDaemon) || errors.Is(err, ErrNoReply) {
+			t.Fatalf("err = %v", err)
+		}
+	})
+	t.Run("oversize reply", func(t *testing.T) {
+		setCap(t, 8<<10)
+		sock := rawServer(t, writeLine(strings.Repeat("x", 9<<10)))
+		_, _, err := Query(sock, OpReport, time.Second)
+		if err == nil || errors.Is(err, ErrNoReply) || !errors.Is(err, errLineTooLong) {
+			t.Fatalf("err = %v", err)
+		}
+	})
+}
+
+func TestRebaseOutcomeUnknown(t *testing.T) {
+	unknown := map[string]func(*os.File, []byte){
+		"never answers":     neverAnswer,
+		"ok without rebase": writeLine(`{"v":2,"ok":true,"info":{"pid":1}}`),
+		"garbage":           writeLine(`garbage`),
+		"over the cap":      writeLine(strings.Repeat("x", 9<<10)),
+	}
+	for name, reply := range unknown {
+		t.Run(name, func(t *testing.T) {
+			setCap(t, 8<<10)
+			sock := rawServer(t, reply)
+			_, res, err := Rebase(sock, nil, 200*time.Millisecond)
+			if !errors.Is(err, ErrOutcomeUnknown) || res != (RebaseResult{}) {
+				t.Fatalf("(%+v, %v), want ErrOutcomeUnknown", res, err)
+			}
+		})
+	}
+	t.Run("refused", func(t *testing.T) {
+		sock := rawServer(t, writeLine(`{"v":2,"ok":false,"error":"generation moved","code":"expect_mismatch"}`))
+		_, _, err := Rebase(sock, nil, time.Second)
+		var re *RefusedError
+		if !errors.As(err, &re) || re.Code != CodeExpectMismatch || errors.Is(err, ErrOutcomeUnknown) {
+			t.Fatalf("err = %v", err)
+		}
+	})
+	t.Run("version", func(t *testing.T) {
+		sock := rawServer(t, writeLine(`{"v":1,"ok":false,"error":"unsupported protocol version 2 (daemon speaks 1)"}`))
+		_, _, err := Rebase(sock, nil, time.Second)
+		var ve *VersionError
+		if !errors.As(err, &ve) || ve.Daemon != 1 || errors.Is(err, ErrOutcomeUnknown) {
+			t.Fatalf("err = %v", err)
+		}
+	})
+	t.Run("dial failure", func(t *testing.T) {
+		_, _, err := Rebase(filepath.Join(shortDir(t), SockName), nil, time.Second)
+		if !errors.Is(err, ErrNoDaemon) || errors.Is(err, ErrOutcomeUnknown) {
+			t.Fatalf("err = %v", err)
+		}
+	})
 }
