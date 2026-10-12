@@ -681,3 +681,69 @@ func TestWriteDumpDropsOversizeView(t *testing.T) {
 		}
 	})
 }
+
+// TestCompatV1Dump: a dump in the exact v0.3.0 shape is a version
+// mismatch for the v2 reader.
+func TestCompatV1Dump(t *testing.T) {
+	p := filepath.Join(shortDir(t), DumpName)
+	s := sampleSnapshot()
+	b, err := encodeLine(v1DumpFile{V: 1, Info: sampleInfo(), State: StateReady, Snapshot: &v1Snapshot{
+		State: s.State, HasErrors: s.HasErrors, Generation: s.Generation, Text: s.Text, Summary: s.Summary, JSON: s.JSON, SARIF: s.SARIF}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.HasPrefix(b, []byte(`{"v":1,"info":{`)) || !bytes.Contains(b, []byte(`"state":"ready","snapshot":{"state":"ready",`)) {
+		t.Fatalf("not the v0.3.0 shape: %s", b)
+	}
+	if err := os.WriteFile(p, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, got, err := ReadDump(p)
+	var ve *VersionError
+	if !errors.As(err, &ve) || ve.Daemon != 1 || ve.Client != 2 || got != nil {
+		t.Fatalf("(%v, %v), want *VersionError{1,2}", got, err)
+	}
+}
+
+// TestCompatV1DecoderRefusesV2Dump: the frozen v0.3.0 reader refuses a
+// dump written by the v2 WriteDump.
+func TestCompatV1DecoderRefusesV2Dump(t *testing.T) {
+	w, _ := dumpWriter(t)
+	if err := WriteDump(w, sampleInfo(), blastSnapshot()); err != nil {
+		t.Fatal(err)
+	}
+	_, got, err := v1ReadDump(w.Path)
+	var ve *VersionError
+	if !errors.As(err, &ve) || ve.Daemon != 2 || ve.Client != 1 || got != nil {
+		t.Fatalf("(%v, %v), want a version mismatch {2,1}", got, err)
+	}
+}
+
+// TestReportResponseHasNoBlast: the report response line has no blast key
+// and, with "v":2 read as "v":1, is byte-equal to v0.3.0's answer for the
+// same check fields.
+func TestReportResponseHasNoBlast(t *testing.T) {
+	info := sampleInfo()
+	s := blastSnapshot()
+	Seal(info, s)
+	for _, st := range []string{StateReady, StateFailed} {
+		c := *s
+		c.State = st
+		if st == StateFailed {
+			c.LastError = "boom"
+		}
+		got := answer([]byte(`{"v":2,"op":"report"}`+"\n"), info, &fakeHandler{snap: &c})
+		if bytes.Contains(got, []byte(`"blast"`)) {
+			t.Fatalf("report response carries blast: %s", got)
+		}
+		v1s := &v1Snapshot{State: c.State, LastError: c.LastError, HasErrors: c.HasErrors, Generation: c.Generation,
+			Text: c.Text, Summary: c.Summary, JSON: c.JSON, SARIF: c.SARIF}
+		want, err := encodeLine(v1Respond([]byte(`{"v":1,"op":"report"}`), info, func() *v1Snapshot { return v1s }))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if asV1 := bytes.Replace(got, []byte(`{"v":2,`), []byte(`{"v":1,`), 1); !bytes.Equal(asV1, want) {
+			t.Fatalf("%s: report line differs from v0.3.0 beyond the version\n got %s\nwant %s", st, asV1, want)
+		}
+	}
+}

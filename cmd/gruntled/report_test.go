@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -290,6 +291,32 @@ func TestReportWindowsFile(t *testing.T) {
 		want := "gruntled: daemon runs protocol v99, this gruntled speaks v" + strconv.Itoa(ipc.ProtocolVersion) + "; restart the daemon\n"
 		if got.code != exitFailure || got.stdout != "" || got.stderr != want {
 			t.Fatalf("protocol mismatch: %s", got)
+		}
+	})
+	t.Run("protocol v1 dump", func(t *testing.T) {
+		env := envAt(shortBase(t))
+		rt := holdDump(t, env, fixture, snap)
+		// The exact v0.3.0 dump shape: {v, info, state, snapshot{v1 fields}}.
+		v1, err := json.Marshal(struct {
+			V        int      `json:"v"`
+			Info     ipc.Info `json:"info"`
+			State    string   `json:"state"`
+			Snapshot any      `json:"snapshot"`
+		}{1, ipc.Info{PID: os.Getpid()}, ipc.StateReady, struct {
+			State      string `json:"state"`
+			HasErrors  bool   `json:"has_errors"`
+			Generation uint64 `json:"generation"`
+			Text       []byte `json:"text"`
+			Summary    []byte `json:"summary"`
+			JSON       []byte `json:"json"`
+			SARIF      []byte `json:"sarif"`
+		}{snap.State, snap.HasErrors, snap.Generation, snap.Text, snap.Summary, snap.JSON, snap.SARIF}})
+		mustDo(t, err)
+		mustDo(t, statusfile.NewWriter(filepath.Join(rt, ipc.DumpName)).Write(string(v1)+"\n"))
+		got := runReportAt(env, "windows", "text", fixture)
+		want := "gruntled: daemon runs protocol v1, this gruntled speaks v2; restart the daemon\n"
+		if got.code != exitFailure || got.stdout != "" || got.stderr != want {
+			t.Fatalf("protocol v1 dump: %s", got)
 		}
 	})
 }
