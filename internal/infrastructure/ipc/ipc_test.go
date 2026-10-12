@@ -6,8 +6,10 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/GiulioSavini/gruntled/internal/infrastructure/statusfile"
@@ -109,31 +111,166 @@ func TestVersionErrorMessage(t *testing.T) {
 	}
 }
 
+// fakeHandler is a Handler over a fixed snapshot that records Rebase calls.
+type fakeHandler struct {
+	snap *Snapshot
+	res  RebaseResult
+	err  error
+
+	mu     sync.Mutex
+	calls  int
+	expect *uint64 // copy of the last expect, nil when none was sent
+}
+
+func (h *fakeHandler) Snapshot() *Snapshot { return h.snap }
+
+func (h *fakeHandler) Rebase(expect *uint64) (RebaseResult, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.calls++
+	h.expect = nil
+	if expect != nil {
+		e := *expect
+		h.expect = &e
+	}
+	return h.res, h.err
+}
+
+func (h *fakeHandler) rebaseCalls() int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.calls
+}
+
+func sampleBlast() *BlastView {
+	return &BlastView{
+		BaselineGeneration: 3,
+		BaselineSource:     "watch start",
+		HasErrors:          true,
+		BrokenErrors:       2,
+		Text:               append([]byte("baseline: daemon generation 3\n"), invalidUTF8...),
+		JSON:               []byte("{\"version\":2}\n"),
+	}
+}
+
+// blastSnapshot is sampleSnapshot with a blast view.
+func blastSnapshot() *Snapshot {
+	s := sampleSnapshot()
+	s.Blast = sampleBlast()
+	return s
+}
+
+func TestSnapshotJSONByteExactBlast(t *testing.T) {
+	want := blastSnapshot()
+	want.Blast.JSON = append([]byte{0x01, 0x7f}, invalidUTF8...)
+	b, err := json.Marshal(want)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got Snapshot
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatal(err)
+	}
+	equalSnapshot(t, &got, want)
+	if !reflect.DeepEqual(got.Blast, want.Blast) {
+		t.Fatalf("blast = %+v, want %+v", got.Blast, want.Blast)
+	}
+	plain, err := json.Marshal(sampleSnapshot())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(plain, []byte(`"blast"`)) {
+		t.Fatalf("nil Blast encoded a blast key: %s", plain)
+	}
+}
+
+func TestRequestFitsMaxRequest(t *testing.T) {
+	max := uint64(18446744073709551615)
+	b, err := encodeLine(request{V: ProtocolVersion, Op: OpRebase, Expect: &max})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(b) >= 64 {
+		t.Fatalf("largest valid request is %d bytes: %s", len(b), b)
+	}
+	if maxRequest != 4<<10 {
+		t.Fatalf("maxRequest = %d, want 4 KiB", maxRequest)
+	}
+}
+
 func TestRespond(t *testing.T) {
 	info := sampleInfo()
-	snap := sampleSnapshot()
-	ready := func() *Snapshot { return snap }
-	indexing := func() *Snapshot { return nil }
+	snap := blastSnapshot()
+	ready := &fakeHandler{snap: snap, res: RebaseResult{Generation: 9, BrokenErrors: 1}}
+	indexing := &fakeHandler{}
 
 	cases := []struct {
-		name      string
-		line      string
-		get       func() *Snapshot
-		ok        bool
-		state     string
-		snapshot  bool
-		errSubstr string
+		name  string
+		line  string
+		h     *fakeHandler
+		ok    bool
+		state string
+		code  string
+		msg   string
+		check func(t *testing.T, r response)
 	}{
-		{"report ready", `{"v":1,"op":"report"}`, ready, true, StateReady, true, ""},
-		{"report indexing", `{"v":1,"op":"report"}`, indexing, true, StateIndexing, false, ""},
-		{"ping", `{"v":1,"op":"ping"}`, ready, true, StateReady, false, ""},
-		{"bad version", `{"v":2,"op":"report"}`, ready, false, "", false, "unsupported protocol version"},
-		{"unknown op", `{"v":1,"op":"shutdown"}`, ready, false, "", false, "unknown op"},
-		{"garbage", `not json`, ready, false, "", false, "malformed"},
+		{name: "report ready", line: `{"v":2,"op":"report"}`, h: ready, ok: true, state: StateReady, check: func(t *testing.T, r response) {
+			if r.Snapshot == nil || r.Snapshot.Blast != nil {
+				t.Fatalf("report snapshot = %+v, want check bytes and no blast", r.Snapshot)
+			}
+			equalSnapshot(t, r.Snapshot, snap)
+			if snap.Blast == nil {
+				t.Fatal("respond cleared the handler's Blast")
+			}
+		}},
+		{name: "report indexing", line: `{"v":2,"op":"report"}`, h: indexing, ok: true, state: StateIndexing, check: noSnapshot},
+		{name: "blast ready", line: `{"v":2,"op":"blast"}`, h: ready, ok: true, state: StateReady, check: func(t *testing.T, r response) {
+			s := r.Snapshot
+			if s == nil || s.Text != nil || s.Summary != nil || s.JSON != nil || s.SARIF != nil {
+				t.Fatalf("blast snapshot = %+v, want no check bytes", s)
+			}
+			if s.Blast != snap.Blast || s.State != snap.State || s.LastError != snap.LastError ||
+				s.HasErrors != snap.HasErrors || s.Generation != snap.Generation {
+				t.Fatalf("blast snapshot header/view = %+v, want %+v", s, snap)
+			}
+			if snap.Text == nil {
+				t.Fatal("respond cleared the handler's Text")
+			}
+		}},
+		{name: "blast indexing", line: `{"v":2,"op":"blast"}`, h: indexing, ok: true, state: StateIndexing, check: noSnapshot},
+		{name: "ping", line: `{"v":2,"op":"ping"}`, h: ready, ok: true, state: StateReady, check: noSnapshot},
+		{name: "rebase ok", line: `{"v":2,"op":"rebase","expect":4}`, h: &fakeHandler{snap: snap, res: RebaseResult{Generation: 9, BrokenErrors: 1}}, ok: true, check: func(t *testing.T, r response) {
+			if r.Rebase == nil || *r.Rebase != (RebaseResult{Generation: 9, BrokenErrors: 1}) || r.Snapshot != nil {
+				t.Fatalf("rebase = %+v, snapshot %+v", r.Rebase, r.Snapshot)
+			}
+		}},
+		{name: "rebase refused", line: `{"v":2,"op":"rebase","expect":4}`, h: &fakeHandler{snap: snap, err: Refuse(CodeExpectMismatch, "generation moved")}, code: CodeExpectMismatch, msg: "generation moved"},
+		{name: "rebase plain error", line: `{"v":2,"op":"rebase"}`, h: &fakeHandler{snap: snap, err: errors.New("open /secret/path: denied")}, code: CodeInternal, msg: "internal error"},
+		{name: "v1", line: `{"v":1,"op":"report"}`, h: ready, msg: "unsupported protocol version 1"},
+		{name: "v3", line: `{"v":3,"op":"report"}`, h: ready, msg: "unsupported protocol version 3"},
+		{name: "v1 unknown field", line: `{"v":1,"op":"report","x":1}`, h: ready, msg: "unsupported protocol version 1"},
+		{name: "v3 unknown op", line: `{"v":3,"op":"shutdown","x":1}`, h: ready, msg: "unsupported protocol version 3"},
+		{name: "unknown field", line: `{"v":2,"op":"report","x":1}`, h: ready, code: CodeMalformed, msg: "malformed request"},
+		{name: "expect on report", line: `{"v":2,"op":"report","expect":1}`, h: ready, code: CodeMalformed, msg: "malformed request"},
+		{name: "expect on blast", line: `{"v":2,"op":"blast","expect":1}`, h: ready, code: CodeMalformed, msg: "malformed request"},
+		{name: "negative expect", line: `{"v":2,"op":"rebase","expect":-1}`, h: ready, code: CodeMalformed, msg: "malformed request"},
+		{name: "fractional expect", line: `{"v":2,"op":"rebase","expect":1.5}`, h: ready, code: CodeMalformed, msg: "malformed request"},
+		{name: "expect over 2^64-1", line: `{"v":2,"op":"rebase","expect":18446744073709551616}`, h: ready, code: CodeMalformed, msg: "malformed request"},
+		{name: "trailing value", line: `{"v":2,"op":"report"}{}{}`, h: ready, code: CodeMalformed, msg: "malformed request"},
+		{name: "trailing values only", line: `{}{}`, h: ready, code: CodeMalformed, msg: "malformed request"},
+		{name: "garbage", line: `not json`, h: ready, code: CodeMalformed, msg: "malformed request"},
+		{name: "expect null", line: `{"v":2,"op":"report","expect":null}`, h: ready, code: CodeMalformed, msg: "malformed request"},
+		{name: "case variants", line: `{"V":2,"OP":"rebase","EXPECT":5}`, h: ready, code: CodeMalformed, msg: "malformed request"},
+		{name: "duplicate op", line: `{"v":2,"op":"report","op":"rebase","expect":3}`, h: ready, code: CodeMalformed, msg: "malformed request"},
+		{name: "duplicate v", line: `{"v":1,"v":2,"op":"report"}`, h: ready, code: CodeMalformed, msg: "malformed request"},
+		{name: "extra space", line: `{"v":2, "op":"report"}`, h: ready, code: CodeMalformed, msg: "malformed request"},
+		{name: "rebase extra space", line: `{"v":2,"op":"rebase", "expect":3}`, h: ready, code: CodeMalformed, msg: "malformed request"},
+		{name: "unknown op", line: `{"v":2,"op":"shutdown"}`, h: ready, code: CodeUnknownOp, msg: `unknown op "shutdown"`},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			r := respond([]byte(c.line+"\n"), info, c.get)
+			before := c.h.rebaseCalls()
+			r, _ := respond([]byte(c.line+"\n"), info, c.h)
 			if r.V != ProtocolVersion {
 				t.Fatalf("v = %d", r.V)
 			}
@@ -141,8 +278,17 @@ func TestRespond(t *testing.T) {
 				t.Fatalf("ok = %v (%+v)", r.OK, r)
 			}
 			if !c.ok {
-				if !strings.Contains(r.Error, c.errSubstr) {
-					t.Fatalf("error %q, want %q", r.Error, c.errSubstr)
+				if !strings.Contains(r.Error, c.msg) || r.Code != c.code {
+					t.Fatalf("refusal (%q, %q), want code %q containing %q", r.Code, r.Error, c.code, c.msg)
+				}
+				if strings.Contains(r.Error, "/secret/path") {
+					t.Fatalf("handler error text leaked: %q", r.Error)
+				}
+				if r.Snapshot != nil || r.Rebase != nil || r.Info != nil {
+					t.Fatalf("refusal carries data: %+v", r)
+				}
+				if c.code != CodeExpectMismatch && c.code != CodeInternal && c.h.rebaseCalls() != before {
+					t.Fatalf("Handler.Rebase called for a refused request")
 				}
 				return
 			}
@@ -152,31 +298,114 @@ func TestRespond(t *testing.T) {
 			if r.State != c.state {
 				t.Fatalf("state = %q, want %q", r.State, c.state)
 			}
-			if (r.Snapshot != nil) != c.snapshot {
-				t.Fatalf("snapshot present = %v", r.Snapshot != nil)
+			if c.check != nil {
+				c.check(t, r)
 			}
 		})
+	}
+	if n := ready.rebaseCalls(); n != 0 {
+		t.Fatalf("Handler.Rebase reached %d times through refused requests", n)
+	}
+}
+
+func noSnapshot(t *testing.T, r response) {
+	t.Helper()
+	if r.Snapshot != nil || r.Rebase != nil {
+		t.Fatalf("snapshot %+v, rebase %+v; want neither", r.Snapshot, r.Rebase)
+	}
+}
+
+func TestRespondPassesExpect(t *testing.T) {
+	h := &fakeHandler{snap: blastSnapshot()}
+	if r, op := respond([]byte(`{"v":2,"op":"rebase","expect":18446744073709551615}`+"\n"), sampleInfo(), h); !r.OK || op != OpRebase {
+		t.Fatalf("respond = %+v, %q", r, op)
+	}
+	if h.expect == nil || *h.expect != 18446744073709551615 {
+		t.Fatalf("expect = %v", h.expect)
+	}
+	if r, _ := respond([]byte(`{"v":2,"op":"rebase"}`+"\n"), sampleInfo(), h); !r.OK || h.expect != nil {
+		t.Fatalf("respond = %+v, expect %v; want ok and nil", r, h.expect)
 	}
 }
 
 func TestDecodeResponse(t *testing.T) {
-	if _, _, err := decodeResponse([]byte(`{"v":1,"ok":false,"error":"unsupported protocol version 2"}`), 2, OpReport); err == nil {
-		t.Fatal("no error on version mismatch")
-	} else {
+	t.Run("version mismatch", func(t *testing.T) {
+		_, _, _, err := decodeResponse([]byte(`{"v":1,"ok":false,"error":"unsupported protocol version 2"}`), 2, OpReport)
 		var ve *VersionError
 		if !errors.As(err, &ve) || ve.Daemon != 1 || ve.Client != 2 {
 			t.Fatalf("err = %v, want *VersionError{1,2}", err)
 		}
+	})
+	t.Run("refused", func(t *testing.T) {
+		_, _, _, err := decodeResponse([]byte(`{"v":2,"ok":false,"error":"unknown op \"x\"","code":"unknown_op"}`), 2, OpReport)
+		var re *RefusedError
+		if !errors.As(err, &re) || re.Code != CodeUnknownOp || re.Msg != `unknown op "x"` {
+			t.Fatalf("err = %#v, want *RefusedError{unknown_op}", err)
+		}
+		if err.Error() != `ipc: daemon refused the request: unknown op "x"` {
+			t.Fatalf("text %q", err)
+		}
+	})
+	malformed := []struct {
+		name, line, op, want string
+	}{
+		{"ready report without snapshot", `{"v":2,"ok":true,"info":{"pid":1},"state":"ready"}`, OpReport, "no snapshot"},
+		{"garbage", `xx`, OpReport, "malformed response"},
+		{"blast ready without view", `{"v":2,"ok":true,"info":{"pid":1},"state":"ready","snapshot":{"state":"ready"}}`, OpBlast, "no blast view"},
+		{"blast failed without view", `{"v":2,"ok":true,"info":{"pid":1},"state":"failed","snapshot":{"state":"failed","last_error":"x"}}`, OpBlast, "no blast view"},
+		{"blast empty view", `{"v":2,"ok":true,"info":{"pid":1},"state":"ready","snapshot":{"state":"ready","blast":{}}}`, OpBlast, "empty blast view"},
+		{"blast text only", `{"v":2,"ok":true,"info":{"pid":1},"state":"ready","snapshot":{"state":"ready","blast":{"text":"eA=="}}}`, OpBlast, "empty blast view"},
+		{"blast json only", `{"v":2,"ok":true,"info":{"pid":1},"state":"ready","snapshot":{"state":"ready","blast":{"json":"eA=="}}}`, OpBlast, "empty blast view"},
+		{"rebase ok without result", `{"v":2,"ok":true,"info":{"pid":1}}`, OpRebase, "malformed"},
 	}
-	if _, _, err := decodeResponse([]byte(`{"v":1,"ok":false,"error":"unknown op"}`), 1, OpReport); err == nil ||
-		!strings.Contains(err.Error(), "unknown op") {
-		t.Fatalf("err = %v", err)
+	for _, c := range malformed {
+		t.Run(c.name, func(t *testing.T) {
+			_, s, res, err := decodeResponse([]byte(c.line), 2, c.op)
+			if err == nil || !strings.Contains(err.Error(), c.want) || s != nil || res != nil {
+				t.Fatalf("(%v, %v, %v), want an error containing %q", s, res, err, c.want)
+			}
+		})
 	}
-	if _, _, err := decodeResponse([]byte(`{"v":1,"ok":true,"info":{"pid":1},"state":"ready"}`), 1, OpReport); err == nil {
-		t.Fatal("ready report without snapshot accepted")
+	for _, line := range []string{
+		`{"v":2,"ok":true,"info":{"pid":1},"state":"ready","snapshot":{"state":"ready","blast":{"too_large":5}}}`,
+		`{"v":2,"ok":true,"info":{"pid":1},"state":"ready","snapshot":{"state":"ready","blast":{"error":"x"}}}`,
+		`{"v":2,"ok":true,"info":{"pid":1},"state":"ready","snapshot":{"state":"ready","blast":{"text":"eA==","json":"eA=="}}}`,
+	} {
+		if _, s, _, err := decodeResponse([]byte(line), 2, OpBlast); err != nil || s == nil || s.Blast == nil {
+			t.Fatalf("%s: (%v, %v)", line, s, err)
+		}
 	}
-	if _, _, err := decodeResponse([]byte(`xx`), 1, OpReport); err == nil {
-		t.Fatal("garbage accepted")
+	t.Run("blast indexing", func(t *testing.T) {
+		info, s, res, err := decodeResponse([]byte(`{"v":2,"ok":true,"info":{"pid":7},"state":"indexing"}`), 2, OpBlast)
+		if err != nil || s != nil || res != nil || info.PID != 7 {
+			t.Fatalf("(%+v, %v, %v, %v)", info, s, res, err)
+		}
+	})
+	t.Run("rebase ok", func(t *testing.T) {
+		info, _, res, err := decodeResponse([]byte(`{"v":2,"ok":true,"info":{"pid":7},"rebase":{"generation":4,"broken_errors":2}}`), 2, OpRebase)
+		if err != nil || res == nil || *res != (RebaseResult{Generation: 4, BrokenErrors: 2}) || info.PID != 7 {
+			t.Fatalf("(%+v, %v, %v)", info, res, err)
+		}
+	})
+}
+
+func TestValidBlastView(t *testing.T) {
+	for _, c := range []struct {
+		v    *BlastView
+		want string
+	}{
+		{nil, "no blast view"},
+		{&BlastView{}, "empty blast view"},
+		{&BlastView{Text: []byte("x")}, "empty blast view"},
+		{&BlastView{JSON: []byte("x")}, "empty blast view"},
+		{&BlastView{TooLarge: 1}, ""},
+		{&BlastView{Error: "x"}, ""},
+		{&BlastView{Text: []byte("x"), JSON: []byte("y")}, ""},
+	} {
+		err := ValidBlastView(c.v)
+		if (c.want == "") != (err == nil) || (err != nil && err.Error() != c.want) {
+			t.Fatalf("ValidBlastView(%+v) = %v, want %q", c.v, err, c.want)
+		}
 	}
 }
 
