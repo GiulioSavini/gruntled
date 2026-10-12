@@ -19,7 +19,10 @@ type dumpFile struct {
 }
 
 // WriteDump replaces the dump atomically through w (0600 file, checked
-// 0700 directory). s nil means the daemon is still indexing.
+// 0700 directory). s nil means the daemon is still indexing. A dump over
+// responseCap whose blast view has bytes is written with a copy of the
+// view without them (TooLarge set), so plain report reads it as in v1.
+// s is never modified.
 func WriteDump(w *statusfile.Writer, info Info, s *Snapshot) error {
 	d := dumpFile{V: ProtocolVersion, Info: info, State: StateIndexing}
 	if s != nil {
@@ -33,6 +36,16 @@ func WriteDump(w *statusfile.Writer, info Info, s *Snapshot) error {
 	if err != nil {
 		return err
 	}
+	if len(b) > responseCap && s != nil && s.Blast != nil && (s.Blast.Text != nil || s.Blast.JSON != nil) {
+		c := *s
+		v := *s.Blast
+		v.Text, v.JSON, v.TooLarge = nil, nil, int64(len(b))
+		c.Blast = &v
+		d.Snapshot = &c
+		if b, err = encodeLine(d); err != nil {
+			return err
+		}
+	}
 	return w.Write(string(b))
 }
 
@@ -44,12 +57,12 @@ func ReadDump(path string) (Info, *Snapshot, error) {
 		return Info{}, nil, err
 	}
 	defer f.Close()
-	b, err := io.ReadAll(io.LimitReader(f, maxResponse+1))
+	b, err := io.ReadAll(io.LimitReader(f, int64(responseCap)+1))
 	if err != nil {
 		return Info{}, nil, err
 	}
-	if len(b) > maxResponse {
-		return Info{}, nil, fmt.Errorf("ipc: %s: %w", path, errLineTooLong)
+	if len(b) > responseCap {
+		return Info{}, nil, fmt.Errorf("ipc: %s: dump over the %s cap: %w", path, capString(responseCap), errLineTooLong)
 	}
 	var d dumpFile
 	if err := json.Unmarshal(b, &d); err != nil {

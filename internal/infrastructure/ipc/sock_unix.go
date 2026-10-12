@@ -86,12 +86,13 @@ func Listen(path string) (*Listener, error) {
 	return &Listener{f: os.NewFile(uintptr(fd), path), path: path}, nil
 }
 
-// Server answers one request per connection from get. It never touches
-// the index: get returns an immutable, pre-rendered snapshot.
+// Server answers one request per connection from its Handler. It never
+// touches the index: the handler returns an immutable, pre-rendered
+// snapshot.
 type Server struct {
 	ln       *Listener
 	info     Info
-	get      func() *Snapshot
+	h        Handler
 	deadline time.Duration
 
 	wg   sync.WaitGroup // connection handlers
@@ -103,12 +104,17 @@ type Server struct {
 }
 
 // Serve starts the accept loop on ln. get nil-snapshot means the daemon is
-// still indexing.
+// still indexing. Rebase is refused with code unsupported.
 func Serve(ln *Listener, info Info, get func() *Snapshot) *Server {
+	return ServeHandler(ln, info, getHandler(get))
+}
+
+// ServeHandler starts the accept loop on ln, answering from h.
+func ServeHandler(ln *Listener, info Info, h Handler) *Server {
 	s := &Server{
 		ln:       ln,
 		info:     info,
-		get:      get,
+		h:        h,
 		deadline: serverReadDeadline,
 		quit:     make(chan struct{}),
 		done:     make(chan struct{}),
@@ -212,11 +218,7 @@ func (s *Server) handle(conn *os.File) {
 	if err != nil {
 		return // silent, oversize or broken client: drop it
 	}
-	r, _ := respond(line, s.info, getHandler(s.get))
-	b, err := encodeLine(r)
-	if err != nil {
-		b, _ = encodeLine(response{V: ProtocolVersion, Error: "internal error"})
-	}
+	b := answer(line, s.info, s.h)
 	if err := conn.SetWriteDeadline(time.Now().Add(ioTimeout)); err != nil {
 		return
 	}
@@ -254,37 +256,67 @@ func dial(sock string, timeout time.Duration) (*os.File, error) {
 
 // Query sends one op to the daemon at sock. timeout bounds the connect and
 // the whole exchange (0 means 2s). The snapshot is nil while the daemon is
-// indexing and for OpPing.
+// indexing and for OpPing. A read failure after the request was sent
+// matches ErrNoReply.
 func Query(sock, op string, timeout time.Duration) (Info, *Snapshot, error) {
-	return query(sock, op, ProtocolVersion, timeout)
+	info, s, _, err := query(sock, request{V: ProtocolVersion, Op: op}, timeout)
+	return info, s, err
 }
 
-func query(sock, op string, v int, timeout time.Duration) (Info, *Snapshot, error) {
+// Rebase asks the daemon at sock to move its baseline to the published
+// report; expect, when set, must equal its published generation. Every
+// failure after the request was sent that is not a decoded refusal or
+// version error matches ErrOutcomeUnknown: the baseline may have moved.
+func Rebase(sock string, expect *uint64, timeout time.Duration) (Info, RebaseResult, error) {
+	line, sent, err := exchange(sock, request{V: ProtocolVersion, Op: OpRebase, Expect: expect}, timeout)
+	var info Info
+	var res *RebaseResult
+	if err == nil {
+		info, _, res, err = decodeResponse(line, ProtocolVersion, OpRebase)
+	}
+	if err != nil {
+		var re *RefusedError
+		var ve *VersionError
+		if sent && !errors.As(err, &re) && !errors.As(err, &ve) {
+			err = fmt.Errorf("%w: %w", ErrOutcomeUnknown, err)
+		}
+		return Info{}, RebaseResult{}, err
+	}
+	return info, *res, nil
+}
+
+func query(sock string, req request, timeout time.Duration) (Info, *Snapshot, *RebaseResult, error) {
+	line, _, err := exchange(sock, req, timeout)
+	if err != nil {
+		return Info{}, nil, nil, err
+	}
+	return decodeResponse(line, req.V, req.Op)
+}
+
+// exchange sends req to sock and reads one response line. sent reports
+// whether the request was written in full.
+func exchange(sock string, req request, timeout time.Duration) (line []byte, sent bool, err error) {
 	if timeout <= 0 {
 		timeout = ioTimeout
 	}
 	if err := CheckSockPath(sock); err != nil {
-		return Info{}, nil, err
+		return nil, false, err
 	}
 	f, err := dial(sock, timeout)
 	if err != nil {
-		return Info{}, nil, err
+		return nil, false, err
 	}
 	defer f.Close()
 	if err := f.SetDeadline(time.Now().Add(timeout)); err != nil {
-		return Info{}, nil, err
+		return nil, false, err
 	}
-	req, err := encodeLine(request{V: v, Op: op})
+	b, err := encodeLine(req)
 	if err != nil {
-		return Info{}, nil, err
+		return nil, false, err
 	}
-	if _, err := f.Write(req); err != nil {
-		return Info{}, nil, fmt.Errorf("ipc: send to %s: %w", sock, err)
+	if _, err := f.Write(b); err != nil {
+		return nil, false, fmt.Errorf("ipc: send to %s: %w", sock, err)
 	}
-	line, err := readLine(f, maxResponse)
-	if err != nil {
-		return Info{}, nil, fmt.Errorf("ipc: read from %s: %w", sock, err)
-	}
-	info, snap, _, err := decodeResponse(line, v, op)
-	return info, snap, err
+	line, err = readReply(f, sock)
+	return line, true, err
 }

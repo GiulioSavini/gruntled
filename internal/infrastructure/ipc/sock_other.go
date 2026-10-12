@@ -16,10 +16,18 @@ func Listen(string) (*Listener, error) { return nil, ErrUnsupported }
 // Serve returns an inert Server.
 func Serve(*Listener, Info, func() *Snapshot) *Server { return &Server{} }
 
+// ServeHandler returns an inert Server.
+func ServeHandler(*Listener, Info, Handler) *Server { return &Server{} }
+
 // Close is a no-op.
 func (*Server) Close() error { return nil }
 
 // Query returns ErrUnsupported.
 func Query(string, string, time.Duration) (Info, *Snapshot, error) {
 	return Info{}, nil, ErrUnsupported
+}
+
+// Rebase returns ErrUnsupported.
+func Rebase(string, *uint64, time.Duration) (Info, RebaseResult, error) {
+	return Info{}, RebaseResult{}, ErrUnsupported
 }

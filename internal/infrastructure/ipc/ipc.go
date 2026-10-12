@@ -428,3 +428,94 @@ func decodeResponse(line []byte, clientV int, op string) (Info, *Snapshot, *Reba
 	}
 	return *r.Info, r.Snapshot, nil, nil
 }
+
+// Seal pre-encodes the blast response line for s, once per published
+// snapshot, so a blast request costs O(1) whatever the view size. If the
+// line is over responseCap, s.Blast is replaced by a copy without the
+// rendered bytes and with TooLarge set to the encoded size, keeping the
+// metadata, and that small line is stored instead. If encoding fails, s
+// gets an error view. Seal always re-encodes (a struct copy of a sealed
+// snapshot carries a stale line) and never writes through s.Blast: the
+// view may be shared with a snapshot handlers are reading. It must run
+// before s itself is shared.
+func Seal(info Info, s *Snapshot) {
+	if s == nil {
+		return
+	}
+	s.blastLine = nil
+	b, err := encodeLine(snapshotResponse(info, s, OpBlast))
+	if err == nil && len(b) > responseCap && s.Blast != nil && (s.Blast.Text != nil || s.Blast.JSON != nil) {
+		v := *s.Blast
+		v.Text, v.JSON, v.TooLarge = nil, nil, int64(len(b))
+		s.Blast = &v
+		b, err = encodeLine(snapshotResponse(info, s, OpBlast))
+	}
+	if err != nil {
+		v := BlastView{Error: "the blast view could not be encoded"}
+		if s.Blast != nil {
+			v.BaselineGeneration, v.BaselineSource = s.Blast.BaselineGeneration, s.Blast.BaselineSource
+		}
+		s.Blast = &v
+		if b, err = encodeLine(snapshotResponse(info, s, OpBlast)); err != nil {
+			b = internalLine()
+		}
+	}
+	s.blastLine = b
+}
+
+func internalLine() []byte {
+	b, _ := encodeLine(response{V: ProtocolVersion, Error: "internal error", Code: CodeInternal})
+	return b
+}
+
+// answer is the server's per-request path: respond, then the sealed blast
+// line as is when there is one. Without a sealed line (the Serve wrapper,
+// tests) the response is encoded here, O(view) for blast, and a blast
+// line over responseCap becomes a too_large refusal. Plain report keeps
+// the v1 behaviour: no server-side cap.
+func answer(line []byte, info Info, h Handler) []byte {
+	r, op := respond(line, info, h)
+	if op == OpBlast && r.OK && r.Snapshot != nil && r.Snapshot.blastLine != nil && len(r.Snapshot.blastLine) <= responseCap {
+		return r.Snapshot.blastLine
+	}
+	if r.Snapshot != nil {
+		r.Snapshot.blastLine = nil
+	}
+	b, err := encodeLine(r)
+	if err != nil {
+		return internalLine()
+	}
+	if op == OpBlast && len(b) > responseCap {
+		b, err = encodeLine(response{V: ProtocolVersion, Code: CodeTooLarge,
+			Error: fmt.Sprintf("blast view is %d bytes, over the %s response cap; run gruntled blast --base", len(b), capString(responseCap))})
+		if err != nil {
+			return internalLine()
+		}
+	}
+	return b
+}
+
+// noReplyError is a read failure after the request was written. Its text
+// is the v1 one; it matches ErrNoReply.
+type noReplyError struct {
+	sock string
+	err  error
+}
+
+func (e *noReplyError) Error() string        { return fmt.Sprintf("ipc: read from %s: %v", e.sock, e.err) }
+func (e *noReplyError) Unwrap() error        { return e.err }
+func (e *noReplyError) Is(target error) bool { return target == ErrNoReply }
+
+// readReply reads one response line from r after a request was sent to
+// sock. An over-cap line names the cap and wraps errLineTooLong; any other
+// read error is a noReplyError.
+func readReply(r io.Reader, sock string) ([]byte, error) {
+	line, err := readLine(r, responseCap)
+	switch {
+	case errors.Is(err, errLineTooLong):
+		return nil, fmt.Errorf("ipc: read from %s: response over the %s cap: %w", sock, capString(responseCap), err)
+	case err != nil:
+		return nil, &noReplyError{sock: sock, err: err}
+	}
+	return line, nil
+}

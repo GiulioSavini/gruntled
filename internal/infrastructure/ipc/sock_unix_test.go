@@ -331,15 +331,21 @@ func rawServer(t *testing.T, reply func(conn *os.File, req []byte)) string {
 		t.Fatal(err)
 	}
 	var wg sync.WaitGroup
-	done := make(chan struct{})
+	done, quit := make(chan struct{}), make(chan struct{})
 	go func() {
 		defer close(done)
 		for {
 			conn, err := accept(rc)
 			if err != nil {
+				select {
+				case <-quit:
+					return
+				default:
+				}
 				if errors.Is(err, os.ErrClosed) {
 					return
 				}
+				time.Sleep(time.Millisecond)
 				continue
 			}
 			wg.Go(func() {
@@ -354,6 +360,7 @@ func rawServer(t *testing.T, reply func(conn *os.File, req []byte)) string {
 		}
 	}()
 	t.Cleanup(func() {
+		close(quit)
 		_ = ln.f.Close()
 		<-done
 		wg.Wait()
