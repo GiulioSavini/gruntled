@@ -487,6 +487,13 @@ as on Linux. On macOS, install coreutils and put its gnubin directory first
 on `PATH`, or run them on Linux. Without these tools they fail closed: they
 exit non-zero and write nothing outside their temp directory.
 
+`scripts/compat-v1.sh [ref]` (default `v0.3.0`, also run by hand) builds the
+previous release from its tag in a temporary worktree, offline, and checks
+the protocol mismatch with real daemons both ways: a v0.3.0 daemon refuses
+this `report`, `report --blast` and `rebase`, and this daemon refuses the
+v0.3.0 `report`, each with exit 3 and the "restart the daemon" message. It
+stops every daemon it started, also on `^C`, and fails if one is left running.
+
 ## CI
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every push to
