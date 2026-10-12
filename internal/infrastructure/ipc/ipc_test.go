@@ -602,8 +602,8 @@ func TestBlastRequestAllocsConstant(t *testing.T) {
 		runtime.ReadMemStats(&after)
 		d := after.TotalAlloc - before.TotalAlloc
 		t.Logf("20 requests allocated %d bytes (sealed line %d bytes)", d, len(s.blastLine))
-		if d >= 64<<10 {
-			t.Fatalf("20 requests allocated %d bytes, want < 64 KiB", d)
+		if limit := uint64(64<<10 + raceAllocSlack); d >= limit {
+			t.Fatalf("20 requests allocated %d bytes, want < %d", d, limit)
 		}
 	}
 	t.Run("in cap, 2 MiB view", func(t *testing.T) {
