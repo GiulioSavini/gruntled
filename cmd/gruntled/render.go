@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"fmt"
 
+	"github.com/GiulioSavini/gruntled/internal/application/blasting"
 	"github.com/GiulioSavini/gruntled/internal/application/checking"
+	"github.com/GiulioSavini/gruntled/internal/domain/diagnostic"
 	"github.com/GiulioSavini/gruntled/internal/infrastructure/ipc"
 	"github.com/GiulioSavini/gruntled/internal/interfaces/presenter"
 )
@@ -53,4 +55,43 @@ func buildSnapshot(rep checking.Report, gen uint64) (*ipc.Snapshot, error) {
 		return nil, err
 	}
 	return s, nil
+}
+
+// Test seams: the publisher builds snapshots and views through these.
+var (
+	buildSnap = buildSnapshot
+	between   = blasting.Between
+)
+
+// buildBlastView renders the blast from base to cur exactly as blast --base
+// does (same Between, same presenters), labelled with the daemon baseline
+// d, and counts the error findings in Broken. The view holds bytes only.
+func buildBlastView(base, cur checking.Report, d presenter.DaemonBaseline) (*ipc.BlastView, error) {
+	res, err := between(base, cur)
+	if err != nil {
+		return nil, err
+	}
+	var text, js bytes.Buffer
+	if err := presenter.BlastText(&text, res, presenter.DaemonBaselineLabel(d)); err != nil {
+		return nil, err
+	}
+	if err := presenter.BlastJSONDaemon(&js, res, d); err != nil {
+		return nil, err
+	}
+	n := 0
+	for _, b := range res.Broken {
+		for _, f := range b.Findings {
+			if f.Severity() == diagnostic.SeverityError {
+				n++
+			}
+		}
+	}
+	return &ipc.BlastView{
+		BaselineGeneration: d.Generation,
+		BaselineSource:     d.Source,
+		HasErrors:          res.HasErrors(),
+		BrokenErrors:       n,
+		Text:               text.Bytes(),
+		JSON:               js.Bytes(),
+	}, nil
 }

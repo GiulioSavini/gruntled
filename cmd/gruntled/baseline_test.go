@@ -46,7 +46,8 @@ type testPublisher struct {
 
 func newTestPublisher(t *testing.T) *testPublisher {
 	t.Helper()
-	dir := t.TempDir()
+	dir := filepath.Join(shortBase(t), "rt")
+	mustDo(t, statusfile.EnsureDir(dir))
 	tp := &testPublisher{out: &bytes.Buffer{}, errOut: &bytes.Buffer{}, statusPath: filepath.Join(dir, "status")}
 	tp.watchPublisher = &watchPublisher{
 		stdout:    tp.out,

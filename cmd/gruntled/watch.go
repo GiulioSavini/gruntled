@@ -9,8 +9,10 @@ import (
 	"io"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"time"
 
+	"github.com/GiulioSavini/gruntled/internal/application/checking"
 	"github.com/GiulioSavini/gruntled/internal/application/watching"
 	"github.com/GiulioSavini/gruntled/internal/domain/diagnostic"
 	"github.com/GiulioSavini/gruntled/internal/infrastructure/ipc"
@@ -222,8 +224,18 @@ func openWatcher(root string, forcePoll bool, interval time.Duration, deps watch
 	return w, "poll", true
 }
 
-// watchPublisher turns run loop events into status file lines and stdout
-// output. It is called only from the watch.Run goroutine.
+// Baseline sources, as the blast view labels them.
+const (
+	sourceWatchStart = "watch start"
+	sourceRebase     = "rebase"
+)
+
+// watchPublisher turns run loop events into status file lines, stdout
+// output and served snapshots, and owns the daemon's blast baseline.
+// publish is called only from the watch.Run goroutine; rebase is called
+// from socket handler goroutines. mu serialises them: it guards base,
+// baseGen, baseSource, lastRep, gen and last, and every setSnapshot. The
+// baseline is a checking.Report only, never a loader, FS or cache.
 type watchPublisher struct {
 	stdout, stderr io.Writer
 	now            func() time.Time
@@ -237,33 +249,38 @@ type watchPublisher struct {
 	printed diagnostic.Set
 	// snapshots, when set, receives every published snapshot.
 	snapshots func(*ipc.Snapshot)
-	// last is the most recent snapshot; gen counts successful indexes.
-	last *ipc.Snapshot
-	gen  uint64
+
+	mu sync.Mutex
+	// last is the served snapshot; gen counts committed indexes; lastRep
+	// is the Report of the last committed EventReady.
+	last    *ipc.Snapshot
+	gen     uint64
+	lastRep checking.Report
+	// base is the baseline Report: the first committed EventReady, or
+	// lastRep at the last rebase. hasBase is false until then.
+	base       checking.Report
+	baseGen    uint64
+	baseSource string
+	hasBase    bool
 }
 
 func (p *watchPublisher) publish(ev watch.Event) {
 	stamp := p.now().Format("15:04:05")
-	var line bytes.Buffer
+	var line, out bytes.Buffer
+	var renderErr error
 	switch ev.Kind {
 	case watch.EventIndexing:
 		_ = presenter.StatusIndexing(&line, stamp)
 	case watch.EventReady:
 		_ = presenter.StatusLine(&line, ev.Report.Diagnostics, stamp)
 		if !p.ready || !ev.Report.Diagnostics.Equal(p.printed) {
-			var out bytes.Buffer
-			if err := presenter.Text(&out, ev.Report.Diagnostics); err == nil {
-				writeOut(p.stdout, p.stderr, &out)
+			if err := presenter.Text(&out, ev.Report.Diagnostics); err != nil {
+				out.Reset()
 			}
 			p.printed = ev.Report.Diagnostics
 		}
 		p.ready = true
-		p.gen++
-		if s, err := buildSnapshot(ev.Report, p.gen); err == nil {
-			p.setSnapshot(s)
-		} else {
-			fmt.Fprintf(p.stderr, "gruntled: rendering report: %v\n", err)
-		}
+		renderErr = p.commitReady(ev.Report)
 	case watch.EventFailed:
 		reason := "unknown error"
 		if ev.Err != nil {
@@ -273,17 +290,24 @@ func (p *watchPublisher) publish(ev watch.Event) {
 		if p.ready {
 			fmt.Fprintf(p.stderr, "gruntled: reindex failed: %s\n", presenter.SanitizeReason(reason))
 		}
-		// The last good bytes stay served, marked failed with the reason.
+		// The last good bytes and blast view stay served, marked failed.
+		p.mu.Lock()
 		if p.last != nil {
 			s := *p.last
 			s.State = ipc.StateFailed
 			s.LastError = presenter.SanitizeReason(reason)
 			p.setSnapshot(&s)
 		}
+		p.mu.Unlock()
 	case watch.EventStopped:
 		_ = presenter.StatusStopped(&line, stamp)
 	default:
 		return
+	}
+	// stdout and the status file are written outside p.mu.
+	writeOut(p.stdout, p.stderr, &out)
+	if renderErr != nil {
+		fmt.Fprintf(p.stderr, "gruntled: rendering report: %v\n", renderErr)
 	}
 	if err := p.status.Write(line.String()); err != nil && !p.writeFailed {
 		p.writeFailed = true
@@ -291,8 +315,79 @@ func (p *watchPublisher) publish(ev watch.Event) {
 	}
 }
 
-// setSnapshot records s and hands it on. Snapshots are never mutated once
-// handed on: handlers may be reading them.
+// commitReady builds the snapshot of rep, with its blast view, as the next
+// generation and commits it. lastRep, gen, the first baseline and the
+// served snapshot change together, and only when the snapshot was built.
+func (p *watchPublisher) commitReady(rep checking.Report) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	next := p.gen + 1
+	s, err := buildSnap(rep, next)
+	if err != nil {
+		return err
+	}
+	base, baseGen, src := p.base, p.baseGen, p.baseSource
+	if !p.hasBase {
+		base, baseGen, src = rep, next, sourceWatchStart
+	}
+	s.Blast = blastViewOrError(base, rep, presenter.DaemonBaseline{Source: src, Generation: baseGen, CurrentGeneration: next})
+	p.lastRep, p.gen = rep, next
+	p.base, p.baseGen, p.baseSource, p.hasBase = base, baseGen, src, true
+	p.setSnapshot(s)
+	return nil
+}
+
+// blastViewOrError is buildBlastView, or on failure a view carrying the
+// sanitised error and the baseline metadata: never nil.
+func blastViewOrError(base, cur checking.Report, d presenter.DaemonBaseline) *ipc.BlastView {
+	v, err := buildBlastView(base, cur, d)
+	if err != nil {
+		return &ipc.BlastView{
+			BaselineGeneration: d.Generation,
+			BaselineSource:     d.Source,
+			Error:              presenter.SanitizeReason("blast view: " + err.Error()),
+		}
+	}
+	return v
+}
+
+// rebase makes the Report of the served snapshot the baseline. It refuses,
+// changing nothing, while indexing, after a failed reindex, when the served
+// view could not be computed (its accepted count would be unknown), when
+// expect is set and differs from the served generation, and when the new
+// view cannot be built. It writes nothing: no status line, no stdout. The
+// generation does not move. It returns the number of error findings the
+// served view held, which the new baseline accepts.
+func (p *watchPublisher) rebase(expect *uint64) (ipc.RebaseResult, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	last := p.last
+	switch {
+	case last == nil:
+		return ipc.RebaseResult{}, ipc.Refuse(ipc.CodeIndexing, "the daemon is still indexing; nothing changed")
+	case last.State == ipc.StateFailed:
+		return ipc.RebaseResult{}, ipc.Refuse(ipc.CodeFailed, "the last reindex failed; nothing changed")
+	case last.Blast == nil || last.Blast.Error != "":
+		return ipc.RebaseResult{}, ipc.Refuse(ipc.CodeUnavailable, "the blast view could not be computed; nothing changed")
+	case expect != nil && *expect != last.Generation:
+		return ipc.RebaseResult{}, ipc.Refuse(ipc.CodeExpectMismatch, fmt.Sprintf("the daemon is at generation %d, not %d", last.Generation, *expect))
+	}
+	v, err := buildBlastView(p.lastRep, p.lastRep, presenter.DaemonBaseline{Source: sourceRebase, Generation: last.Generation, CurrentGeneration: last.Generation})
+	if err != nil {
+		return ipc.RebaseResult{}, ipc.Refuse(ipc.CodeInternal, "the blast view could not be rebuilt; nothing changed")
+	}
+	accepted := last.Blast.BrokenErrors
+	c := *last
+	c.Blast = v
+	p.base, p.baseGen, p.baseSource, p.hasBase = p.lastRep, last.Generation, sourceRebase, true
+	p.setSnapshot(&c)
+	return ipc.RebaseResult{Generation: last.Generation, BrokenErrors: accepted}, nil
+}
+
+// setSnapshot records s and hands it on. It runs inside p.mu; in
+// report-file mode that includes the dump write (up to the response cap),
+// which is harmless because the instance refuses rebase in that mode.
+// Snapshots are never mutated once handed on: handlers may be reading them.
 func (p *watchPublisher) setSnapshot(s *ipc.Snapshot) {
 	p.last = s
 	if p.snapshots != nil {
