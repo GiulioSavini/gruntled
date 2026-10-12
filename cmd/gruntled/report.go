@@ -128,8 +128,12 @@ func runReportWith(args []string, stdout, stderr io.Writer, deps reportDeps) int
 		return exitFailure
 	case *blast && errors.As(err, &rerr) && rerr.Code == ipc.CodeTooLarge:
 		return blastTooLarge(stderr, refusedSize(rerr.Msg))
+	case errors.As(err, &rerr):
+		// The refusal text comes from the daemon: never print it raw.
+		fmt.Fprintf(stderr, "gruntled: the daemon refused the request: %s\n", presenter.SanitizeReason(rerr.Msg))
+		return exitFailure
 	case err != nil:
-		fmt.Fprintf(stderr, "gruntled: cannot query the watch daemon for %s: %v\n", root, err)
+		fmt.Fprintf(stderr, "gruntled: cannot query the watch daemon for %s: %s\n", root, presenter.SanitizeReason(err.Error()))
 		return exitFailure
 	case snap == nil:
 		fmt.Fprintln(stderr, "gruntled: the daemon is still indexing; try again")
