@@ -1,0 +1,43 @@
+name: corpus
+
+# The REL-03 corpus suite (phase 17): on demand and weekly, never on push.
+# It fetches the three pinned corpora (the only networked step), then runs
+# scripts/corpus-gate.sh, which re-executes itself in an empty network
+# namespace; CORPUS_GATE_NONET=1 makes a runner that cannot isolate fail
+# instead of running with network. The required gate is the local recorded
+# run (docs/validation.md); this job is informational. Read-only token, no
+# secrets, no persisted credentials, no Go cache shared with ci.yml.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * 1"
+
+permissions:
+  contents: read
+
+env:
+  GOTOOLCHAIN: local
+
+jobs:
+  corpus:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: fetch corpora
+        run: |
+          set -o pipefail
+          bash scripts/fetch-corpora.sh "$RUNNER_TEMP/corpus" | tee "$RUNNER_TEMP/fetch.log"
+          grep '^export GRUNTLED_CORPUS' "$RUNNER_TEMP/fetch.log" | sed 's/^export //' >> "$GITHUB_ENV"
+      - name: corpus gate
+        env:
+          CORPUS_GATE_NONET: "1"
+        run: bash scripts/corpus-gate.sh
