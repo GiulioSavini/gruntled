@@ -423,6 +423,7 @@ func TestHelpMatchesDocs(t *testing.T) {
 		{"blast", 4},
 		{"watch", 3},
 		{"report", 4},
+		{"rebase", 3},
 	} {
 		_, stderr, code := runCLI(t, c.cmd, "-h")
 		if code != exitOK {
