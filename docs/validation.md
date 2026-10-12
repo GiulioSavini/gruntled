@@ -4,6 +4,8 @@ v0.2 adds GRT002 (missing dependency target) and GRT003 (dependency cycle). Thei
 validation on the real corpus is recorded in
 [v0.2: GRT002 and GRT003 on the real corpus](#v02-grt002-and-grt003-on-the-real-corpus-more-06),
 at the end of this document. Everything before it is the v0.1 record, unchanged.
+v0.4's blast is validated on the three real corpora in
+[v0.4: blast on the real corpora (REL-03)](#v04-blast-on-the-real-corpora-rel-03).
 
 gruntled v0.1 is a falsifiable experiment, not a feature list. The claim has four
 parts. On the unmutated primary corpus, `gruntled check` reports nothing. When an output
@@ -450,6 +452,10 @@ the ratio stayed between 1.99 and 2.81 in every run.
 
 ## Reproduce
 
+The corpora can be fetched in one step: `bash scripts/fetch-corpora.sh` fetches all three
+at their pinned commits into `~/.cache/gruntled-phase4/corpus` (verified, ELF binaries
+stripped) and prints the `export` lines. The manual steps below remain as a fallback.
+
 1. Download terragrunt v1.1.6 and check its SHA256:
 
    ```
@@ -801,3 +807,281 @@ changes one attribute of a ~4 MiB variable type. `report --blast` stays within t
 free -m   # at least 4 GB available; run it alone
 GOMAXPROCS=2 GOFLAGS=-p=2 timeout 900 go test -count=1 -run TestDaemonMemorySynthrepo -v ./cmd/gruntled/
 ```
+
+## v0.4: blast on the real corpora (REL-03)
+
+The claim has three parts, on each of the three pinned corpora:
+
+1. `check` is byte-identical to v0.3.0, and `blast --base` of a tree against itself is empty.
+2. Reformat-only changes give an empty blast.
+3. Every mutation of a fixed set is caught with exact equality: Broken units and GRT004
+   sites, Impacted units with distance, source and via, and `changes[]` with its name
+   lists and `type_changes`.
+
+The expected results come from an independent textual model of each corpus, which shares
+no code with gruntled. They never come from gruntled's own output.
+
+### Outcome
+
+| Claim | Result | Evidence |
+|---|---|---|
+| `check` text, JSON and SARIF and `graph --json` byte-identical to v0.3.0 (stdout, stderr, exit) | PASS: 256/256 identical, corpus digests unchanged | `scripts/compare-ref.sh` with `COMPARE_REF_CORPORA` |
+| `blast --base X X` and `blast --base <copy> X` are empty (text and JSON) | PASS on all three | TestCorpusBlastSelf |
+| The independent model agrees with `graph --json` except for pinned, predicate-checked exclusions | PASS: 110 rows; included modules below | TestCorpusBlastModel |
+| Reformat-only transforms R1-R9 give exit 0 with Broken, Impacted and `changes` all empty | PASS on all three, guard green | TestCorpusReformat |
+| Mutations M1-M7 and M9 caught with exact equality; M1 confirmed by v0.3.0 | PASS: 4,345 of 4,345 | TestCorpusMutation17 |
+| Propagation to distance 2 and more (M8) | PASS: up to distance 5 on denis256 | TestCorpusMutation17/<corpus>/M8 |
+| The daemon path (`report --blast`, `rebase`) agrees with `blast --base` | PASS: one site per class, R8, the shared `global.tf` edit and one rebase cycle per corpus | TestCorpusDaemonSample |
+
+Exact equality has four named exceptions:
+
+- type_changes.old is compared exactly for an absent type (any) and for the primitives string, number and bool; for any other type it is only checked to be non-empty and different from new.
+- GRT004 messages are compared by prefix; the M1 dual oracle against v0.3.0 compares the full message after rewriting `was removed from` to `is not declared by`.
+- Text output is checked by tokens once per class; the JSON document is the authority and is compared exactly.
+- The M5 SENTINEL canonical string is pinned from HEAD after a hand check against the D-15 rendering rules.
+
+### Pinned commits
+
+| Corpus | Repository | Commit | Variable |
+|---|---|---|---|
+| iso20022 | aws-solutions-library-samples/guidance-for-iso20022-messaging-workflows-on-aws | `e6c55d11fd1a01e75b78d7897be36c69fa26b8cc` | `GRUNTLED_CORPUS` |
+| secret | cds-snc/secret | `341e8a95b0d9bd658793094a248527cc3ebae6f2` | `GRUNTLED_CORPUS_SECRET` |
+| denis256 | denis256/terragrunt-tests | `726485e699a70c02dabbde629f66c0119e197357` | `GRUNTLED_CORPUS_DENIS256` |
+
+The reference binary is v0.3.0 at `e870e2984760f0a674bc87697e3f69329613758e`.
+
+### Command
+
+```sh
+bash scripts/fetch-corpora.sh            # once, the only network step
+export GRUNTLED_CORPUS=… GRUNTLED_CORPUS_SECRET=… GRUNTLED_CORPUS_DENIS256=…   # its export lines
+bash scripts/corpus-gate.sh              # offline, serial, about 50 minutes
+```
+
+`scripts/fetch-corpora.sh`:
+- fetches each corpus by its sha, with git isolated from system, global and template
+  config;
+- verifies HEAD;
+- fails on escaping symlinks;
+- deletes the checked-in ELF binaries of denis256 (30 files, 1,856,441,161 bytes).
+
+`scripts/corpus-gate.sh`:
+- re-executes itself under `unshare -rn` and proves the isolation from `/proc/net/dev`;
+- builds v0.3.0 from the pinned tag commit;
+- runs 31 shards one at a time, under a memory floor of 1500 MB and an address-space cap.
+
+`.github/workflows/corpus.yml` runs the same two scripts on demand and weekly. `ci.yml`
+does not run them.
+
+### The independent model and its exclusions
+
+The model (`cmd/gruntled/corpus_model_test.go`) is computed from source text. It finds:
+- units;
+- `terraform.source`, with the `//` subdirectory split, plus Terragrunt's documented path
+  functions;
+- live `dependency` edges: `enabled` absent or literally true, `skip_outputs` absent or
+  literally false, and a target that is a unit;
+- reference sites, classified plain, guarded or other;
+- module surfaces;
+- a BFS whose via is the smallest predecessor one level closer.
+
+Every difference with `graph --json` must be covered by a pinned row: path, category,
+direction and file:line evidence. The test re-evaluates each row's category as a predicate
+over source text, binds it to the reason gruntled itself gives, and fails on an uncovered
+difference, a stale row or a changed count. An exclusion removes the item from the
+universe, and every mutation whose module, seeds or cone touches it. It never copies
+gruntled's value into the model.
+
+The per-item rows live in test code (`corpusExclusions`). Totals per category:
+
+| Category | iso20022 | secret | denis256 | Total |
+|---|---:|---:|---:|---:|
+| `include target` | 0 | 1 | 52 | 53 |
+| `generate block may declare outputs` | 0 | 0 | 21 | 21 |
+| `reference shape other` | 0 | 0 | 16 | 16 |
+| `module syntax error the oracle does not detect` | 0 | 0 | 4 | 4 |
+| `duplicate dependency label in one file` | 3 | 0 | 0 | 3 |
+| `deep-merged dependency (non-literal facts)` | 0 | 0 | 2 | 2 |
+| `more than one unlabeled include` | 0 | 0 | 2 | 2 |
+| `source not modelled` | 0 | 0 | 2 | 2 |
+| `unit config syntax error the oracle does not detect` | 0 | 0 | 2 | 2 |
+| `config_path absolute or unresolvable` | 0 | 0 | 1 | 1 |
+| `include path not modelled` | 0 | 0 | 1 | 1 |
+| `module dir contains the unit dir` | 0 | 0 | 1 | 1 |
+| `nesting over the 1000-level cap` | 0 | 0 | 1 | 1 |
+| `terragrunt.hcl.json unit` | 0 | 0 | 1 | 1 |
+
+Each category matches gruntled's documented reason for the unit or module. Examples:
+`include-target`, `generate-may-declare-outputs`, `invalid-dependency`, `syntax-error` and
+`config-too-deep`. The two resolved-unit rows are documented lower bounds: an absolute
+`config_path`, and deep-merged `enabled`/`skip_outputs`.
+
+Included modules: eligible to the model, not excluded, and with a cone that avoids every
+excluded unit. The share is taken of the modules `graph --json` knows.
+
+| Corpus | Included | Known | Share |
+|---|---:|---:|---:|
+| iso20022 | 62 | 62 | 1.000 |
+| secret | 3 | 3 | 1.000 |
+| denis256 | 795 | 818 | 0.972 |
+
+On denis256, 15 known modules are not eligible: 14 have a seed whose `generate` block may
+change the surface, and 1 has an include the model does not evaluate. The other 8 modules
+in the 818 vs 795 gap belong to excluded units.
+
+### Mutations
+
+| Class | Edit | Expected |
+|---|---|---|
+| M1 | referenced output removed | `removed_outputs`, GRT004 at every firing site and no GRT001, exit 1; v0.3.0's GRT001 set equals HEAD's GRT004 set |
+| M2 | unreferenced output removed | `removed_outputs`, Broken empty |
+| M3 | `variable "gruntled_m17_req" {}` in a new file | `added_variables`, `variable_required` absent → required |
+| M4 | `default` removed | `variable_required` optional → required |
+| M5 | `type` set to `object({gruntled_m17 = string})` | `variable_type` old → SENTINEL |
+| M6 | `type = string` on the base, `type = number` on the current tree | `output_type` string → number; the base against the pristine tree is empty |
+| M7 | `sensitive` flipped | `output_sensitive` |
+| M9 | M4 and M5 on the shared iso20022 `iac.src/global.tf` | one `changes[]` entry per linking module |
+| M8 | not an edit | Impacted at distance 2 and more equal the model's BFS |
+
+The recorded counts (sites = caught):
+
+```
+CORPUS-MUTATION iso20022 M1 sites=4 caught=4 excluded_by_touch=0
+CORPUS-MUTATION iso20022 M2 sites=392 caught=392 excluded_by_touch=0
+CORPUS-MUTATION iso20022 M3 sites=62 caught=62 excluded_by_touch=0
+CORPUS-MUTATION iso20022 M4 sites=0 caught=0 excluded_by_touch=0 excluded=map[declared-in-shared-link:372]
+CORPUS-MUTATION iso20022 M5 sites=75 caught=75 excluded_by_touch=0 excluded=map[declared-in-shared-link:372]
+CORPUS-MUTATION iso20022 M6 sites=396 caught=396 excluded_by_touch=0
+CORPUS-MUTATION iso20022 M7 sites=396 caught=396 excluded_by_touch=0
+CORPUS-MUTATION iso20022 M9 sites=12 caught=12 excluded_by_touch=0 excluded=map[linker-of-excluded-units:3]
+CORPUS-MUTATION iso20022 M8 depth>=2=67 depth>=3=0 depth>=4=0 depth>=5=0
+CORPUS-MUTATION secret M1 sites=3 caught=3 excluded_by_touch=0
+CORPUS-MUTATION secret M2 sites=1 caught=1 excluded_by_touch=0
+CORPUS-MUTATION secret M3 sites=3 caught=3 excluded_by_touch=0
+CORPUS-MUTATION secret M4 sites=4 caught=4 excluded_by_touch=0
+CORPUS-MUTATION secret M5 sites=8 caught=8 excluded_by_touch=0
+CORPUS-MUTATION secret M6 sites=4 caught=4 excluded_by_touch=0
+CORPUS-MUTATION secret M7 sites=4 caught=4 excluded_by_touch=0
+CORPUS-MUTATION secret M9 sites=0 caught=0 excluded_by_touch=0 (no file shared by symlink)
+CORPUS-MUTATION secret M8 depth>=2=14 depth>=3=0 depth>=4=0 depth>=5=0
+CORPUS-MUTATION denis256 M1 sites=87 caught=87 excluded_by_touch=8
+CORPUS-MUTATION denis256 M2 sites=387 caught=387 excluded_by_touch=0
+CORPUS-MUTATION denis256 M3 sites=795 caught=795 excluded_by_touch=0
+CORPUS-MUTATION denis256 M4 sites=41 caught=41 excluded_by_touch=0
+CORPUS-MUTATION denis256 M5 sites=708 caught=708 excluded_by_touch=0 excluded=map[type-grammar:1]
+CORPUS-MUTATION denis256 M6 sites=481 caught=481 excluded_by_touch=0 excluded=map[type-declared:1]
+CORPUS-MUTATION denis256 M7 sites=482 caught=482 excluded_by_touch=0
+CORPUS-MUTATION denis256 M9 sites=0 caught=0 excluded_by_touch=0 (no file shared by symlink)
+CORPUS-MUTATION denis256 M8 depth>=2=667 depth>=3=147 depth>=4=67 depth>=5=12
+```
+
+- **iso20022 M4 has no module-local site.** Every iso20022 default is in the shared
+  `global.tf`, which M9 covers.
+- **The 8 denis256 `excluded_by_touch`** are the (module, output) pairs of the
+  `reference shape other` rows.
+
+**The M1 dual oracle.**
+- `GRUNTLED_REF_BIN` must print `gruntled v0.3.0 (e870e2984760f0a674bc87697e3f69329613758e)`.
+- It must also pass a behavioural fingerprint: `rebase` is an unknown command and
+  `blast --depth` is an undefined flag. A HEAD build with v0.3.0 ldflags fails that check.
+
+**SENTINEL hand check.** The sentinel `object({gruntled_m17 = string})` has one attribute.
+The renderer writes `object({`, then each name in sorted order quoted with
+`strconv.Quote`, then `=` with no whitespace, then the type (`string`), then `})`. That
+gives `object({"gruntled_m17"=string})`, which is the string HEAD prints.
+
+### Reformat-only transforms
+
+Each transform is corpus-wide over the included modules' regular `.tf` files. None
+touches a string, heredoc or comment interior.
+
+| Transform | What it does |
+|---|---|
+| R1 | whitespace |
+| R2 | comments |
+| R3 | attribute reorder |
+| R4 | `optional()` default, two-sided, added and changed |
+| R5 | `.tf` to `.tf.json` for simple blocks, both directions |
+| R6 | blocks moved to another file |
+| R7 | `deprecated` added |
+| R8 | R1∘R2∘R3∘R6∘R7 |
+| R9 | symlinked module files materialised |
+
+Each must give exit 0 and an empty Broken, Impacted and `changes`. A guard also requires
+the same known modules and names, the same unit statuses, no new GRT100, and at least one
+edit per corpus:
+
+| Transform | iso20022 | secret | denis256 |
+|---|---:|---:|---:|
+| R1 | 1443 | 54 | 1520 |
+| R2 | 1413 | 44 | 2556 |
+| R3 | 0 (471 inside R8) | 5 | 43 |
+| R4 | 62 | 3 | 795 |
+| R5 | 469 | 9 | 1103 |
+| R6 | 471 | 12 | 1191 |
+| R7 | 471 | 12 | 1191 |
+| R8 | 5211 | 159 | 10875 |
+| R9 | 62 | 0 | 0 |
+
+### The daemon sample
+
+TestCorpusDaemonSample starts one built `gruntled watch --poll` at a time on a working copy.
+For each class it applies the first eligible site, then R8, then (iso20022) M9. After each
+edit it waits until the daemon has indexed the final tree. `report --blast` (text and
+JSON) must then equal `blast --base <pristine copy> <working copy>` after the exact-label
+normaliser, with the same exit code. After the revert the view must be empty again.
+
+Then comes one rebase cycle:
+- the M1 edit is applied;
+- `rebase --expect <gen>` accepts its GRT004 findings: iso20022 3, secret 2, denis256 1;
+- the view is empty;
+- the revert shows `+output <y>` at exit 0.
+
+The daemon is stopped with SIGTERM, then SIGKILL after 5 seconds, and no process may still
+mention the temp directories. The run passed on all three corpora: 18 s, 8 s and 38 s,
+147 MB RSS.
+
+### Recorded gate run
+
+2026-10-12, commit `853bb17`, 15:18:50 to 16:09:10 (wall 3020 s), run alone. Machine
+(from `lscpu`, `/proc/meminfo`, `uname -r` and `go version`): Intel(R) Core(TM) Ultra 7
+155H, 8 logical CPUs, MemTotal 8132820 kB, kernel 6.6.87.2-microsoft-standard-WSL2, go1.27.2.
+Gate output (excerpt: the first lines, the shards over 60 seconds, and the last lines):
+
+```
+corpus-gate: network=isolated (/proc/net/dev: lo)
+corpus-gate: GRUNTLED_REF_BIN gruntled v0.3.0 (e870e2984760f0a674bc87697e3f69329613758e)
+corpus-gate: free -m: Mem: 7942 912 5864 3 1360 7029
+256/256 identical
+corpus-gate: shard compare-ref ok 8s
+corpus-gate: shard TestCorpusBlastSelf ok 5s
+corpus-gate: shard TestCorpusBlastModel ok 8s
+corpus-gate: shard TestCorpusReformat ok 30s
+corpus-gate: shard TestCorpusMutation17/iso20022/M2 ok 65s
+corpus-gate: shard TestCorpusMutation17/iso20022/M6 ok 125s
+corpus-gate: shard TestCorpusMutation17/denis256/M2 ok 289s
+corpus-gate: shard TestCorpusMutation17/denis256/M3 ok 591s
+corpus-gate: shard TestCorpusMutation17/denis256/M5 ok 540s
+corpus-gate: shard TestCorpusMutation17/denis256/M6 ok 746s
+corpus-gate: shard TestCorpusMutation17/denis256/M7 ok 378s
+corpus-gate: free -m: Mem: 7942 1187 4022 3 2926 6754
+corpus-gate: 31/31
+```
+
+All 31 shards passed. The other shards took between 0 and 96 seconds each. Peak RSS was
+about 150 MB per shard.
+
+### Limitations
+
+- **The universe is restricted.** On denis256, 23 of the 818 known modules are outside it.
+  These are the modules with a surface-changing `generate` or a seed or cone that meets an
+  excluded unit (the table above). Their changes are not claimed.
+- **R5 converts only simple blocks.** Those are single-line values with no heredoc,
+  directive or nested block (iso20022 skipped 2 blocks, secret 3, denis256 88).
+- **No corpus declares `optional()` or an output `type`.** R4 and M6 therefore inject
+  them on both sides.
+- **The daemon sample is one site per class, not the full set.** The windows report-file
+  path is covered by phase 16 CI.
+- **The gate needs unprivileged user namespaces for `network=isolated`.** The CI workflow
+  sets `CORPUS_GATE_NONET=1`, so a runner without them fails instead of running with
+  network.
