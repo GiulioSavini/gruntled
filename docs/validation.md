@@ -737,3 +737,67 @@ fails at run time, a unit's own missing path fails during queue construction.
 - **Mutation coverage.** 13 mutations of four kinds (plus module-only on iso20022), in one
   unit per repository. Shared-include attribution and paths-list merging are covered by
   goldens, not by the corpus.
+
+## v0.4 daemon memory (DAEMON-10)
+
+Since v0.4 the watch daemon keeps a blast baseline: the `checking.Report` of its first
+index (or of the last `gruntled rebase`), next to the last Report and the served snapshot,
+which carries the pre-rendered check output and the blast view. The baseline is a Report
+only, never a loader, parse cache or file system (TestBaselineHoldsOnlyReport). This
+section records what that costs.
+
+**Method.** TestDaemonMemorySynthrepo (`cmd/gruntled/daemon_mem_test.go`) generates a
+synthrepo tree (`synthrepo.Spec{Units: n, IncludeDepth: 3, DependencyFanout: 3, Seed: 16}`)
+and measures `HeapInuse` after two `runtime.GC()` calls:
+
+- `report_heap`: one Report, indexed through the daemon's path (`watching.Indexer` over
+  one invalidating loader on an `os.Root`), with the indexer dropped;
+- `publisher_heap`: a publisher that published that Report, then the Report of one edit
+  (an output of `unit-000` renamed, reindexed with that dirty path), holding the baseline,
+  the last Report and the served snapshot sealed as the daemon seals it (`ipc.Seal`);
+- `view_bytes`: the blast view's text plus JSON bytes.
+
+The test asserts `publisher_heap <= 2.5 x report_heap + view_bytes + 1 MiB`, which a pinned
+parse cache (many times one Report) would break. The 5,000-unit size is skipped under
+`-short`.
+
+**Result.** One local run, on its own (`free -m` showed 6.9 GB available):
+
+| Units | Report heap | Publisher heap | Publisher / Report | View bytes | Report heap per unit |
+|---:|---:|---:|---:|---:|---:|
+| 65 | 344 KiB | 856 KiB | 2.49 | 20,424 | 5.4 KB |
+| 500 | 1.12 MiB | 2.70 MiB | 2.41 | 151,221 | 2.3 KB |
+| 5,000 | 10.9 MiB | 25.9 MiB | 2.37 | 1,609,736 | 2.3 KB |
+
+```
+VALIDATION-BENCH goos=linux goarch=amd64
+VALIDATION-BENCH cpus=8
+VALIDATION-BENCH go=go1.27.2
+VALIDATION-BENCH cpu_model=Intel(R) Core(TM) Ultra 7 155H
+VALIDATION-BENCH mem_total=8132820 kB
+VALIDATION-BENCH kernel=6.6.87.2-microsoft-standard-WSL2
+VALIDATION-BENCH loadavg=0.19 0.27 0.38 2/246 146219
+VALIDATION-BENCH daemon_mem units=65 report_heap=352256 publisher_heap=876544 view_bytes=20424 ratio=2.49
+VALIDATION-BENCH daemon_mem units=500 report_heap=1171456 publisher_heap=2826240 view_bytes=151221 ratio=2.41
+VALIDATION-BENCH daemon_mem units=5000 report_heap=11460608 publisher_heap=27172864 view_bytes=1609736 ratio=2.37
+```
+
+The ARCHITECTURE estimate was about 1-3 KB per unit for the baseline: measured, one
+Report costs about 2.3 KB per unit from 500 units up (the 65-unit figure is dominated by
+fixed overhead), so the baseline is about 11 MiB at 5,000 units. The whole publisher state
+is two Reports plus the snapshot (check output, blast view and its sealed response line),
+about 2.4 x one Report.
+
+The worst-case blast view is bounded separately. TestReportBlastSizeBound (BLAST-11, CI,
+skipped under `-short`) runs the built daemon on the 5,000-unit chain whose seed module
+changes one attribute of a ~4 MiB variable type. `report --blast` stays within the
+`blast` byte bounds, and the daemon's peak RSS stays within an in-run control daemon's
++ 64 x the type bytes. In the same local run: control 627 MiB, big 635 MiB, bound
+883 MiB; text 10,234,273 bytes and JSON 11,384,568 bytes, under the 64 MiB response cap.
+
+**Command.**
+
+```sh
+free -m   # at least 4 GB available; run it alone
+GOMAXPROCS=2 GOFLAGS=-p=2 timeout 900 go test -count=1 -run TestDaemonMemorySynthrepo -v ./cmd/gruntled/
+```
