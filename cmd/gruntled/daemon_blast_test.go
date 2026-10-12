@@ -691,9 +691,14 @@ func servedBaseline(text string) (presenter.DaemonBaseline, bool) {
 }
 
 // waitBlastFinal waits until the daemon on dir serves a blast view past
-// its first generation AND its plain report equals check on dir: the
-// daemon then holds the final tree, never a half-written one.
-func waitBlastFinal(t *testing.T, dir string, report func(args ...string) cliResult) {
+// its first generation, its plain report equals check on dir, AND the
+// blast view holds every line in final: the daemon then holds the final
+// tree, never a half-written one. The report/check comparison alone is
+// vacuous when the edit leaves check output unchanged (a type-only change),
+// and applyTree's temp file can make a generation of its own before the
+// rename lands; final must therefore name lines only the final tree's blast
+// view can contain (TestReportBlastE2E passes each scenario's has lines).
+func waitBlastFinal(t *testing.T, dir string, report func(args ...string) cliResult, final ...string) {
 	t.Helper()
 	var last string
 	eventually(t, func() bool {
@@ -702,6 +707,12 @@ func waitBlastFinal(t *testing.T, dir string, report func(args ...string) cliRes
 		if !ok || d.CurrentGeneration < 2 {
 			last = "report --blast: " + bl.String()
 			return false
+		}
+		for _, w := range final {
+			if !strings.Contains(bl.stdout, w) {
+				last = fmt.Sprintf("report --blast lacks %q: %s", w, bl.String())
+				return false
+			}
 		}
 		got, want := report("--format", "text", dir), runCheckAt("text", dir)
 		if got != want {
@@ -769,7 +780,7 @@ var e2eScenarios = []struct {
 			"live/a/terragrunt.hcl":   "dependency \"net\" {\n  config_path = \"../net\"\n}\ninputs = { id = dependency.net.outputs.id }\n",
 		},
 		nil,
-		[]string{"\nBroken (0):\n", "\nType changes (1):\n  modules/net variable cidr: type string -> number\n"},
+		[]string{"\nBroken (0):\n", "\nType changes (1):\n  modules/net variable cidr: type string -> bool\n"},
 	},
 	{
 		"GRT100 and GRT002",
@@ -796,7 +807,10 @@ func init() {
 		return c
 	}
 	e2eScenarios[0].c = edit(e2eScenarios[0].d, map[string]string{"modules/net/main.tf": "output \"id\" { value = \"x\" }\n"})
-	e2eScenarios[1].c = edit(e2eScenarios[1].d, map[string]string{"modules/net/main.tf": "variable \"cidr\" {\n  type = number\n}\noutput \"id\" {\n  value = \"x\"\n}\n"})
+	// The poll scanner cannot see an edit that keeps size and mtime
+	// (watch/poll.go scanner), so the type change must change the size:
+	// string -> bool, not string -> number.
+	e2eScenarios[1].c = edit(e2eScenarios[1].d, map[string]string{"modules/net/main.tf": "variable \"cidr\" {\n  type = bool\n}\noutput \"id\" {\n  value = \"x\"\n}\n"})
 	e2eScenarios[2].c = edit(e2eScenarios[2].d, map[string]string{
 		"live/a/terragrunt.hcl": "dependency \"net\" {\n  config_path = \"../net\"\n}\ninputs = { id = dependency.net.outputs.id }\nlocals {\n",
 		"live/b/terragrunt.hcl": "dependency \"a\" {\n  config_path = \"../a\"\n}\ndependency \"gone\" {\n  config_path = \"../gone\"\n}\n",
@@ -823,7 +837,7 @@ func TestReportBlastE2E(t *testing.T) {
 					"first report", func() string { return first.String() })
 
 				applyTree(t, dir, sc.d, sc.c)
-				waitBlastFinal(t, dir, report)
+				waitBlastFinal(t, dir, report, sc.has...)
 				assertBlastEquivalent(t, report, baseCopy, dir)
 				view := report("--blast", dir)
 				for _, h := range sc.has {
