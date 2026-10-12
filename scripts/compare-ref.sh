@@ -12,11 +12,23 @@
 # "N/M identical", and exits 1 when anything differs. A difference fails the
 # gate; it is never explained away.
 #
+# COMPARE_REF_CORPORA=<dir>[:<dir>...] adds each directory (for example the
+# pinned corpora from scripts/fetch-corpora.sh) as a read-only fixture,
+# labelled corpus/<basename>: cwd = the directory, argument ".", the same four
+# commands. For corpus rows stdout, stderr and the exit code are compared.
+# Each entry must exist and be a directory, else the script exits 2 before
+# building anything. A tree digest of each corpus is taken before and after
+# the runs, and any change prints "DIFF corpus/<name> digest" and fails the
+# run. The digest never follows a symlink (find -P): regular files are
+# hashed with their mode, links are recorded as "path -> target", other
+# types by type, path and mode. Corpora are never extracted, copied or
+# executed; only the two gruntled binaries read them.
+#
 # COMPARE_REF_PERTURB=1 appends one byte to the first working-tree stdout
 # before comparing: the self-test that proves the comparison can fail.
 #
-# Offline by construction: GOFLAGS=-mod=readonly and GOPROXY=off make a
-# build that would need a download fail instead. The ref worktree and every
+# Offline by construction: GOFLAGS=-mod=readonly, GOPROXY=off and
+# GOTOOLCHAIN=local make a build that would need a download fail instead. The ref worktree and every
 # temp file are removed on exit. <ref> must name a commit (git rev-parse
 # --verify --end-of-options); txtar member names and symlink targets must stay
 # inside the extracted tree, or the script stops before writing them.
@@ -39,12 +51,47 @@ if [ "$#" -ne 1 ] || [ -z "$1" ]; then
 fi
 ref=$1
 
+# Resolved before the cd below, so relative entries mean the caller's cwd.
+corpora=()
+if [ -n "${COMPARE_REF_CORPORA:-}" ]; then
+  IFS=: read -r -a entries <<<"$COMPARE_REF_CORPORA"
+  for e in "${entries[@]}"; do
+    if [ -z "$e" ] || ! r=$(realpath -e -- "$e" 2>/dev/null) || [ ! -d "$r" ]; then
+      echo "compare-ref.sh: COMPARE_REF_CORPORA entry is not a directory: '$e'" >&2
+      exit 2
+    fi
+    corpora+=("$r")
+  done
+fi
+
 cd "$(dirname "$0")/.."
 root=$(pwd)
 T=$(mktemp -d)
 trap 'git -C "$root" worktree remove --force "$T/ref" >/dev/null 2>&1 || true; rm -rf "$T"' EXIT
 
-export GOFLAGS=-mod=readonly GOPROXY=off
+export GOFLAGS=-mod=readonly GOPROXY=off GOTOOLCHAIN=local
+
+# tree_listing <dir>: one sorted line per entry under dir (excluding .git),
+# never following a symlink: "f <mode> <sha256>  <path>" for regular files,
+# "l <path> -> <target>" for links, "<type> <path> <mode>" for the rest.
+tree_listing() {
+  (
+    cd -- "$1"
+    find -P . -path ./.git -prune -o -type f -print0 | LC_ALL=C sort -z >"$T/dl.files"
+    # xargs keeps argument order, so line n of both lists is the same file.
+    xargs -0 -r stat -c '%a' -- <"$T/dl.files" >"$T/dl.mode"
+    xargs -0 -r sha256sum -- <"$T/dl.files" >"$T/dl.sum"
+    {
+      paste -d' ' "$T/dl.mode" "$T/dl.sum" | sed 's/^/f /'
+      find -P . -path ./.git -prune -o -type l -printf 'l %p -> %l\n'
+      find -P . -path ./.git -prune -o ! -type f ! -type l -printf '%y %p %m\n'
+    } | LC_ALL=C sort
+  )
+}
+
+tree_digest() {
+  tree_listing "$1" | sha256sum | cut -d' ' -f1
+}
 
 commit=$(git rev-parse --verify --quiet --end-of-options "$ref^{commit}") || {
   echo "compare-ref.sh: $ref is not a commit" >&2
@@ -79,30 +126,61 @@ for name in clean-fixture sarif-fixture; do
   fixtures+=("$T/fx/dir/$name")
 done
 
+ncorpus=${#fixtures[@]}
+for d in "${corpora[@]}"; do
+  fixtures+=("$d")
+done
+
 commands=("check --format text" "check --format json" "check --format sarif" "graph --json")
 total=0
 same=0
 perturb=${COMPARE_REF_PERTURB:-}
-for d in "${fixtures[@]}"; do
+digest_fail=0
+for i in "${!fixtures[@]}"; do
+  d=${fixtures[$i]}
+  corpus=
   label=${d#"$T/fx/"}
+  if [ "$i" -ge "$ncorpus" ]; then
+    corpus=1
+    label=corpus/$(basename -- "$d")
+    before=$(tree_digest "$d")
+  fi
   for c in "${commands[@]}"; do
     total=$((total + 1))
-    # shellcheck disable=SC2086 # c is a fixed word list
-    rc_ref=0; (cd "$d" && "$T/gref" $c . >"$T/out.ref" 2>/dev/null) || rc_ref=$?
-    # shellcheck disable=SC2086
-    rc_head=0; (cd "$d" && "$T/ghead" $c . >"$T/out.head" 2>/dev/null) || rc_head=$?
+    : >"$T/err.ref"
+    : >"$T/err.head"
+    if [ -n "$corpus" ]; then
+      # shellcheck disable=SC2086 # c is a fixed word list
+      rc_ref=0; (cd -- "$d" && "$T/gref" $c . >"$T/out.ref" 2>"$T/err.ref") || rc_ref=$?
+      # shellcheck disable=SC2086
+      rc_head=0; (cd -- "$d" && "$T/ghead" $c . >"$T/out.head" 2>"$T/err.head") || rc_head=$?
+    else
+      # shellcheck disable=SC2086
+      rc_ref=0; (cd "$d" && "$T/gref" $c . >"$T/out.ref" 2>/dev/null) || rc_ref=$?
+      # shellcheck disable=SC2086
+      rc_head=0; (cd "$d" && "$T/ghead" $c . >"$T/out.head" 2>/dev/null) || rc_head=$?
+    fi
     if [ -n "$perturb" ]; then
       printf 'x' >>"$T/out.head"
       perturb=
     fi
-    if [ "$rc_ref" -eq "$rc_head" ] && cmp -s "$T/out.ref" "$T/out.head"; then
+    if [ "$rc_ref" -eq "$rc_head" ] && cmp -s "$T/out.ref" "$T/out.head" &&
+      cmp -s "$T/err.ref" "$T/err.head"; then
       same=$((same + 1))
       echo "same $label $c (exit $rc_head)"
     else
       echo "DIFF $label $c (exit ref $rc_ref, head $rc_head)"
     fi
   done
+  if [ -n "$corpus" ]; then
+    if [ "$(tree_digest "$d")" = "$before" ]; then
+      echo "same $label digest $before"
+    else
+      echo "DIFF $label digest"
+      digest_fail=1
+    fi
+  fi
 done
 
 echo "$same/$total identical"
-[ "$same" -eq "$total" ]
+[ "$same" -eq "$total" ] && [ "$digest_fail" -eq 0 ]
