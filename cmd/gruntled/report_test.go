@@ -359,3 +359,173 @@ func TestReportNoDaemonCreatesNothing(t *testing.T) {
 		}
 	})
 }
+
+// runReportArgs runs report with args against the runtime base of env.
+func runReportArgs(env statusfile.Env, goos string, args ...string) cliResult {
+	var out, errb bytes.Buffer
+	code := runReportWith(args, &out, &errb, reportDeps{env: env, goos: goos})
+	return cliResult{out.String(), errb.String(), code}
+}
+
+// snapHandler serves a fixed snapshot; rebase is answered by rebase, or
+// refused as unsupported when nil.
+type snapHandler struct {
+	snap   *ipc.Snapshot
+	rebase func(*uint64) (ipc.RebaseResult, error)
+}
+
+func (h snapHandler) Snapshot() *ipc.Snapshot { return h.snap }
+
+func (h snapHandler) Rebase(e *uint64) (ipc.RebaseResult, error) {
+	if h.rebase == nil {
+		return ipc.RebaseResult{}, ipc.Refuse(ipc.CodeUnsupported, "no")
+	}
+	return h.rebase(e)
+}
+
+// serveAt runs a ServeHandler at the runtime socket of repoDir under env.
+func serveAt(t *testing.T, env statusfile.Env, repoDir string, h ipc.Handler) {
+	t.Helper()
+	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
+		t.Skip("unix sockets on linux and darwin only")
+	}
+	rt := ensureRuntime(t, env, repoDir)
+	ln, err := ipc.Listen(filepath.Join(rt, ipc.SockName))
+	mustDo(t, err)
+	srv := ipc.ServeHandler(ln, ipc.Info{PID: os.Getpid()}, h)
+	t.Cleanup(func() { _ = srv.Close() })
+}
+
+// blastSnapshots are the served snapshots after publishing A (clean view)
+// and B (a GRT004 in Broken).
+func blastSnapshots(t *testing.T) (clean, broken *ipc.Snapshot) {
+	t.Helper()
+	a, b := abReports(t)
+	p := newTestPublisher(t)
+	p.publish(ready(a))
+	clean = p.served.Load()
+	p.publish(ready(b))
+	return clean, p.served.Load()
+}
+
+// withSnapshot serves s for fixture over goos's transport.
+func withSnapshot(t *testing.T, goos, fixture string, s *ipc.Snapshot) statusfile.Env {
+	t.Helper()
+	env := envAt(shortBase(t))
+	if goos == "windows" {
+		holdDump(t, env, fixture, s)
+	} else {
+		serveAt(t, env, fixture, snapHandler{snap: s})
+	}
+	return env
+}
+
+func TestReportBlastStates(t *testing.T) {
+	for _, goos := range reportGOOS {
+		t.Run(goos+"/indexing", func(t *testing.T) {
+			dir := repo(t, "vpc_idd")
+			deps := testDeps(t)
+			deps.goos = goos
+			entered, release := make(chan struct{}), make(chan struct{})
+			deps.loaderHook = func(*terragrunt.Loader) {
+				close(entered)
+				<-release
+			}
+			startWatch(t, dir, deps, "--poll")
+			t.Cleanup(func() { close(release) }) // runs before the daemon stops
+			<-entered
+			got := runReportArgs(deps.env, goos, "--blast", dir)
+			if got.code != exitFailure || got.stdout != "" || got.stderr != "gruntled: the daemon is still indexing; try again\n" {
+				t.Fatalf("report --blast while indexing: %s", got)
+			}
+		})
+	}
+	fixture := "testdata/sarif-fixture"
+	clean, broken := blastSnapshots(t)
+	for _, goos := range reportGOOS {
+		for _, c := range []struct {
+			name string
+			snap *ipc.Snapshot
+			code int
+		}{{"clean", clean, exitOK}, {"broken", broken, exitFindings}} {
+			t.Run(goos+"/"+c.name, func(t *testing.T) {
+				env := withSnapshot(t, goos, fixture, c.snap)
+				for _, f := range []string{"text", "json"} {
+					want := c.snap.Blast.Text
+					if f == "json" {
+						want = c.snap.Blast.JSON
+					}
+					got := runReportArgs(env, goos, "--blast", "--format", f, fixture)
+					if got.code != c.code || got.stdout != string(want) || got.stderr != "" {
+						t.Fatalf("%s: %s", f, got)
+					}
+				}
+			})
+		}
+		t.Run(goos+"/failed", func(t *testing.T) {
+			s := *broken
+			s.State, s.LastError = ipc.StateFailed, "parse \x1b[2Jboom\r\nline\x07"
+			env := withSnapshot(t, goos, fixture, &s)
+			got := runReportArgs(env, goos, "--blast", fixture)
+			if got.code != exitFindings || got.stdout != string(broken.Blast.Text) || got.stderr != failedWarning {
+				t.Fatalf("failed: %s", got)
+			}
+		})
+	}
+}
+
+func TestReportBlastRefusals(t *testing.T) {
+	fixture := "testdata/sarif-fixture"
+	_, broken := blastSnapshots(t)
+	with := func(v *ipc.BlastView) *ipc.Snapshot {
+		s := *broken
+		s.Blast = v
+		return &s
+	}
+	cases := []struct {
+		name  string
+		snap  *ipc.Snapshot
+		want  string // exact stderr, or a substring when exact is false
+		exact bool
+	}{
+		{"too large", with(&ipc.BlastView{BaselineGeneration: 1, TooLarge: 70_000_000}),
+			"gruntled: the blast view is 70000000 bytes, over the 64 MiB response cap; run gruntled blast --base <dir>\n", true},
+		{"view error", with(&ipc.BlastView{BaselineGeneration: 1, Error: "blast view: \x1b[2Jboom\r\n"}),
+			"gruntled: the daemon could not compute the blast view: blast view: [2Jboom\n", true},
+		{"no view", with(nil), "no blast view", false},
+		{"empty view", with(&ipc.BlastView{}), "empty blast view", false},
+		{"text only", with(&ipc.BlastView{Text: []byte("x")}), "empty blast view", false},
+		{"json only", with(&ipc.BlastView{JSON: []byte("x")}), "empty blast view", false},
+	}
+	for _, goos := range reportGOOS {
+		for _, c := range cases {
+			t.Run(goos+"/"+c.name, func(t *testing.T) {
+				env := withSnapshot(t, goos, fixture, c.snap)
+				got := runReportArgs(env, goos, "--blast", fixture)
+				if got.code != exitFailure || got.stdout != "" ||
+					(c.exact && got.stderr != c.want) || (!c.exact && !strings.Contains(got.stderr, c.want)) {
+					t.Fatalf("%s", got)
+				}
+				assertNoControl(t, got.stderr)
+			})
+		}
+	}
+}
+
+func TestReportBlastNoDaemonCreatesNothing(t *testing.T) {
+	dir := repo(t, "vpc_idd")
+	for _, goos := range reportGOOS {
+		t.Run(goos, func(t *testing.T) {
+			base := shortBase(t)
+			got := runReportArgs(envAt(base), goos, "--blast", dir)
+			if got.code != exitFailure || got.stdout != "" || !strings.Contains(got.stderr, "gruntled: no watch daemon is running for ") {
+				t.Fatalf("no daemon: %s", got)
+			}
+			ents, err := os.ReadDir(base)
+			mustDo(t, err)
+			if len(ents) != 0 {
+				t.Fatalf("report --blast created %v in the runtime base", ents)
+			}
+		})
+	}
+}

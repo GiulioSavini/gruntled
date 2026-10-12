@@ -6,6 +6,9 @@ stderr '^  report  '
 exec gruntled-exit 0 report -h
 stderr '^usage: gruntled report '
 stderr '--format text\|json\|sarif'
+stderr '--blast'
+stderr 'in Broken with --blast'
+stderr 'over the 64 MiB cap or unavailable'
 stderr '^  0  '
 stderr '^  1  '
 stderr '^  2  usage error'
@@ -29,3 +32,31 @@ exec gruntled-exit 2 report a b
 stderr 'more than one path given'
 stderr '^usage: gruntled report '
 ! stdout .
+
+# --blast with sarif: exit 2 with usage
+exec gruntled-exit 2 report --blast --format sarif
+stderr 'invalid --format "sarif" with --blast \(want text or json\)'
+stderr '^usage: gruntled report '
+! stdout .
+
+# --depth belongs to blast --base: exit 2 with or without --blast
+exec gruntled-exit 2 report --blast --depth 2
+stderr '^gruntled: --depth is not supported by report; use gruntled blast --base <dir> --depth N$'
+stderr '^usage: gruntled report '
+! stdout .
+exec gruntled-exit 2 report --depth 2
+stderr '^gruntled: --depth is not supported by report; use gruntled blast --base <dir> --depth N$'
+stderr '^usage: gruntled report '
+! stdout .
+
+# --blast with no daemon: exit 3
+env XDG_RUNTIME_DIR=$WORK/rt
+mkdir $WORK/rt
+exec gruntled-exit 3 report --blast repo
+stderr 'no watch daemon is running for '
+! stdout .
+! exists $WORK/rt/gruntled
+
+-- repo/vpc/terragrunt.hcl --
+-- repo/vpc/main.tf --
+output "vpc_id" { value = "x" }
