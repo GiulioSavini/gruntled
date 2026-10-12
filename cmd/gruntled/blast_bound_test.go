@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"syscall"
 	"testing"
@@ -213,7 +214,8 @@ func startBoundDaemon(t *testing.T, bin, dir string) *boundDaemon {
 }
 
 // client runs the built binary against the daemon and returns stdout and
-// the exit code; stderr must be empty unless the exit code is 3.
+// the exit code; report --blast must print nothing on stderr unless it
+// exits 3 (plain text report prints its summary there).
 func (d *boundDaemon) client(args ...string) (string, int) {
 	d.t.Helper()
 	cmd := exec.Command(d.bin, append(args, d.dir)...)
@@ -229,7 +231,7 @@ func (d *boundDaemon) client(args ...string) (string, int) {
 		}
 		code = ee.ExitCode()
 	}
-	if stderr.Len() > 0 && code != exitFailure {
+	if stderr.Len() > 0 && code != exitFailure && slices.Contains(args, "--blast") {
 		d.t.Fatalf("%v: exit %d, stderr:\n%s", args, code, stderr.String())
 	}
 	return stdout.String(), code
