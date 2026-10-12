@@ -37,6 +37,10 @@ jobs:
           set -o pipefail
           bash scripts/fetch-corpora.sh "$RUNNER_TEMP/corpus" | tee "$RUNNER_TEMP/fetch.log"
           grep '^export GRUNTLED_CORPUS' "$RUNNER_TEMP/fetch.log" | sed 's/^export //' >> "$GITHUB_ENV"
+      - name: allow unprivileged user namespaces
+        # ubuntu-latest's AppArmor blocks them (run 38262035294), and the
+        # gate needs `unshare -rn` to prove it runs with no network.
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - name: corpus gate
         env:
           CORPUS_GATE_NONET: "1"
