@@ -61,6 +61,15 @@ func TestValidationDocPins(t *testing.T) {
 	for _, m := range graphMutations {
 		want = append(want, m.Want.pos(), m.Want.Msg)
 	}
+	// v0.4 DAEMON-10: the daemon memory record at the three sizes
+	// TestDaemonMemorySynthrepo measures.
+	want = append(want,
+		"## v0.4 daemon memory (DAEMON-10)",
+		"VALIDATION-BENCH daemon_mem units=65 ",
+		"VALIDATION-BENCH daemon_mem units=500 ",
+		"VALIDATION-BENCH daemon_mem units=5000 ",
+		"TestDaemonMemorySynthrepo",
+	)
 	for _, s := range want {
 		if !strings.Contains(doc, s) {
 			t.Errorf("docs/validation.md does not contain %q", s)

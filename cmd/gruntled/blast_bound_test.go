@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -177,5 +178,192 @@ func TestBlastSizeBound(t *testing.T) {
 		rssControl>>20, rssBig>>20, bound>>20, typeBytes, runtime.GOOS, runtime.GOARCH, runtime.NumCPU())
 	if rssBig > bound {
 		t.Errorf("maxrss %d MiB over the bound %d MiB", rssBig>>20, bound>>20)
+	}
+}
+
+// boundDaemon is a built-binary watch daemon on a private runtime dir.
+type boundDaemon struct {
+	t    *testing.T
+	bin  string
+	dir  string
+	env  []string
+	cmd  *exec.Cmd
+	errb *syncBuf
+	done bool
+}
+
+func startBoundDaemon(t *testing.T, bin, dir string) *boundDaemon {
+	t.Helper()
+	base := shortBase(t)
+	rt := filepath.Join(base, "rt")
+	mustDo(t, os.Mkdir(rt, 0o700))
+	d := &boundDaemon{t: t, bin: bin, dir: dir, env: append(os.Environ(), "XDG_RUNTIME_DIR="+rt, "TMPDIR="+rt), errb: &syncBuf{}}
+	d.cmd = exec.Command(bin, "watch", "--poll", "--poll-interval", "50ms", "--status-file", filepath.Join(base, "st", "status"), dir)
+	d.cmd.Env = d.env
+	d.cmd.Stdout = io.Discard
+	d.cmd.Stderr = d.errb
+	mustDo(t, d.cmd.Start())
+	t.Cleanup(func() {
+		if !d.done {
+			_ = d.cmd.Process.Kill()
+			_ = d.cmd.Wait()
+		}
+	})
+	return d
+}
+
+// client runs the built binary against the daemon and returns stdout and
+// the exit code; stderr must be empty unless the exit code is 3.
+func (d *boundDaemon) client(args ...string) (string, int) {
+	d.t.Helper()
+	cmd := exec.Command(d.bin, append(args, d.dir)...)
+	cmd.Env = d.env
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	err := cmd.Run()
+	code := 0
+	if err != nil {
+		ee, ok := err.(*exec.ExitError)
+		if !ok {
+			d.t.Fatalf("%v: %v", args, err)
+		}
+		code = ee.ExitCode()
+	}
+	if stderr.Len() > 0 && code != exitFailure {
+		d.t.Fatalf("%v: exit %d, stderr:\n%s", args, code, stderr.String())
+	}
+	return stdout.String(), code
+}
+
+// poll runs cond every 500 ms until it holds, failing after limit.
+func (d *boundDaemon) poll(limit time.Duration, what string, cond func() bool) {
+	d.t.Helper()
+	deadline := time.Now().Add(limit)
+	for !cond() {
+		if time.Now().After(deadline) {
+			d.t.Fatalf("timed out after %v waiting for %s; daemon stderr:\n%s", limit, what, d.errb.String())
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
+// stop sends SIGTERM, waits, and returns the daemon's peak RSS in bytes.
+func (d *boundDaemon) stop() int64 {
+	d.t.Helper()
+	mustDo(d.t, d.cmd.Process.Signal(syscall.SIGTERM))
+	err := d.cmd.Wait()
+	d.done = true
+	if err != nil {
+		d.t.Fatalf("daemon exit: %v; stderr:\n%s", err, d.errb.String())
+	}
+	ru, ok := d.cmd.ProcessState.SysUsage().(*syscall.Rusage)
+	if !ok {
+		d.t.Fatal("no rusage")
+	}
+	rss := int64(ru.Maxrss)
+	if runtime.GOOS == "linux" {
+		rss *= 1024 // linux reports KiB, darwin bytes
+	}
+	return rss
+}
+
+// TestReportBlastSizeBound (BLAST-11 report half, 16-04): a built-binary
+// daemon on the 5,000-unit chain whose seed module changes one attribute of
+// a ~4 MiB variable type serves report --blast within TestBlastSizeBound's
+// byte bounds (type strings once), with 5,000 Impacted units, and its peak
+// RSS stays within the in-run control daemon's (same-size file, tiny type
+// change) + 64 x type bytes. Absolute values are only logged.
+func TestReportBlastSizeBound(t *testing.T) {
+	if testing.Short() {
+		t.Skip("builds the binary and runs two daemons on a 5,000-unit chain")
+	}
+	bin := benchBuildGruntled(t)
+
+	run := func(name, oldType, newType string) (text, js string, rss int64) {
+		dir := filepath.Join(t.TempDir(), "repo")
+		boundTree(t, dir, oldType)
+		d := startBoundDaemon(t, bin, dir)
+		start := time.Now()
+		d.poll(60*time.Second, name+": first report", func() bool { _, code := d.client("report"); return code == exitOK })
+		indexed := time.Since(start)
+
+		p := filepath.Join(dir, "modules", "big", "main.tf")
+		mustDo(t, os.WriteFile(p+".tmp", []byte("variable \"big\" {\n  type = "+newType+"\n}\n"), 0o644))
+		mustDo(t, os.Rename(p+".tmp", p))
+		start = time.Now()
+		d.poll(180*time.Second, name+": 5,000 impacted", func() bool {
+			out, code := d.client("report", "--blast", "--format", "json")
+			if code != exitOK {
+				return false
+			}
+			var doc struct {
+				Impacted []json.RawMessage `json:"impacted"`
+			}
+			if json.Unmarshal([]byte(out), &doc) != nil || len(doc.Impacted) != boundUnits {
+				return false
+			}
+			js = out
+			return true
+		})
+		reindexed := time.Since(start)
+		var code int
+		if text, code = d.client("report", "--blast"); code != exitOK {
+			t.Fatalf("%s: report --blast exit %d\n%.2000s", name, code, text)
+		}
+		rss = d.stop()
+		t.Logf("%s: initial index %v, reindex to 5,000 impacted %v; text %d bytes, json %d bytes; daemon maxrss %d MiB",
+			name, indexed.Round(time.Millisecond), reindexed.Round(time.Millisecond), len(text), len(js), rss>>20)
+		return text, js, rss
+	}
+
+	oldType := bigObjectType(hclconv.MaxFileBytes-200, "string")
+	newType := bigObjectType(hclconv.MaxFileBytes-200, "number")
+	typeBytes := len(newType)
+
+	// The control: same chain, a module file of the same size whose 4 MiB
+	// object is a default (parsed, never a type), and a tiny type change.
+	_, _, rssControl := run("control (same-size file, tiny type)", "string\n  default = "+oldType, "number\n  default = "+oldType)
+	text, js, rssBig := run(fmt.Sprintf("big (%d-byte type)", typeBytes), oldType, newType)
+
+	var doc struct {
+		Impacted []struct {
+			Unit     string `json:"unit"`
+			Distance int    `json:"distance"`
+		} `json:"impacted"`
+		Changes []struct {
+			TypeChanges []struct {
+				Kind, Name, Old, New string
+			} `json:"type_changes"`
+		} `json:"changes"`
+	}
+	mustDo(t, json.Unmarshal([]byte(js), &doc))
+	seen := make([]bool, boundUnits+1)
+	for _, e := range doc.Impacted {
+		if e.Distance < 1 || e.Distance > boundUnits || seen[e.Distance] {
+			t.Fatalf("distance %d of %s out of range or repeated", e.Distance, e.Unit)
+		}
+		seen[e.Distance] = true
+	}
+	if len(doc.Changes) != 1 || len(doc.Changes[0].TypeChanges) != 1 || doc.Changes[0].TypeChanges[0].Kind != "variable_type" {
+		t.Fatalf("changes = %+v", doc.Changes)
+	}
+	tc := doc.Changes[0].TypeChanges[0]
+	rendered := len(tc.Old) + len(tc.New)
+	t.Logf("rendered old+new %d bytes (source type %d bytes)", rendered, typeBytes)
+	if bound := rendered + boundUnits*200 + 1024; len(text) > bound {
+		t.Errorf("text %d bytes, over %d", len(text), bound)
+	}
+	if bound := 2*rendered + boundUnits*400 + 1024; len(js) > bound {
+		t.Errorf("json %d bytes, over %d", len(js), bound)
+	}
+	if strings.Count(text, tc.New) != 1 {
+		t.Errorf("text prints the new type string %d times, want 1", strings.Count(text, tc.New))
+	}
+
+	bound := rssControl + 64*int64(typeBytes)
+	t.Logf("daemon maxrss control %d MiB, big %d MiB, bound %d MiB (control + 64 x %d type bytes); %s/%s, %d CPUs",
+		rssControl>>20, rssBig>>20, bound>>20, typeBytes, runtime.GOOS, runtime.GOARCH, runtime.NumCPU())
+	if rssBig > bound {
+		t.Errorf("daemon maxrss %d MiB over the bound %d MiB", rssBig>>20, bound>>20)
 	}
 }
