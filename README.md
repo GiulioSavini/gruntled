@@ -202,6 +202,10 @@ gruntled: ok @ 14:02:11
 running daemon last published, with the same bytes and exit codes as
 `check` (0 clean, 1 error diagnostics). It never starts a daemon: with none
 running, or while the first index is still in progress, it exits 3.
+`gruntled report --blast` prints the daemon's blast view instead: the blast
+of the current tree against the daemon's baseline, which is its first index
+until `gruntled rebase [--expect N]` moves it to the last published result.
+rebase only changes the daemon's in-memory baseline and writes nothing.
 
 `gruntled blast --base dir [--format text|json] [--depth N] [path]` compares
 `path` with a baseline tree you checked out yourself (for example with
@@ -216,7 +220,9 @@ never change the exit code. Without `--base` every finding is Broken.
 **Windows limitation.** There is no native watcher on Windows: `watch`
 always uses stat polling. There is no socket either: the daemon rewrites a
 report file after each index and `report` reads it, so `report` shows the
-last published result with no live query of the daemon.
+last published result with no live query of the daemon. `report --blast`
+reads the blast view from that file; `gruntled rebase` needs the socket and
+is not available on Windows (restart `watch` to reset the baseline).
 
 On linux and darwin `report` talks to the daemon over a local unix socket
 in the runtime directory, opened with the standard `syscall` package. The

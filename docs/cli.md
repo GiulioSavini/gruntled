@@ -11,7 +11,8 @@ gruntled check [--format text|json|sarif] [path]
 gruntled graph --json [path]
 gruntled blast [--base dir] [--format text|json] [path]
 gruntled watch [--poll] [--poll-interval d] [--debounce d] [--status-file p] [--print-status-path] [path]
-gruntled report [--format text|json|sarif] [path]
+gruntled report [--blast] [--format text|json|sarif] [path]
+gruntled rebase [--expect N] [path]
 gruntled --version
 ```
 
@@ -30,6 +31,8 @@ gruntled watch live/
 gruntled watch --print-status-path live/
 gruntled report live/
 gruntled report --format sarif live/ > gruntled.sarif
+gruntled report --blast live/
+gruntled rebase --expect 7 live/
 ```
 
 - Flags may appear before or after the path. The Go standard library `flag`
@@ -38,8 +41,8 @@ gruntled report --format sarif live/ > gruntled.sarif
 - `--` ends flag parsing. Everything after it is a path, even if it starts with `-`.
 - More than one path is a usage error (exit 2).
 - `gruntled -h` lists the commands. `gruntled check -h`, `gruntled graph -h`,
-  `gruntled blast -h`, `gruntled watch -h` and `gruntled report -h` print the
-  usage texts below and exit 0.
+  `gruntled blast -h`, `gruntled watch -h`, `gruntled report -h` and
+  `gruntled rebase -h` print the usage texts below and exit 0.
 
 ```
 usage: gruntled <command> [arguments]
@@ -50,12 +53,14 @@ Commands:
   blast   report which units a change breaks (Broken) or puts at risk (Impacted) against --base
   watch   reindex on every save and keep a one-line status file outside the repository
   report  print the result of the running watch daemon, like check
+  rebase  move the running watch daemon's blast baseline to its last result
 
 Flags:
   --version   print the version and commit, then exit
 
 Run "gruntled check -h", "gruntled graph -h", "gruntled blast -h",
-"gruntled watch -h" or "gruntled report -h" for details.
+"gruntled watch -h", "gruntled report -h" or "gruntled rebase -h" for
+details.
 ```
 
 ```
@@ -217,23 +222,50 @@ the same repository, without analysing anything itself. Details are in
 [gruntled report](#gruntled-report).
 
 ```
-usage: gruntled report [--format text|json|sarif] [path]
+usage: gruntled report [--blast] [--format text|json|sarif] [path]
 
 Print the diagnostics of the watch daemon running for the Terragrunt
 repository at path (default "."), in the same format and bytes as check.
 The daemon is only read; report never starts one. It prints the last
 published result: after a failed reindex that is the previous result,
 with a warning on stderr.
+With --blast it prints the daemon's blast view instead: the blast of the
+current tree against the daemon's in-memory baseline, in the same format
+as blast --base (text or json).
 Flags may appear before or after path; "--" ends flag parsing.
 
 Flags:
+  --blast                    print the daemon's blast view (text or json)
   --format text|json|sarif   output format (default "text")
 
 Exit codes:
   0  report printed, no error diagnostic
-  1  report printed, at least one error diagnostic (GRT001-GRT003, GRT100)
-  2  usage error: unknown flag, invalid --format, more than one path
-  3  no daemon is running for the repository, the daemon is still indexing, protocol mismatch, or the daemon could not be queried
+  1  report printed, at least one error diagnostic (GRT001-GRT003, GRT100; in Broken with --blast)
+  2  usage error: unknown flag, invalid --format, sarif with --blast, --depth, more than one path
+  3  no daemon is running for the repository, the daemon is still indexing, protocol mismatch, blast view over the 64 MiB cap or unavailable, or the daemon could not be queried
+```
+
+`gruntled rebase` moves the running daemon's blast baseline. Details are in
+[gruntled rebase](#gruntled-rebase).
+
+```
+usage: gruntled rebase [--expect N] [path]
+
+Move the baseline of the watch daemon running for the Terragrunt
+repository at path (default ".") to its last published result, so that
+report --blast compares against it from now on. Only the daemon's
+in-memory baseline changes: nothing is written and nothing is reindexed.
+It prints the number of error findings in Broken that the new baseline
+accepts. rebase needs the daemon socket: it is not available on windows.
+Flags may appear before or after path; "--" ends flag parsing.
+
+Flags:
+  --expect N   rebase only if the daemon is at generation N (an integer >= 1)
+
+Exit codes:
+  0  baseline moved
+  2  usage error: unknown flag, invalid --expect, more than one path
+  3  no daemon is running for the repository, the daemon refused (still indexing, failed reindex, generation mismatch, blast view unavailable), protocol mismatch, no usable answer, or not available on this platform
 ```
 
 ## Exit codes
@@ -292,15 +324,28 @@ are reported in the status file and on stdout. As printed by
 ```
 
 `gruntled report` exits 0 and 1 exactly as `check` would for the result it
-prints. Exit 3 means there is no result to print: no daemon runs for the
+prints; with `--blast`, 1 means an error diagnostic in Broken, as for
+`blast`. Exit 3 means there is no result to print: no daemon runs for the
 repository, it has not finished its first index, it speaks another protocol
-version, or it could not be queried. As printed by `gruntled report -h`:
+version, the blast view is over the cap or could not be computed, or the
+daemon could not be queried. As printed by `gruntled report -h`:
 
 ```
   0  report printed, no error diagnostic
-  1  report printed, at least one error diagnostic (GRT001-GRT003, GRT100)
-  2  usage error: unknown flag, invalid --format, more than one path
-  3  no daemon is running for the repository, the daemon is still indexing, protocol mismatch, or the daemon could not be queried
+  1  report printed, at least one error diagnostic (GRT001-GRT003, GRT100; in Broken with --blast)
+  2  usage error: unknown flag, invalid --format, sarif with --blast, --depth, more than one path
+  3  no daemon is running for the repository, the daemon is still indexing, protocol mismatch, blast view over the 64 MiB cap or unavailable, or the daemon could not be queried
+```
+
+`gruntled rebase` exits 0 when the baseline moved, 2 on a usage error and 3
+otherwise: a refusal (nothing changed), no daemon, a protocol mismatch, no
+usable answer (the outcome is unknown), or windows. As printed by
+`gruntled rebase -h`:
+
+```
+  0  baseline moved
+  2  usage error: unknown flag, invalid --expect, more than one path
+  3  no daemon is running for the repository, the daemon refused (still indexing, failed reindex, generation mismatch, blast view unavailable), protocol mismatch, no usable answer, or not available on this platform
 ```
 
 ## Output formats
@@ -550,6 +595,19 @@ and there is no Impacted or Type changes section.
 The baseline label is escaped like every path and name, with the
 [text control-character rules](#text-default).
 
+The blast view of a watch daemon (`gruntled report --blast`, see
+[gruntled report](#gruntled-report)) has the same layout. Its first line
+names the daemon's baseline instead of a directory: the generation of the
+published result the baseline was taken from, how it was taken
+(`watch start` for the daemon's first index, `rebase` after
+[gruntled rebase](#gruntled-rebase)), and the generation it is compared with:
+
+```
+baseline: daemon generation 1 (watch start), current generation 1
+Broken (0):
+Impacted (0):
+```
+
 ### Blast JSON
 
 `gruntled blast --format json` writes one JSON document to stdout. The
@@ -569,10 +627,30 @@ where earlier versions said GRT001. Gate on severity, not on a code list.
 | `impacted[]` | `unit`; `module`, the changed module whose change reached this unit; for distance 1 it is also the unit's own module; `distance`; `source`, the unit that instantiates `module` at the start of the path (the unit itself at distance 1); `via`, the next unit on the path toward `source` (absent at distance 1). At distance 1 only, also `added_variables`, `removed_variables`, `added_outputs`, `removed_outputs` (sorted names); at distance 2 or more the change is the `changes[]` entry for `module`. Sorted by `unit`. Always `[]` without a baseline. |
 | `changes[]` | One entry per changed module: `module`, `added_variables`, `removed_variables`, `added_outputs`, `removed_outputs`, `type_changes`. Sorted by `module`. Always `[]` without a baseline. |
 | `changes[].type_changes[]` | The module's type-level changes, each `kind`, `name`, `old`, `new`, sorted by kind in the order below, then `name`. `[]` when none. `variable_required`: `old` is `absent` (a new variable) or `optional` (it lost its `default`), `new` is `required`. `variable_type`, `output_type`: canonical type strings. `output_sensitive`: `false` or `true`. Type strings appear only here, never in `impacted[]`. |
+| `daemon_baseline` | Only in a watch daemon's blast view (`gruntled report --blast --format json`), right after `baseline`: `source` (`"watch start"` or `"rebase"`), `generation` (the baseline's generation) and `current_generation`. Never in `gruntled blast` output. |
 | `summary` | `broken` and `impacted` counts. |
 
 Type-level changes are Impacted reasons only: they never create a
 diagnostic, never make a unit Broken and never change the exit code.
+
+The `daemon_baseline` member does not change the schema version, which stays
+`2`; a reader that ignores unknown keys reads a daemon view like any blast
+document:
+
+```json
+{
+  "version": 2,
+  "kind": "blast",
+  "baseline": true,
+  "daemon_baseline": {
+    "source": "watch start",
+    "generation": 1,
+    "current_generation": 3
+  },
+  "broken": [],
+  ...
+}
+```
 
 A unit never appears in both `broken` and `impacted`. Following `via` from
 any `impacted[]` or `broken[]` entry reaches its `source` through entries of
@@ -991,15 +1069,16 @@ stop` sends SIGTERM, which writes `stopped` and exits 0.
 
 ## gruntled report
 
-`gruntled report [--format text|json|sarif] [path]` prints the result of the
+`gruntled report [--blast] [--format text|json|sarif] [path]` prints the result of the
 `gruntled watch` daemon running for the repository at `path`, in the same
 formats and with the same bytes as `gruntled check`: stdout is identical and,
 for `text`, so is the summary on stderr. The daemon renders every format once
 per index with the same code `check` uses; `report` only copies those bytes.
 
-- **Read-only.** The query never changes the daemon's state, and `report`
-  never starts a daemon or creates a directory, file or socket. With no
-  daemon it prints `gruntled: no watch daemon is running for <root>` and
+- **Read-only.** `report` and `report --blast` only read the daemon:
+  rebase is the only operation that changes the daemon, and only its in-memory baseline.
+  `report` never starts a daemon or creates a directory, file or socket. With
+  no daemon it prints `gruntled: no watch daemon is running for <root>` and
   exits 3.
 - **Last published result.** `report` shows the result of the last completed
   index. Before the first index finishes it exits 3 with
@@ -1007,20 +1086,88 @@ per index with the same code `check` uses; `report` only copies those bytes.
   reindex it prints the previous result and, on stderr,
   `gruntled: last reindex failed: <reason>; showing the previous result`;
   the exit code follows the result printed.
+- **Blast view.** `report --blast` prints the daemon's blast view in `text`
+  or `json` (`--format sarif` is a usage error, exit 2): the blast of the
+  last published result against the daemon's baseline, rendered at every
+  index with the same comparison and the same
+  [text](#blast-text) and [JSON](#blast-json) layouts as
+  `gruntled blast --base`. Only the first line
+  (`baseline: daemon generation G0 (source), current generation G`) and the
+  JSON `daemon_baseline` member differ. The
+  baseline is the daemon's first index until
+  [gruntled rebase](#gruntled-rebase) moves it. stdout is exactly the view,
+  there is no summary on stderr, and the exit code is 1 when Broken holds
+  an error diagnostic. A view the daemon could not compute exits 3 with
+  `gruntled: the daemon could not compute the blast view: <reason>`.
+  `--depth` belongs to `gruntled blast --base` and is a usage error here.
 - **linux and darwin.** `report` asks the daemon over a unix socket in the
   repository's runtime directory (next to the status file), with a 2 s
-  timeout. A daemon built with another protocol version is refused with
+  timeout. The protocol is version 2; a daemon built with another protocol
+  version is refused with
   `gruntled: daemon runs protocol vX, this gruntled speaks vY; restart the daemon`.
 - **windows.** There is no socket: the daemon rewrites a report file in the
   runtime directory after each index, and `report` reads it only while the
   daemon holds its lock, so a file left behind by a dead daemon is reported
   as no daemon. There is no live query and no version negotiation beyond the
-  version recorded in the file.
+  version recorded in the file. `report --blast` reads the view from the
+  same file; rebase is not available on windows.
 - **Response cap.** One daemon response (socket reply or report file) is
-  capped at 64 MiB. It carries every format at once (text, summary, JSON and
-  SARIF, base64-encoded), so a repository whose combined renders exceed about
-  48 MiB gets a transport error from `report` (exit 3). `check` has no such
-  cap.
+  capped at 64 MiB. The plain report response carries every format at once
+  (text, summary, JSON and SARIF, base64-encoded), so a repository whose
+  combined renders exceed about 48 MiB gets a transport error from `report`
+  (exit 3). `check` has no such cap. report never carries the blast view: the
+  blast view has its own 64 MiB cap, decided once per index. Over it,
+  `report --blast` exits 3 with
+  `gruntled: the blast view is <n> bytes, over the 64 MiB response cap; run gruntled blast --base <dir>`.
+  On windows the report file drops an oversize blast view first, so plain
+  `report` keeps working.
+
+## gruntled rebase
+
+`gruntled rebase [--expect N] [path]` makes the last published result of
+the `gruntled watch` daemon running for the repository at `path` its new
+blast baseline, so `report --blast` shows only what changes from now on. On
+success it prints
+
+```
+gruntled: baseline moved to generation N; M error findings in Broken accepted
+```
+
+and exits 0. M is the number of error findings the blast view held in
+Broken: they are now part of the baseline and no longer reported, so read
+`report --blast` before you rebase.
+
+- **In memory only.** The baseline lives in the daemon's memory. rebase
+  writes no file (not the status file, not the report file), reindexes
+  nothing and does not change the generation. A restarted daemon takes its
+  first index as the baseline again.
+- **--expect N.** The daemon refuses unless its published result is
+  generation N, the one shown on the first line of `report --blast`, so a
+  save that landed after you read the view is never accepted unseen. A
+  mismatch prints
+  `gruntled: the daemon is at generation M, not N; nothing changed` and exits
+  3. N is a decimal integer >= 1 without sign or leading zero; anything else
+  is a usage error (exit 2).
+- **Refusals.** Every refusal exits 3 and changes nothing: the daemon is
+  still indexing, the last reindex failed (fix the tree and save, then
+  rebase), or the blast view could not be computed.
+- **Timeout.** rebase waits 10 s for the answer. When the request was sent
+  but no usable answer came back (timeout, a closed connection, an
+  unreadable reply) the outcome is unknown, and rebase prints
+  `gruntled: no usable answer from the daemon; the baseline may or may not have moved; run gruntled report --blast to check`
+  and exits 3 (on a timeout the message adds `(no answer within 10s)`).
+- **Trust boundary.** rebase talks to the daemon over its unix socket, which
+  is mode 0600 in a runtime directory that is mode 0700 and owned by the
+  user; both the daemon and the client check the directory owner and mode,
+  so only the daemon owner's user can connect (and root). The socket peer's
+  credentials are not checked.
+- **windows.** rebase is not available on windows: it needs the daemon
+  socket. It exits 3 with
+  `gruntled: rebase needs the daemon socket, which this platform does not have; restart gruntled watch to reset the baseline`
+  before touching anything.
+- **GRT004 and GRT001.** The baseline is a full `check` result, so a
+  removed output keeps its GRT004 in the blast view until you rebase. Note that
+  after a rebase, a reference that still names a removed output leaves Broken, while report keeps its GRT001.
 
 ## Guarantees
 
@@ -1041,9 +1188,11 @@ per index with the same code `check` uses; `report` only copies those bytes.
 - **No writes.** gruntled opens the repository with `os.OpenRoot`, which also
   refuses paths that escape the repository, and hands the parsers only
   `root.FS()`, an `fs.FS` that has no write methods. A test runs `check` on a
-  read-only tree and verifies nothing changed.
+  read-only tree and verifies nothing changed. `report`, `report --blast` and
+  `rebase` write nothing anywhere; rebase changes only the daemon's memory.
 - **No cache, no telemetry.** Nothing is stored between runs and nothing is sent anywhere.
-  `gruntled watch` keeps its parse cache in memory only; what it writes
+  `gruntled watch` keeps its parse cache and its blast baseline (one
+  `check` result) in memory only; what it writes
   (status file, lock file, unix socket on linux and darwin, report file on
   windows) lives in the per-repository runtime directory, always outside the
   repository. On windows that directory is under `%LocalAppData%` and relies
@@ -1051,6 +1200,10 @@ per index with the same code `check` uses; `report` only copies those bytes.
   there.
 
 ## Known limitations
+
+- The daemon's blast baseline is its first index: a tree that was already
+  dirty when `watch` started counts as the baseline. The baseline is lost
+  when the daemon restarts. `gruntled rebase` repairs both.
 
 - A diagnostic's identity includes its position, so a line shift above a
   reference changes it. `blast` is the exception: it matches findings without
