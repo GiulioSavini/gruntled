@@ -1119,6 +1119,10 @@ type modelDiff struct {
 	Kind      string // unit, module-of, edge, ref, module-known, module-names
 	Direction string // gruntled-less or gruntled-more
 	Detail    string
+	// Reason is gruntled's own reason for the subject: the unit's
+	// status/reason for unit-level kinds, the module's reason (or "absent"
+	// when graph --json does not list it) for module-level kinds.
+	Reason string
 }
 
 func (d modelDiff) String() string {
@@ -1149,7 +1153,7 @@ func compareWithGraph(t *testing.T, m *corpusModel) []modelDiff {
 	}
 	var diffs []modelDiff
 	add := func(subject, kind, dir, format string, a ...any) {
-		diffs = append(diffs, modelDiff{subject, kind, dir, fmt.Sprintf(format, a...)})
+		diffs = append(diffs, modelDiff{Subject: subject, Kind: kind, Direction: dir, Detail: fmt.Sprintf(format, a...)})
 	}
 
 	gUnits := map[string]int{}
@@ -1296,6 +1300,24 @@ func compareWithGraph(t *testing.T, m *corpusModel) []modelDiff {
 		if _, ok := m.Modules[gm.Path]; !ok && gm.Known {
 			add(gm.Path, "module-known", "gruntled-more", "graph known module not in model")
 		}
+	}
+	for i := range diffs {
+		d := &diffs[i]
+		switch d.Kind {
+		case "module-known", "module-names":
+			d.Reason = "absent"
+			for _, gm := range g.Modules {
+				if gm.Path == d.Subject {
+					d.Reason = "module " + map[bool]string{true: "known", false: "unknown"}[gm.Known] + " " + gm.Reason
+				}
+			}
+		default:
+			d.Reason = "absent"
+			if gi, ok := gUnits[d.Subject]; ok {
+				d.Reason = g.Units[gi].Status + " " + g.Units[gi].Reason
+			}
+		}
+		d.Reason = strings.TrimSpace(d.Reason)
 	}
 	slices.SortFunc(diffs, func(a, b modelDiff) int {
 		return cmp.Or(cmp.Compare(a.Subject, b.Subject), cmp.Compare(a.Kind, b.Kind), cmp.Compare(a.Detail, b.Detail))
@@ -1786,11 +1808,16 @@ func TestCorpusBlastModel(t *testing.T) {
 			}
 			used := map[int]bool{}
 			derived := 0
+			var derivedSubjects []string
 			for _, d := range diffs {
 				covered := false
 				for i, e := range ex {
 					if e.Path == d.Subject && e.Direction == d.Direction {
 						covered, used[i] = true, true
+						if !slices.Contains(categoryBinding[e.Category], d.Kind+"|"+d.Reason) {
+							t.Errorf("row %s (%s) covers a %s difference with gruntled reason %q, which the category does not allow (%v): %s",
+								e.Path, e.Category, d.Kind, d.Reason, categoryBinding[e.Category], d)
+						}
 					}
 				}
 				if !covered && (d.Kind == "module-known" || d.Kind == "module-names") {
@@ -1804,11 +1831,29 @@ func TestCorpusBlastModel(t *testing.T) {
 					if all {
 						covered = true
 						derived++
+						derivedSubjects = append(derivedSubjects, d.Subject)
 					}
 				}
 				if !covered {
 					t.Errorf("uncovered difference: %s | candidates: %s", d, predicateCandidates(m, d.Subject))
 				}
+			}
+			slices.Sort(derivedSubjects)
+			derivedSubjects = slices.Compact(derivedSubjects)
+			if !slices.Equal(derivedSubjects, corpusDerived[r.Name]) {
+				t.Errorf("derived coverage subjects %v, pinned %v", derivedSubjects, corpusDerived[r.Name])
+			}
+			gap := eligibilityGap(t, m, root)
+			for _, gp := range gap {
+				t.Logf("CORPUS-MODEL-GAP %s %s", r.Name, gp)
+			}
+			gapBy := map[string]int{}
+			for _, gp := range gap {
+				_, why, _ := strings.Cut(gp, " ")
+				gapBy[why]++
+			}
+			if fmt.Sprint(gapBy) != fmt.Sprint(corpusEligibilityGap[r.Name]) {
+				t.Errorf("eligibility gap by reason %v, pinned %v", gapBy, corpusEligibilityGap[r.Name])
 			}
 			for i, e := range ex {
 				if e.Direction != "oracle-limit" && !used[i] {
@@ -1964,6 +2009,86 @@ var corpusModelFacts = map[string]modelFacts{
 	"iso20022": {Seeds: 62, LiveEdges: 11, PlainSites: 22, Pairs: 4, Reach2: 2},
 	"secret":   {Seeds: 3, LiveEdges: 3, PlainSites: 4, Pairs: 3, Reach2: 2},
 	"denis256": {Seeds: 799, LiveEdges: 588, PlainSites: 460, Pairs: 93, Reach2: 151, Reach3: 26, Reach4: 12, Reach5: 2},
+}
+
+// categoryBinding is, per category, the (difference kind | gruntled
+// reason) pairs a row of that category may cover (sec #453). A covered
+// difference outside its category's set fails: a row cannot absorb a
+// difference whose cause gruntled names differently.
+var categoryBinding = map[string][]string{
+	catIncludeTgt:   {"module-of|config-unknown include-target", "edge|config-unknown include-target", "ref|config-unknown include-target", "module-known|absent"},
+	catGenerate:     {"module-of|module-unknown generate-may-declare-outputs", "module-known|absent"},
+	catDupDep:       {"module-of|config-unknown invalid-dependency", "edge|config-unknown invalid-dependency", "ref|config-unknown invalid-dependency", "module-known|absent"},
+	catBareIncludes: {"module-of|config-unknown invalid-include", "edge|config-unknown invalid-include", "ref|config-unknown invalid-include", "module-known|absent"},
+	catConfigSyntax: {"module-of|config-unknown syntax-error", "edge|config-unknown syntax-error", "ref|config-unknown syntax-error", "module-known|absent"},
+	catTooDeep:      {"module-of|config-unknown config-too-deep", "edge|config-unknown config-too-deep", "ref|config-unknown config-too-deep", "module-known|absent"},
+	catOverlay:      {"module-of|module-unknown unit-dir-overlays-module", "module-known|absent"},
+	catModuleSyntax: {"module-known|module unknown syntax-error", "module-known|module unknown invalid-module-block"},
+	catDeepMerge:    {"edge|resolved"},
+	catConfigPath:   {"edge|resolved", "ref|resolved"},
+	catSource:       {"module-of|resolved", "module-known|module known"},
+	catInclude:      {"module-of|resolved", "edge|resolved", "ref|resolved", "module-known|module known"},
+	catJSONUnit:     {"unit|config-unknown json-config-unsupported"},
+}
+
+// corpusDerived pins the subjects covered by the derived rule (a
+// module-level difference whose every model seed is an excluded unit).
+var corpusDerived = map[string][]string{
+	"iso20022": nil,
+	"secret":   nil,
+	"denis256": {"issue-4209/base"},
+}
+
+// eligibilityGap lists the modules graph --json knows that the model does
+// not hold as eligible, as "<path> <reason>".
+func eligibilityGap(t *testing.T, m *corpusModel, root string) []string {
+	t.Helper()
+	var out, errb bytes.Buffer
+	run([]string{"graph", "--json", root}, &out, &errb)
+	var g graphFull
+	if err := json.Unmarshal(out.Bytes(), &g); err != nil {
+		t.Fatalf("graph --json: %v", err)
+	}
+	var gap []string
+	for _, gm := range g.Modules {
+		if !gm.Known || slices.Contains(m.Eligible, gm.Path) {
+			continue
+		}
+		mod := m.Modules[gm.Path]
+		why := "not-a-model-module"
+		switch {
+		case mod == nil:
+		case !mod.Known:
+			why = "model-unknown"
+		case mod.Override != "":
+			why = "override-file"
+		case len(mod.Seeds) == 0:
+			why = "no-seed"
+		default:
+			why = "generate-may-change-surface"
+			for _, s := range mod.Seeds {
+				if m.Units[s].GenSurfaceAt == "" {
+					why = "other"
+				}
+			}
+		}
+		gap = append(gap, gm.Path+" "+why)
+	}
+	slices.Sort(gap)
+	return gap
+}
+
+// corpusEligibilityGap pins the gap between gruntled's known modules and
+// the model's eligible ones, by reason (sec #453: denis256 818 vs 811).
+var corpusEligibilityGap = map[string]map[string]int{
+	"iso20022": {},
+	"secret":   {},
+	// 818 gruntled-known modules vs 811 model-eligible is a net figure:
+	// 15 known modules are not eligible (14 whose seed has a generate block
+	// that may change the surface, a model-side conservative exclusion; 1,
+	// issue-2298/app, whose include the model does not evaluate), and 8
+	// eligible modules are not gruntled-known (modules of excluded units).
+	"denis256": {"generate-may-change-surface": 14, "not-a-model-module": 1},
 }
 
 // corpusIncluded pins the included-module count per corpus.
