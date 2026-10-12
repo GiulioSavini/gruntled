@@ -84,6 +84,18 @@ func TestCIDoc(t *testing.T) {
 				t.Errorf("corpus.yml: missing %q", s)
 			}
 		}
+		// ubuntu-latest's AppArmor blocks unprivileged user namespaces, so
+		// the gate's `unshare -rn` needs this sysctl first (17-05 F2); the
+		// gate still runs with CORPUS_GATE_NONET=1.
+		const userns = "sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0"
+		job := workflowJob(cw, "corpus")
+		step := workflowStep(job, "allow unprivileged user namespaces")
+		if !strings.Contains(step, userns) {
+			t.Errorf("corpus.yml: step %q must run %q", "allow unprivileged user namespaces", userns)
+		}
+		if i, j := strings.Index(job, userns), strings.Index(job, "bash scripts/corpus-gate.sh"); i < 0 || j < 0 || i > j {
+			t.Errorf("corpus.yml: the userns sysctl must come before the gate step")
+		}
 		for _, p := range ciPins[:2] {
 			if uses := "uses: " + p.action + "@" + p.sha + " # " + p.version; !strings.Contains(cw, uses) {
 				t.Errorf("corpus.yml: missing %q (the same action version as ci.yml)", uses)
