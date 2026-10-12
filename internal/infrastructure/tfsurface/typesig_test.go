@@ -592,34 +592,96 @@ func fuzzSig(t *testing.T, body hcl.Body, src []byte, fromJSON bool) {
 	}
 }
 
+// fuzzTypeSigSeeds is FuzzTypeSig's seed corpus.
+var fuzzTypeSigSeeds = []string{
+	"string", "list(string)", "tuple([string,number])", "any", "map(bool)",
+	`object({ y = number, x = optional(string, "d") })`,
+	"object({x = optional(string), y = number})",
+	"set(map(list(object({é = string, ж = number}))))",
+	"list", `"string"`, "optional(string)", "strng", `object({"q z" = bool})`,
+	"${list(string)}",
+	deepList(5_000),
+	deepList(999),
+	strings.Repeat("!", 5_000) + "x",
+	nestedIfDefault(1_100),
+	strings.Repeat("a?b:\n", 1_100) + "c",
+}
+
+// fuzzTypeSigOnce is FuzzTypeSig's body: s as a native type expression and
+// as a .tf.json type string, each through fuzzSig when the pre-scans accept it.
+func fuzzTypeSigOnce(t *testing.T, s string) {
+	native := []byte("variable \"v\" {\n  type = " + s + "\n}\n")
+	if len(native) <= hclconv.MaxFileBytes && hclconv.CheckNativeDepth(native) == nil {
+		if file, diags := hclsyntax.ParseConfig(native, "main.tf", hcl.InitialPos); !diags.HasErrors() {
+			fuzzSig(t, file.Body, native, false)
+		}
+	}
+	js := jsonSrc(jsonQuote(s))
+	if len(js) <= hclconv.MaxFileBytes && hclconv.CheckJSONDepth(js) == nil {
+		if file, diags := hcljson.Parse(js, "main.tf.json"); !diags.HasErrors() {
+			fuzzSig(t, file.Body, js, true)
+		}
+	}
+}
+
 func FuzzTypeSig(f *testing.F) {
-	for _, s := range []string{
-		"string", "list(string)", "tuple([string,number])", "any", "map(bool)",
-		`object({ y = number, x = optional(string, "d") })`,
-		"object({x = optional(string), y = number})",
-		"set(map(list(object({é = string, ж = number}))))",
-		"list", `"string"`, "optional(string)", "strng", `object({"q z" = bool})`,
-		"${list(string)}",
-		deepList(5_000),
-		deepList(999),
-		strings.Repeat("!", 5_000) + "x",
-		nestedIfDefault(1_100),
-		strings.Repeat("a?b:\n", 1_100) + "c",
-	} {
+	for _, s := range fuzzTypeSigSeeds {
 		f.Add(s)
 	}
-	f.Fuzz(func(t *testing.T, s string) {
-		native := []byte("variable \"v\" {\n  type = " + s + "\n}\n")
-		if len(native) <= hclconv.MaxFileBytes && hclconv.CheckNativeDepth(native) == nil {
-			if file, diags := hclsyntax.ParseConfig(native, "main.tf", hcl.InitialPos); !diags.HasErrors() {
-				fuzzSig(t, file.Body, native, false)
-			}
+	f.Fuzz(fuzzTypeSigOnce)
+}
+
+// maxFuzzSeedBytes bounds every FuzzTypeSig seed: the mutator minimizes
+// each new interesting input, and mutants of multi-KB seeds ate the whole
+// CI window (phase-15 verifier, 0 execs/s after about 3 s).
+const maxFuzzSeedBytes = 2_048
+
+func TestFuzzTypeSigSeedsSmall(t *testing.T) {
+	if len(fuzzTypeSigSeeds) == 0 {
+		t.Fatal("empty seed corpus")
+	}
+	for i, s := range fuzzTypeSigSeeds {
+		if len(s) > maxFuzzSeedBytes {
+			t.Errorf("seed %d: %d bytes (%.30q...), over %d", i, len(s), s, maxFuzzSeedBytes)
 		}
-		js := jsonSrc(jsonQuote(s))
-		if len(js) <= hclconv.MaxFileBytes && hclconv.CheckJSONDepth(js) == nil {
-			if file, diags := hcljson.Parse(js, "main.tf.json"); !diags.HasErrors() {
-				fuzzSig(t, file.Body, js, true)
+	}
+	boundary := strings.Repeat("[", hclconv.MaxNestingDepth+1) + strings.Repeat("]", hclconv.MaxNestingDepth+1)
+	var hasString, hasOptional, hasInterp, hasBoundary bool
+	for _, s := range fuzzTypeSigSeeds {
+		hasString = hasString || s == "string"
+		hasOptional = hasOptional || (strings.HasPrefix(s, "object(") && strings.Contains(s, "optional("))
+		hasInterp = hasInterp || strings.HasPrefix(s, "${")
+		hasBoundary = hasBoundary || s == boundary
+	}
+	if !hasString || !hasOptional || !hasInterp || !hasBoundary {
+		t.Errorf("corpus lost a shape: string %v, object with optional() %v, ${...} %v, depth boundary %v",
+			hasString, hasOptional, hasInterp, hasBoundary)
+	}
+	native := []byte("variable \"v\" {\n  type = " + boundary + "\n}\n")
+	if hclconv.CheckNativeDepth(native) == nil {
+		t.Errorf("CheckNativeDepth accepts the %d-byte boundary seed", len(boundary))
+	}
+}
+
+// TestTypeSigFormerFuzzSeeds runs the fuzz body over the large seeds that
+// left the corpus, so the depth, unary, ternary and nested-if guards they
+// reached stay exercised on every go test.
+func TestTypeSigFormerFuzzSeeds(t *testing.T) {
+	for _, c := range []struct{ name, s string }{
+		{"list x 5000", deepList(5_000)},
+		{"list x 999", deepList(999)},
+		{"bang x 5000", strings.Repeat("!", 5_000) + "x"},
+		{"nested-if default x 1100", nestedIfDefault(1_100)},
+		{"newline ternary x 1100", strings.Repeat("a?b:\n", 1_100) + "c"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			start := time.Now()
+			fuzzTypeSigOnce(t, c.s)
+			took := time.Since(start)
+			t.Logf("%d bytes in %v", len(c.s), took)
+			if took > 2*time.Second*raceSlowdown {
+				t.Fatalf("took %v, over 2 s", took)
 			}
-		}
-	})
+		})
+	}
 }
