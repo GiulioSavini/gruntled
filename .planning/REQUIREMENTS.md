@@ -35,10 +35,10 @@ Milestone v0.4 Blast-aware Diagnostics. Each maps to one roadmap phase.
 
 ### Daemon blast
 
-- [ ] **DAEMON-07**: `gruntled report --blast [--format text|json]` prints the daemon's last published blast view against its baseline (the first successful index), showing the baseline and current generations. Exit 0/1 as `blast` (1 iff Broken has an error), 2 for `--format sarif` or `--depth`, 3 as `report`. On windows it reads the view from the report dump. After a failed reindex it prints the previous view with the existing stderr warning. A property test proves it equals `blast --base <copy of the tree at baseline time>`, comparing bytes after replacing only the baseline label line (text) and the baseline object (JSON).
-- [ ] **DAEMON-08**: `gruntled rebase [--expect N]` sends one fixed-shape request (op plus an optional numeric expected generation; `maxRequest` stays 4 KiB) over the same 0600/0700 socket; the trust boundary is the daemon owner's uid, documented. It changes only in-memory state, never writes any file (repository, runtime dir, status file) and never starts a daemon. The swap is serialised with publish and installs only the last published report. It refuses with exit 3 while indexing or failed, or when `--expect N` differs. It prints the new generation and the number of error findings in Broken at that moment. A client timeout says the outcome is unknown. On windows it exits 3 as unsupported. Docs that call `report` read-only are updated.
-- [ ] **DAEMON-09**: The IPC protocol version is bumped to 2; a client/daemon version mismatch is an explicit error (exit 3), never an empty "nothing impacted" answer. Compatibility matrix test: fake v1 daemon × v2 client, v2 daemon × v1 request, v1 report dump. Plain `report` bytes are unchanged.
-- [ ] **DAEMON-10**: The baseline keeps only the `checking.Report` (never a loader, `fs.FS` or parse cache). The `report` op response does not carry blast bytes. A blast response over 64 MiB is an explicit exit-3 error naming the cap. Memory is measured on `synthrepo` at 65/500/5,000 units and recorded.
+- [x] **DAEMON-07**: `gruntled report --blast [--format text|json]` prints the daemon's last published blast view against its baseline (the first successful index), showing the baseline and current generations. Exit 0/1 as `blast` (1 iff Broken has an error), 2 for `--format sarif` or `--depth`, 3 as `report`. On windows it reads the view from the report dump. After a failed reindex it prints the previous view with the existing stderr warning. A property test proves it equals `blast --base <copy of the tree at baseline time>`, comparing bytes after replacing only the baseline label line (text) and the baseline object (JSON).
+- [x] **DAEMON-08**: `gruntled rebase [--expect N]` sends one fixed-shape request (op plus an optional numeric expected generation; `maxRequest` stays 4 KiB) over the same 0600/0700 socket; the trust boundary is the daemon owner's uid, documented. It changes only in-memory state, never writes any file (repository, runtime dir, status file) and never starts a daemon. The swap is serialised with publish and installs only the last published report. It refuses with exit 3 while indexing or failed, or when `--expect N` differs. It prints the new generation and the number of error findings in Broken at that moment. A client timeout says the outcome is unknown. On windows it exits 3 as unsupported. Docs that call `report` read-only are updated.
+- [x] **DAEMON-09**: The IPC protocol version is bumped to 2; a client/daemon version mismatch is an explicit error (exit 3), never an empty "nothing impacted" answer. Compatibility matrix test: fake v1 daemon × v2 client, v2 daemon × v1 request, v1 report dump. Plain `report` bytes are unchanged.
+- [x] **DAEMON-10**: The baseline keeps only the `checking.Report` (never a loader, `fs.FS` or parse cache). The `report` op response does not carry blast bytes. A blast response over 64 MiB is an explicit exit-3 error naming the cap. Memory is measured on `synthrepo` at 65/500/5,000 units and recorded.
 
 ### Security
 
@@ -90,10 +90,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BLAST-10 | Phase 15 | Complete |
 | BLAST-11 | Phase 15 | Complete |
 | SEC-01 | Phase 15 | Complete |
-| DAEMON-07 | Phase 16 | Pending |
-| DAEMON-08 | Phase 16 | Pending |
-| DAEMON-09 | Phase 16 | Pending |
-| DAEMON-10 | Phase 16 | Pending |
+| DAEMON-07 | Phase 16 | Complete |
+| DAEMON-08 | Phase 16 | Complete |
+| DAEMON-09 | Phase 16 | Complete |
+| DAEMON-10 | Phase 16 | Complete |
 | REL-03 | Phase 17 | Pending |
 
 **Coverage:**

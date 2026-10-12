@@ -61,7 +61,7 @@
     {
       "number": "16",
       "name": "Daemon Baseline, `report --blast` & `rebase`",
-      "status": "pending"
+      "status": "complete"
     },
     {
       "number": "17",
@@ -71,8 +71,8 @@
   ],
   "next": {
     "command": "/gsd:progress --next",
-    "label": "Advance to the next step (plan phase 16)",
-    "reason": "Phase 16 of 5 — needs a plan"
+    "label": "Advance to the next step (plan phase 17)",
+    "reason": "Phase 17 of 5 — needs a plan"
   },
-  "updated_at": "2026-10-11T17:03:08.793Z"
+  "updated_at": "2026-10-12T09:25:09.321Z"
 }

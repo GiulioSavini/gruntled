@@ -47,7 +47,7 @@ See `milestones/v0.3-ROADMAP.md`.
 - [x] **Phase 13: Removed-Output Diagnostic & Shared Blast Core** - `GRT004` replaces `GRT001` at every reference to an output the change removed; `check` stays byte-identical to v0.3.0 (completed 2026-10-10)
 - [x] **Phase 14: Transitive Impact with Paths** - Impacted follows dependents past one hop, with a distance, one connecting path and `--depth` (completed 2026-10-10)
 - [x] **Phase 15: Type-Level Surface Facts** - New required variables and variable/output type or `sensitive` changes put instantiating units in Impacted, never in Broken (completed 2026-10-11)
-- [ ] **Phase 16: Daemon Baseline, `report --blast` & `rebase`** - The daemon answers blast against its in-memory baseline over IPC v2, and the baseline moves only on `rebase`
+- [x] **Phase 16: Daemon Baseline, `report --blast` & `rebase`** - The daemon answers blast against its in-memory baseline over IPC v2, and the baseline moves only on `rebase` (completed 2026-10-12)
 - [ ] **Phase 17: Corpus Mutation Proof & Cross-Phase Audit** - No noise and 100% mutation catch on the three corpora, plus an independent audit across phase boundaries
 
 ## Phase Details
@@ -125,7 +125,13 @@ Plans:
   4. The IPC protocol is version 2: a client/daemon version mismatch is an explicit error with exit 3, never an empty "nothing impacted" answer; the compatibility matrix (fake v1 daemon with v2 client, v2 daemon with v1 request, v1 report dump) passes and plain `report` bytes are unchanged
   5. The baseline holds only the `checking.Report` (never a loader, `fs.FS` or parse cache); a blast response over 64 MiB is an explicit exit-3 error naming the cap; daemon memory on `synthrepo` at 65, 500 and 5,000 units is measured and recorded
 
-**Plans**: TBD
+Plans:
+- [x] 16-00-PLAN.md — CI fuzz fix: seeds under 2 KiB, former large seeds as a deterministic test, bounded minimization, logged fuzz step
+- [x] 16-01-PLAN.md — IPC v2: strict canonical request, ops blast/rebase, typed refusals, blast line sealed once per publish, compat matrix vs frozen v0.3.0
+- [x] 16-02-PLAN.md — daemon baseline (Report only), blast view per publish, atomic publish commit, serialised rebase
+- [x] 16-03-PLAN.md — `report --blast` and `rebase` CLI, outcome-unknown, windows asymmetry, docs (no longer read-only)
+- [x] 16-04-PLAN.md — equivalence property vs `blast --base`, e2e on both transports, SEC-01/BLAST-11 report halves, DAEMON-10 memory record, compat-v1.sh gate
+
 **Research flag**: yes — first mutating socket op and its serialisation with publish; windows asymmetry (`report --blast` via dump, `rebase` unsupported); 64 MiB cap with a pre-rendered blast view; unmeasured memory at thousands of units; peer-credential trust boundary of the 0600 socket
 
 ### Phase 17: Corpus Mutation Proof & Cross-Phase Audit
@@ -156,5 +162,5 @@ Plans:
 | 13. Removed-Output Diagnostic & Shared Blast Core | v0.4 | 3/3 | Complete    | 2026-10-10 |
 | 14. Transitive Impact with Paths | v0.4 | 3/3 | Complete    | 2026-10-10 |
 | 15. Type-Level Surface Facts | v0.4 | 6/6 | Complete    | 2026-10-11 |
-| 16. Daemon Baseline, `report --blast` & `rebase` | v0.4 | 0/TBD | Not started | - |
+| 16. Daemon Baseline, `report --blast` & `rebase` | v0.4 | 5/5 | Complete    | 2026-10-12 |
 | 17. Corpus Mutation Proof & Cross-Phase Audit | v0.4 | 0/TBD | Not started | - |
