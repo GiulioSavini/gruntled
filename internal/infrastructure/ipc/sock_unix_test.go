@@ -88,10 +88,10 @@ func TestQueryIndexing(t *testing.T) {
 
 func TestQueryVersionMismatch(t *testing.T) {
 	_, sock := serve(t, func() *Snapshot { return sampleSnapshot() })
-	_, _, err := query(sock, OpReport, 2, time.Second)
+	_, _, err := query(sock, OpReport, 1, time.Second)
 	var ve *VersionError
-	if !errors.As(err, &ve) || ve.Daemon != 1 || ve.Client != 2 {
-		t.Fatalf("err = %v, want *VersionError{1,2}", err)
+	if !errors.As(err, &ve) || ve.Daemon != 2 || ve.Client != 1 {
+		t.Fatalf("err = %v, want *VersionError{2,1}", err)
 	}
 }
 

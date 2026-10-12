@@ -212,7 +212,8 @@ func (s *Server) handle(conn *os.File) {
 	if err != nil {
 		return // silent, oversize or broken client: drop it
 	}
-	b, err := encodeLine(respond(line, s.info, s.get))
+	r, _ := respond(line, s.info, getHandler(s.get))
+	b, err := encodeLine(r)
 	if err != nil {
 		b, _ = encodeLine(response{V: ProtocolVersion, Error: "internal error"})
 	}
@@ -284,5 +285,6 @@ func query(sock, op string, v int, timeout time.Duration) (Info, *Snapshot, erro
 	if err != nil {
 		return Info{}, nil, fmt.Errorf("ipc: read from %s: %w", sock, err)
 	}
-	return decodeResponse(line, v, op)
+	info, snap, _, err := decodeResponse(line, v, op)
+	return info, snap, err
 }
