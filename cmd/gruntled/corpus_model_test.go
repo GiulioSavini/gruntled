@@ -321,8 +321,12 @@ func modelKindsEOF(src string) (k []byte, closed bool) {
 				continue
 			case c == '<' && next == '<' && len(stack) == 0:
 				if m := oracleHeredocRe.FindStringSubmatch(src[i:]); m != nil {
+					// The opener is code; its line end belongs to the heredoc.
 					for x := i; x < i+len(m[0]); x++ {
 						k[x] = kind
+						if src[x] == '\n' || src[x] == '\r' {
+							k[x] = 'h'
+						}
 					}
 					stack = append(stack, frame{str: true, here: m[1]})
 					i += len(m[0])
