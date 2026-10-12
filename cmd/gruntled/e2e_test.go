@@ -445,3 +445,21 @@ func TestHelpMatchesDocs(t *testing.T) {
 		}
 	}
 }
+
+// TestTopUsageMatchesDocs pins the top-level usage (gruntled with no
+// command) to the fenced block in docs/cli.md, and requires the report line
+// to name the blast view (17-05 F4).
+func TestTopUsageMatchesDocs(t *testing.T) {
+	docs, err := os.ReadFile("../../docs/cli.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.ReplaceAll(string(docs), "\r\n", "\n"), "```\n"+topUsage+"```\n") {
+		t.Errorf("docs/cli.md has no fenced block equal to the top-level usage:\n%s", topUsage)
+	}
+	for l := range strings.SplitSeq(topUsage, "\n") {
+		if strings.HasPrefix(l, "  report  ") && !strings.Contains(l, "--blast") {
+			t.Errorf("the report line does not mention --blast: %q", l)
+		}
+	}
+}
