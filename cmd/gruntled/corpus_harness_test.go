@@ -46,10 +46,11 @@ const (
 	m17Sentinel = "object({" + m17Prefix + " = string})"
 )
 
-// m17SentinelCanon is TypeSig's canonical string for m17Sentinel, pinned
-// from HEAD and checked by hand against the D-15 rendering rules: an object
-// type renders its attributes sorted, each name quoted with strconv.Quote,
-// as "name"=type, joined by commas, inside object({...}).
+// m17SentinelCanon is SENTINEL: TypeSig's canonical string for
+// m17Sentinel, pinned from HEAD after a hand check against the D-15
+// rendering rules (attribute names sorted and strconv.Quote'd, "name"=type
+// with no whitespace, joined by commas, inside object({...})). The check is
+// written in 17-03-SUMMARY.md and docs/validation.md.
 const m17SentinelCanon = `object({"gruntled_m17"=string})`
 
 // mutation is one generated change. File is root-relative; for M9 it is the
@@ -76,6 +77,14 @@ type harness struct {
 	caught    int
 	gBase     *digestGuard
 	gCur      *digestGuard
+	// pristine, when set, is an unedited tree: two-sided M6 also requires
+	// blast --base pristine base' to be empty (a one-sided type is silent).
+	pristine string
+	// onApplied, when set, runs while m's edits are applied, after the
+	// blast comparison (the M1 dual oracle).
+	onApplied func(r reporter, m mutation, doc blastDoc)
+	// textDone records the classes whose text output was token-checked.
+	textDone map[string]bool
 }
 
 func newHarness(t testing.TB, model *corpusModel, base, cur string) *harness {
@@ -228,6 +237,9 @@ func expectBlast(model *corpusModel, m mutation) blastWant {
 			tc("output_sensitive", m.Name, "false", "true", true)
 		}
 	}
+	// The class-level exact keys, qualified per module below (never range
+	// over the map being filled).
+	exactKeys := slices.Sorted(maps(w.OldExact))
 	for _, mod := range mods {
 		c := d
 		c.Module = mod
@@ -239,7 +251,7 @@ func expectBlast(model *corpusModel, m mutation) blastWant {
 			c.TypeChanges = []blastTypeChange{}
 		}
 		w.Doc.Changes = append(w.Doc.Changes, c)
-		for k := range w.OldExact {
+		for _, k := range exactKeys {
 			w.OldExact[mod+"|"+k] = true
 		}
 	}
@@ -535,8 +547,68 @@ func runMutation(r reporter, h *harness, m mutation, hook func(*blastDoc, *int))
 		r.Errorf("%s: %d differences:\n  %s", m, len(diffs), strings.Join(diffs, "\n  "))
 		return false
 	}
-	h.caught++
-	return true
+	ok := true
+	if m.Class == "M6" && h.pristine != "" {
+		var o2, e2 bytes.Buffer
+		c2 := run([]string{"blast", "--base", h.pristine, "--format", "json", h.base}, &o2, &e2)
+		d2, err := decodeBlastErr(o2.String())
+		if err != nil || c2 != 0 || len(d2.Broken)+len(d2.Impacted)+len(d2.Changes) != 0 {
+			r.Errorf("%s: base' (type = string on one side) vs pristine is not empty (exit %d):\n%s", m, c2, o2.String())
+			ok = false
+		}
+	}
+	if h.onApplied != nil {
+		n := 0
+		if rec, isRec := r.(*recorder); isRec {
+			n = len(rec.msgs)
+		}
+		h.onApplied(r, m, doc)
+		if rec, isRec := r.(*recorder); isRec && len(rec.msgs) > n {
+			ok = false
+		}
+	}
+	if h.textDone != nil && !h.textDone[m.Class] {
+		h.textDone[m.Class] = true
+		var o3, e3 bytes.Buffer
+		run([]string{"blast", "--base", h.base, h.cur}, &o3, &e3)
+		for _, tok := range textTokens(m) {
+			if !strings.Contains(o3.String(), tok) {
+				r.Errorf("%s: text output lacks %q:\n%s", m, tok, o3.String())
+				ok = false
+			}
+		}
+	}
+	if ok {
+		h.caught++
+	}
+	return ok
+}
+
+// textTokens are the tokens the text output of m must hold (checked once
+// per class; JSON is the authority).
+func textTokens(m mutation) []string {
+	class, sub := m.Class, ""
+	if class == "M9" {
+		sub, _, _ = strings.Cut(m.Detail, ":")
+		class = sub
+	}
+	switch class {
+	case "M1":
+		return []string{"Broken (", ": GRT004 ", "output \"" + m.Name + "\" was removed from module"}
+	case "M2":
+		return []string{"Broken (0):", "-output " + m.Name}
+	case "M3":
+		return []string{"+variable " + m17ReqVar, "required variable " + m17ReqVar, "variable " + m17ReqVar + ": now required"}
+	case "M4":
+		return []string{"required variable " + m.Name, "variable " + m.Name + ": now required"}
+	case "M5":
+		return []string{"type variable " + m.Name, "variable " + m.Name + ": type ", "-> " + m17SentinelCanon}
+	case "M6":
+		return []string{"type output " + m.Name, "output " + m.Name + ": type string -> number"}
+	case "M7":
+		return []string{"sensitive output " + m.Name, "output " + m.Name + ": sensitive "}
+	}
+	return nil
 }
 
 // surfaceView is what assertSurfaceUnchanged compares: per module its known
@@ -808,6 +880,40 @@ func TestCorpusHarnessSelfTest(t *testing.T) {
 			}
 		})
 	}
+
+	// The M1 dual-oracle comparison fails when v0.3.0's GRT001 set differs
+	// from HEAD's GRT004 set by one site, and passes when they agree.
+	t.Run("fault/dual oracle differs by one site", func(t *testing.T) {
+		h := newH(t)
+		var doc blastDoc
+		h.onApplied = func(_ reporter, _ mutation, d blastDoc) { doc = d }
+		runMutation(t, h, m1, nil)
+		var rep corpusReport
+		for _, b := range doc.Broken {
+			for _, f := range b.Findings {
+				rep.Diagnostics = append(rep.Diagnostics, struct {
+					Code     string `json:"code"`
+					Severity string `json:"severity"`
+					File     string `json:"file"`
+					Line     int    `json:"line"`
+					Column   int    `json:"column"`
+					Unit     string `json:"unit"`
+					Message  string `json:"message"`
+				}{"GRT001", "error", f.File, f.Line, f.Column, b.Unit, strings.Replace(f.Message, "was removed from", "is not declared by", 1)})
+			}
+		}
+		if d := dualCompare(m1, rep, doc); d != nil {
+			t.Errorf("agreeing sets rejected: %v", d)
+		}
+		rep.Diagnostics[0].Line++
+		if d := dualCompare(m1, rep, doc); d == nil {
+			t.Errorf("a one-site difference was accepted")
+		}
+		rep.Diagnostics = rep.Diagnostics[:0]
+		if d := dualCompare(m1, rep, doc); d == nil {
+			t.Errorf("an empty v0.3.0 set was accepted")
+		}
+	})
 
 	// The non-vacuity guard trips on a reformat that breaks the parse.
 	t.Run("fault/reformat breaks the parse", func(t *testing.T) {

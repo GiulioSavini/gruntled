@@ -56,6 +56,7 @@ type refSite struct {
 	Output       string
 	Shape        string // plain, guarded, other
 	TargetUnit   string // "" when the label's edge is not a literal unit target
+	TargetAny    string // the edge's resolved target even when the site is silent
 	Module       string // the target unit's model module, "" when none
 	Silent       bool   // DIAG-03: the edge is disabled, skip_outputs, non-literal, or not a unit
 	SilentReason string
@@ -855,6 +856,9 @@ func (m *corpusModel) buildUnit(u string, isUnit map[string]bool) *modelUnit {
 			s := refSite{Unit: u, File: f.rel, Line: line, Col: col, Label: label, Output: output,
 				Shape: modelShape(lines[line-1], label, output)}
 			e, ok := byLabel[label]
+			if ok {
+				s.TargetAny = e.Target
+			}
 			switch {
 			case !ok:
 				s.Silent, s.SilentReason = true, "undeclared label"
