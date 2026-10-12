@@ -30,7 +30,7 @@ completed: 2026-10-12
 
 # Phase 16 Plan 00: CI Fuzz Fix Summary
 
-**FuzzTypeSig's seed corpus now holds only seeds of at most 2,048 bytes. The five multi-KB seeds that kept the 30 s CI window busy minimizing mutants are gone from the corpus, but they still run through the same fuzz body on every `go test` (TestTypeSigFormerFuzzSeeds, 3-22 ms each). A 2,002-byte seed one level past `hclconv.MaxNestingDepth` keeps the mutator on the refusal edge. The CI step bounds minimization with `-fuzzminimizetime 200x`, tees the full output to `$RUNNER_TEMP/fuzz.log`, prints the last progress lines on success, and on failure prints 200 lines of panic and stack plus every failing input. TestCIDoc pins all of it.**
+**FuzzTypeSig's seed corpus now holds only seeds of at most 2,048 bytes. The five multi-KB seeds that kept the 30 s CI window busy minimizing mutants are gone from the corpus, but they still run through the same fuzz body on every `go test` (TestTypeSigFormerFuzzSeeds, 3-22 ms each). A 2,002-byte seed one level past `hclconv.MaxNestingDepth` keeps the mutator on the refusal edge. The CI step bounds minimization with `-fuzzminimizetime 200x`, tees the full output to `"$RUNNER_TEMP/fuzz.log"`, prints the last progress lines on success, and on failure prints 200 lines of panic and stack plus every failing input. TestCIDoc pins all of it.**
 
 ## Performance
 
@@ -105,7 +105,7 @@ CI evidence still to collect: the plan asks for the final `fuzz:` progress line,
 |----|-------------|-------|
 | T-16-00-1 | mitigated | typesig_test.go:671 TestTypeSigFormerFuzzSeeds runs the five former seeds through the shared fuzzTypeSigOnce (:614); boundary seed in the corpus (:609), its refusal asserted at :650 onward |
 | T-16-00-2 | mitigated | ci.yml:62 `-fuzzminimizetime 200x`; :63 tail of the log on success shows execs and rate; pinned at ci_doc_test.go:116 |
-| T-16-00-5 | mitigated | ci.yml:60-62 tee to `$RUNNER_TEMP/fuzz.log` under pipefail; :65 `tail -n 200`; the loop that follows cats every FuzzTypeSig input; pinned at ci_doc_test.go:116 |
+| T-16-00-5 | mitigated | ci.yml:60-62 tee to `"$RUNNER_TEMP/fuzz.log"` under pipefail; :65 `tail -n 200`; the loop that follows cats every FuzzTypeSig input; pinned at ci_doc_test.go:116 |
 | T-16-00-3 | mitigated | only the fuzz step's comment and run block changed; ci_doc_test.go:138 rejects `secrets.` and `permissions:` in the step |
 | T-16-00-4 | accepted | `timeout-minutes: 5` kept (ci.yml:58) and pinned |
 

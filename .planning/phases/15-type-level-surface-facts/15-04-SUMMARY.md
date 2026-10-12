@@ -30,7 +30,7 @@ key-decisions:
   - "Type changes section order: Changes order (by module), then the domain's kind/name order, so variable_required precedes variable_type"
   - "variable_required prints 'now required' for both absent -> required and optional -> required; JSON keeps old absent/optional"
   - "The depth-1 normaliser touches text only: JSON already drops the whole changes key, where type_changes lives"
-requirements-completed: []
+requirements-completed: [BLAST-09]
 duration: 45min
 completed: 2026-10-11
 ---

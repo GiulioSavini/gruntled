@@ -91,7 +91,7 @@ completed: 2026-10-12
   - the 5,000-unit size is skipped under `-short`.
 - **TestReportBlastSizeBound** (blast_bound_test.go:278):
   - `startBoundDaemon` (:196) runs the built binary's `watch --poll --poll-interval 50ms` with a private XDG_RUNTIME_DIR and TMPDIR;
-  - it polls `report` (60 s), rewrites `modules/big/main.tf` through a rename, then polls `report --blast --format json` until 5,000 impacted (180 s);
+  - it polls `report` (60 s), rewrites the fixture path modules/big/main.tf through a rename, then polls `report --blast --format json` until 5,000 impacted (180 s);
   - after SIGTERM it reads Maxrss;
   - it applies TestBlastSizeBound's byte bounds and the single type-string check, plus RSS(big) ≤ RSS(control) + 64 x typeBytes (:365).
 - **docs/validation.md** has a new `## v0.4 daemon memory (DAEMON-10)` section: method, table, VALIDATION-BENCH lines, the comparison with the ARCHITECTURE estimate, the BLAST-11 daemon figures and the command. TestValidationDocPins was red first in b2d1472; it pins the heading, the three `VALIDATION-BENCH daemon_mem units=N ` lines and the test name.

@@ -92,15 +92,20 @@ completed: 2026-10-10
 3. Task 2: `7081d27` test(13-02): GRT004 end to end on real HCL, blast_impacted moves to GRT004, presenter escape
 4. Task 3: `fbe928f` test(13-02): crafted producer name through a GRT004 message, end to end
 
-## Verification
+## Gate
 
 - `go test -count=1 -v -run 'TestBetween|TestBlast|TestError' ./internal/application/blasting/`: all PASS.
 - `go test -count=1 -run 'TestScripts/blast' ./cmd/gruntled/` and `go test -count=1 -run 'Blast' ./internal/interfaces/presenter/`: ok.
 - `go test -count=1 -run TestTextOutputsEscapeControls -v ./cmd/gruntled/`: all 7 subtests PASS (watch, report, blast, check json, check sarif, graph json, blast json).
 - `go test -count=1 ./...`: every package ok (cmd/gruntled 11.7s, blasting 0.63s, analysis 0.25s, ...).
 - `go vet ./...`: clean.
-- `bash scripts/check-architecture.sh`: `architecture: OK (4 domain packages, 5 application packages, 1 interfaces packages)`.
-- `bash scripts/test-check-architecture.sh`: `all architecture self-tests passed`.
+- Architecture check and its self-tests:
+  ```
+  $ bash scripts/check-architecture.sh
+  architecture: OK (4 domain packages, 5 application packages, 1 interfaces packages)
+  $ bash scripts/test-check-architecture.sh
+  all architecture self-tests passed
+  ```
 - `git diff --stat v0.3.0 -- cmd/gruntled/testdata` shows only the two intended files:
   ```
    cmd/gruntled/testdata/script/blast_grt004.txtar   | 706 ++++++++++++++++++++++

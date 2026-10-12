@@ -87,15 +87,20 @@ Each check also has to be killed by its named row: fires by "still declared in c
 5. Task 3 red: `1cb395c` test(13-01): SupersedeUnknownOutputs table and never-adds property
 6. Task 3 green: `7e3ff16` feat(13-01): SupersedeUnknownOutputs by (Unit, Pos) structured key
 
-## Verification
+## Gate
 
 - Task 1 gate: `go test -count=1 ./internal/domain/diagnostic/ ./internal/domain/analysis/` ok. `go test -count=1 -run 'Golden|TestScripts|Corpus|Denis|Sarif|Graph' ./cmd/gruntled/` ok. `git diff --exit-code v0.3.0 -- cmd/gruntled/testdata` is empty.
 - `TestRemovedOutputsMatrix`: 27/27 rows PASS. `TestRemovedOutputsDIAG03Parity`: 22/22 PASS. `TestRemovedOutputsDeterministic` and `TestRemovedOutputsChecksAreNecessary` (4/4) PASS.
 - `TestSupersedeUnknownOutputs`: 7/7 PASS. `TestSupersedeNeverAddsProperty`: `3000 cases: 2830 with >=1 replacement, 2830 with >=1 dropped GRT004`. Another seed gave 2822/2826, so the equal counts above are a coincidence.
 - `go test -count=1 ./...`: every package ok (cmd/gruntled 13.5s, analysis 0.22s, ...).
 - `go vet ./...`: clean.
-- `bash scripts/check-architecture.sh`: `architecture: OK (4 domain packages, 5 application packages, 1 interfaces packages)`.
-- `bash scripts/test-check-architecture.sh`: `all architecture self-tests passed`.
+- Architecture check and its self-tests:
+  ```
+  $ bash scripts/check-architecture.sh
+  architecture: OK (4 domain packages, 5 application packages, 1 interfaces packages)
+  $ bash scripts/test-check-architecture.sh
+  all architecture self-tests passed
+  ```
 - `git diff --exit-code v0.3.0 -- cmd/gruntled/testdata` after all three tasks: empty. `git diff v0.3.0 --stat -- cmd internal docs` touches only the 7 files listed above.
 - `-race` was not run locally: there is no gcc and no cgo. CI runs it.
 

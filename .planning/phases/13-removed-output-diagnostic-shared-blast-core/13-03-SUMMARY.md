@@ -79,7 +79,7 @@ completed: 2026-10-10
   - Fixture extraction: an awk txtar splitter that skips want* and `_golden/` files and recreates `_golden/symlinks`. Fixtures: 13 golden repositories, text/json/sarif/graph goldens, the 4 diag03 scripts (per top-level dir when they do not analyse "."), the 28 blast_grt004 trees, clean-fixture and sarif-fixture.
   - Runs `check --format text|json|sarif` and `graph --json` with cwd = fixture on ".", comparing stdout bytes and exit codes.
   - Output: `same|DIFF <fixture> <command>` per pair (:120), then `N/M identical` (:125); exits non-zero on any difference.
-  - Extraction fidelity check: HEAD's output on the extracted text_golden and sarif_golden trees equals their want.txt / want.sarif byte for byte, and the symlinked_module_files links are recreated (`svc/api/common.tf -> ../../shared/common.tf`). Exit codes per golden match `_golden/exit` (12×1, live_clean 0).
+  - Extraction fidelity check: HEAD's output on the extracted text_golden and sarif_golden trees equals their want.txt / want.sarif byte for byte, and the symlinked_module_files links are recreated (fixture link svc/api/common.tf -> ../../shared/common.tf). Exit codes per golden match `_golden/exit` (12×1, live_clean 0).
 
 ## Task Commits
 

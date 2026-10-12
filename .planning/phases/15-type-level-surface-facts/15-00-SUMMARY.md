@@ -72,7 +72,7 @@ The code commits touch only the plan's files:
 
 This summary is its own `docs(15-00): summary` commit.
 
-## Verification
+## Gate
 
 ```
 ok  	github.com/GiulioSavini/gruntled/cmd/gruntled	10.119s

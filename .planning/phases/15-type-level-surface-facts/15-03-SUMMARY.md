@@ -20,7 +20,7 @@ key-decisions:
   - "Compute needed no change: it already seeds from SurfaceDiff, and Empty() now counts TypeChanges"
   - "TypeChanges are sorted by Kind (declaration order of the constants), then Name; never nil, also for name-only changes"
   - "The Broken half of the property compares Subject and Findings; Broken Reach is propagation metadata and is compared only in the no-type-only-seed cases, together with the Impacted Reach"
-requirements-completed: []
+requirements-completed: [BLAST-06, BLAST-07, BLAST-08, BLAST-10]
 duration: 25min
 completed: 2026-10-11
 ---

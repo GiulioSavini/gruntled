@@ -176,9 +176,10 @@ git diff 7d5cf0e -- cmd/gruntled/testdata     # empty (0 lines)
 
 ### Six-target proof (first typeexpr import, cd0958c)
 
-`bash scripts/check-architecture.sh` (Step 9 covers all six targets, including the linker symbol proof) prints:
+The architecture check (Step 9 covers all six targets, including the linker symbol proof) prints:
 
 ```
+$ bash scripts/check-architecture.sh
 architecture: OK (4 domain packages, 5 application packages, 1 interfaces packages)
 ```
 
@@ -203,9 +204,10 @@ Delta of `go list -deps ./cmd/gruntled` against 7d5cf0e, taken from a temporary 
 
 ### Architecture self-tests
 
-The full `bash scripts/test-check-architecture.sh` ends with `all architecture self-tests passed`, including the five new probes:
+The full architecture self-test run ends with `all architecture self-tests passed`, including the five new probes:
 
 ```
+$ bash scripts/test-check-architecture.sh
 PASS typeexpr-in-terragrunt
 PASS typeexpr-in-terragrunt-test
 PASS typeexpr-windows-file
@@ -233,7 +235,7 @@ PASS typeexpr-guard-vacuous
 ## Deviations from Plan
 
 **1. [Test placement] The cmd-level smoke is a Go test, not check_json_type_bomb.txtar**
-- The plan lists `cmd/gruntled/testdata/script/check_json_type_bomb.txtar`, and its verify runs `TestScripts/check_json_type_bomb`.
+- The plan lists the never-created path cmd/gruntled/testdata/script/check_json_type_bomb.txtar, and its verify runs `TestScripts/check_json_type_bomb`.
 - The hostile file is 2.4 MB, testscript has no generator command, and the orchestrator required an empty `cmd/gruntled/testdata` diff.
 - `cmd/gruntled/type_bomb_test.go` builds the repo in a temp dir and asserts the same exit code and byte-identical text and JSON output against the plain repo.
 
