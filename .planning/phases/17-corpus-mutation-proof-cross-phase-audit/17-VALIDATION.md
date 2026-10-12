@@ -5,6 +5,7 @@ status: draft
 nyquist_compliant: true
 wave_0_complete: false
 created: 2026-10-12
+revised: 2026-10-12 (sec plan review #412-#423: HIGH 1, MEDIUM 5, LOW 4, INFO 1)
 ---
 
 # Phase 17: Validation Strategy
@@ -20,7 +21,7 @@ created: 2026-10-12
 | **Framework** | Go testing in cmd/gruntled: env-gated corpus tests (GRUNTLED_CORPUS, _SECRET, _DENIS256) with an independent textual oracle, plus one always-on harness self-test. Shell gates: `scripts/compare-ref.sh` (COMPARE_REF_CORPORA), `scripts/corpus-gate.sh`, `scripts/fetch-corpora.sh` + `scripts/test-fetch-corpora.sh`, `scripts/compat-v1.sh` |
 | **Config file** | none. New `.github/workflows/corpus.yml` (workflow_dispatch + weekly); `ci.yml` unchanged |
 | **Quick run command** | `go test -count=1 -short -run 'TestCorpusHarnessSelfTest\|TestValidationDocPins\|TestCIDoc' ./cmd/gruntled/` |
-| **Corpus gate (local, required)** | `bash scripts/corpus-gate.sh` (serial shards: compare-ref with corpora, TestCorpusBlastSelf, TestCorpusBlastModel, TestCorpusReformat, TestCorpusMutation17/<corpus>/<class>, each `-p=1 -count=1 -timeout 90m` under `timeout`, `free -m` first, memory floor 1500 MB, no-net re-exec) |
+| **Corpus gate (local, required)** | `bash scripts/corpus-gate.sh` (re-execs under `unshare -rn` first and prints `network=isolated`; exports GOMAXPROCS=2 and GOFLAGS='-mod=readonly -p=1' itself; serial shards: compare-ref with corpora, TestCorpusBlastSelf, TestCorpusBlastModel, TestCorpusReformat, TestCorpusMutation17/<corpus>/<class>, each `-p=1 -count=1 -timeout 90m` under `timeout`, `free -m` first, memory floor 1500 MB, no-net re-exec) |
 | **Full suite command (local)** | `go vet ./... && go test -count=1 -short -timeout 900s ./internal/... && go test -count=1 -short -timeout 1200s ./cmd/gruntled/ && bash scripts/check-architecture.sh && bash scripts/test-check-architecture.sh && bash scripts/compare-ref.sh v0.3.0 && bash scripts/compat-v1.sh v0.3.0 && bash scripts/test-txtar-extract.sh && bash scripts/test-fetch-corpora.sh` |
 | **CI adds** | ci.yml unchanged: `go test -race -count=1 ./...` on linux, macos and windows (the harness self-test runs there; corpus tests SKIP without env). corpus.yml on demand and weekly: fetch + corpus gate |
 | **Estimated runtime** | quick ~20 s; corpus gate ~35-45 min serial (measured per run: 0.10 s iso20022, 0.51 s denis256, 13-25 MB RSS); local full ~5-7 min |
@@ -103,12 +104,19 @@ before 17-01 Task 2.
 | compare-ref cannot fail | `COMPARE_REF_PERTURB=1` with corpus rows → DIFF, exit 1 | 17-01-SUMMARY |
 | Self-blast cannot fail | TestCorpusBlastSelf non-vacuity row (output deleted → changes non-empty) | 17-01-SUMMARY |
 | Fetch accepts a wrong commit / follows a symlink when stripping | test-fetch-corpora.sh cases 1-3 | 17-01-SUMMARY |
-| Oracle copies gruntled (uncategorised difference, count drift) | TestCorpusBlastModel with empty tables (red), pinned counts | 17-02-SUMMARY |
-| Comparator accepts a wrong result (9 faults: dropped/added unit, distance ±1, wrong via/source, GRT001 left, GRT004 at a silent site, extra change, wrong type kind) | TestCorpusHarnessSelfTest | 17-02-SUMMARY |
+| Fetch runs a config-defined filter or template hook, or accepts an escaping symlink (sec #414) | test-fetch-corpora.sh filter, templateDir and escaping-link cases (markers absent, exit 1) | 17-01-SUMMARY |
+| compare-ref digest follows links (dir symlink, dangling, absolute, /dev/zero) (sec #413) | compare-ref link-shape row: completes under timeout, 248/248, links listed as `p -> target` | 17-01-SUMMARY |
+| Oracle copies gruntled: uncategorised difference, item failing its predicate, gruntled-reports-less without a predicate, count or share drift (sec #412) | TestCorpusBlastModel with empty per-item lists (red), predicate check per item, direction rule, pinned included count and share; sec acceptance of the table before 17-03 | 17-02-SUMMARY |
+| applyEdit writes through an escaping link or a dir-symlink alias (sec #415) | TestCorpusHarnessSelfTest refusal rows | 17-02-SUMMARY |
+| Driver or comparator accepts a wrong result (sec #416). Faults injected through the real runMutation hook, each must record a failure and leave caught < sites: Impacted unit dropped; unit added; distance off by one; wrong via; wrong source; wrong module on an Impacted unit; wrong name in added/removed_variables or added/removed_outputs; GRT001 left at a GRT004 site; one GRT004 site missing; GRT004 at a silent site; extra changes[] entry; missing changes[] entry; wrong type_changes kind; wrong type_changes new; old-rule violation; wrong exit code; summary mismatch; wrong version, kind or baseline | TestCorpusHarnessSelfTest | 17-02-SUMMARY |
 | Reformat breaks the parse and passes vacuously | non-vacuity guard (red R3 case) | 17-02-SUMMARY |
 | GRT004 reported as GRT001, or one site missing | M1 comparator + v0.3.0 dual oracle (red on the self-test tree) | 17-03-SUMMARY |
 | SENTINEL wrong | M5 red with empty constant, hand check | 17-03-SUMMARY |
-| Reference binary is not v0.3.0 | `--version` check fails, never skips | 17-03-SUMMARY |
+| Reference binary is not v0.3.0 (sec #417) | gate: `v0.3.0^{commit}` == pinned before build, resolved sha in ldflags; test: `--version` label AND fingerprint (`rebase` unknown command, `blast --depth` undefined flag); a HEAD build with v0.3.0 ldflags fails | 17-03-SUMMARY |
+| Gate runs with network (sec #417) | `exec unshare -rn` first, /proc/net/dev only lo, `network=isolated` in the record; CORPUS_GATE_NONET=1 without unshare exits 1 | 17-03-SUMMARY |
+| Site or included-module counts shrink (sec #418) | pinned package-level constants asserted by TestCorpusMutation17 | 17-03-SUMMARY |
+| Eval site swapped while the count stays 4 (sec #421) | 17-05 gate compares the exact (file, function) set | 17-05-SUMMARY |
+| corpus.yml persists the token or shares the Go cache (sec #420) | TestCIDoc pins `persist-credentials: false` and `cache: false` | 17-04-SUMMARY |
 | Daemon label off by one | TestCorpusDaemonSample normaliser mutant | 17-04-SUMMARY |
 | Doc numbers drift | TestValidationDocPins with shared package-level values | 17-04-SUMMARY |
 | Corpus suite leaks into ci.yml | TestCIDoc corpus_workflow | 17-04-SUMMARY |
@@ -120,7 +128,8 @@ before 17-01 Task 2.
 | Behavior | Requirement | Why Manual | Test Instructions |
 |----------|-------------|------------|-------------------|
 | One-time corpus fetch | REL-03 | Needs network | `bash scripts/fetch-corpora.sh`; record stripped counts and HEADs in 17-01-SUMMARY |
-| Exclusion table review | REL-03 | A human must justify each category | Each category row in 17-02-SUMMARY has a reason sentence; reviewed by sec in the 17-05 review |
+| Exclusion table review | REL-03 | A human must justify each item | The per-item table (path, predicate category, direction, evidence) is posted to sec and accepted before 17-03 runs (bus id in 17-02-SUMMARY); re-checked in the 17-05 review |
+| Exactness exceptions | REL-03 | Claim wording | The four named exceptions (type old by inequality for non-primitives, GRT004 message prefix, text by tokens once per class, SENTINEL from HEAD) appear in the 17-03 truths and the docs claim table |
 | SENTINEL hand check | REL-03 | Orchestrator decision 4 | Derive the expected string from the D-15 rules and compare with HEAD's output; write it in 17-03-SUMMARY and docs/validation.md |
 | Cross-phase review | REL-03 SC4 | Independent reviewers | 17-05 Task 1 checkpoint |
 | corpus.yml first run | REL-03 (CI, informational) | Dispatch after push | `gh workflow run corpus.yml`; record run id |
