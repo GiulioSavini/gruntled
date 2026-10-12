@@ -592,7 +592,8 @@ func fuzzSig(t *testing.T, body hcl.Body, src []byte, fromJSON bool) {
 	}
 }
 
-// fuzzTypeSigSeeds is FuzzTypeSig's seed corpus.
+// fuzzTypeSigSeeds is FuzzTypeSig's seed corpus; every seed is at most
+// maxFuzzSeedBytes (TestFuzzTypeSigSeedsSmall).
 var fuzzTypeSigSeeds = []string{
 	"string", "list(string)", "tuple([string,number])", "any", "map(bool)",
 	`object({ y = number, x = optional(string, "d") })`,
@@ -600,11 +601,12 @@ var fuzzTypeSigSeeds = []string{
 	"set(map(list(object({é = string, ж = number}))))",
 	"list", `"string"`, "optional(string)", "strng", `object({"q z" = bool})`,
 	"${list(string)}",
-	deepList(5_000),
-	deepList(999),
-	strings.Repeat("!", 5_000) + "x",
-	nestedIfDefault(1_100),
-	strings.Repeat("a?b:\n", 1_100) + "c",
+	// A deep type the pre-scans accept and typeexpr parses (1,806 bytes).
+	deepList(300),
+	// One level past hclconv.MaxNestingDepth (2,002 bytes): the mutator
+	// keeps exploring the refusal edge. The larger former seeds run in
+	// TestTypeSigFormerFuzzSeeds instead.
+	strings.Repeat("[", hclconv.MaxNestingDepth+1) + strings.Repeat("]", hclconv.MaxNestingDepth+1),
 }
 
 // fuzzTypeSigOnce is FuzzTypeSig's body: s as a native type expression and
