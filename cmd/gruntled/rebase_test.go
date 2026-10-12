@@ -124,11 +124,17 @@ func treeState(t *testing.T, root string) string {
 		b.WriteString(p + " " + fi.Mode().String() + " " + strconv.FormatInt(fi.Size(), 10) + " " + fi.ModTime().String())
 		if fi.Mode().IsRegular() {
 			data, err := os.ReadFile(p)
-			if err != nil {
+			switch {
+			case err == nil:
+				sum := sha256.Sum256(data)
+				b.WriteString(" " + string(sum[:]))
+			case runtime.GOOS == "windows":
+				// A held lock file cannot be opened on windows; its
+				// mode, size and mtime are still compared.
+				b.WriteString(" unreadable")
+			default:
 				return err
 			}
-			sum := sha256.Sum256(data)
-			b.WriteString(" " + string(sum[:]))
 		}
 		b.WriteByte('\n')
 		return nil

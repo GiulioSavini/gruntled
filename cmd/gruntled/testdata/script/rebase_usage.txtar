@@ -51,7 +51,8 @@ stderr '^usage: gruntled rebase '
 env XDG_RUNTIME_DIR=$WORK/rt
 mkdir $WORK/rt
 exec gruntled-exit 3 rebase repo
-stderr 'no watch daemon is running for '
+[!windows] stderr 'no watch daemon is running for '
+[windows] stderr 'rebase needs the daemon socket, which this platform does not have'
 ! stdout .
 ! exists $WORK/rt/gruntled
 
