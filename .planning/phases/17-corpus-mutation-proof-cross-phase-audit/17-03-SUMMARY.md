@@ -196,7 +196,7 @@ Not run: -race, -fuzz, `go test ./...`, and test-check-architecture.sh (no archi
 | T-17-03-4 | mitigated | `exec unshare -rn` first, /proc/net/dev proof, `network=isolated` in the record; CORPUS_GATE_NONET=1 row |
 | T-17-03-5 | mitigated | the gate exports GOMAXPROCS/GOFLAGS; serial shards; 1500 MB floor; `ulimit -v`; timeouts; about 150 MB per shard |
 | T-17-03-6 | mitigated | work copies in t.TempDir; sha256 restore; digestGuard every 100 edits and at the end; checkout corpusDigest before and after |
-| T-17-03-7 | mitigated | the only exec in the tests is GRUNTLED_REF_BIN (fingerprinted); corpora ELF-stripped |
+| T-17-03-7 | mitigated | the only exec in the 17-03 tests and the gate's anchored shards is GRUNTLED_REF_BIN (fingerprinted); corpora ELF-stripped. The env-gated phase 5 terragrunt oracle (corpus_graph_test.go) runs terragrunt on corpus copies, outside the gate |
 | T-17-03-8 | mitigated | trap EXIT INT TERM HUP removes the worktree, prunes and deletes the temp dir; `git worktree list` clean after the run |
 
 ## Deviations from Plan

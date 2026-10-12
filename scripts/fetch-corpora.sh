@@ -16,8 +16,8 @@
 # An existing dest at the pinned HEAD is reused (re-verified, re-stripped);
 # one at any other HEAD is refused and never reset.
 #
-# Nothing from a corpus is executed, sourced or built: the script never cds
-# into a corpus, and every git call is isolated from system, global and
+# This script executes, sources and builds nothing from a corpus: it never
+# cds into a corpus, and every git call is isolated from system, global and
 # template config (GIT_CONFIG_NOSYSTEM, GIT_CONFIG_GLOBAL=/dev/null, an
 # empty --template), with hooks, fsmonitor, submodule recursion and LFS
 # smudge off and only https allowed. That isolation is the control against

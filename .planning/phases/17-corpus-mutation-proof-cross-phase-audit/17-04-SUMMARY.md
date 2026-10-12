@@ -142,7 +142,7 @@ There was no gruntled watch process and no extra worktree at the end. Runs were 
 | T-17-04-8 | mitigated | corpus.yml `persist-credentials: false`, `cache: false`; pinned in TestCIDoc corpus_workflow |
 | T-17-04-3 | mitigated | `permissions: contents: read`, no `secrets.` and no `write`, the same sha-pinned actions as ci.yml; asserted |
 | T-17-04-4 | mitigated | fetch-corpora.sh verifies each sha; the require helpers fail on another commit |
-| T-17-04-5 | mitigated | fetch isolation and ELF strip (17-01); nothing from a corpus is executed; no secrets in the job |
+| T-17-04-5 | mitigated | fetch isolation and ELF strip (17-01); corpus.yml and the gate execute nothing from a corpus (anchored shards; the phase 5 terragrunt oracle is never selected); no secrets in the job |
 | T-17-04-6 | mitigated | `rel03DocPins` built from the package-level values the gated tests assert |
 | T-17-04-7 | mitigated | TestCIDoc asserts ci.yml has no corpus env, gate or fetch call |
 

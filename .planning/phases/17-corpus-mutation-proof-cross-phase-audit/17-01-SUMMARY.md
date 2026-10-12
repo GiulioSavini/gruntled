@@ -191,7 +191,7 @@ shellcheck is not installed on this machine, so the shellcheck half of the Task 
 | ID | Status | Where |
 |----|--------|-------|
 | T-17-01-1 | mitigated | fetch by sha; HEAD and `cat-file -t` checked before the rename (scripts/fetch-corpora.sh:126-131); case 2; the require helpers fail on another commit |
-| T-17-01-2 | mitigated | nothing executes corpus content: the script never cds into a corpus; g() isolation (:101-112); `init --template=` (:205); cases 6-7 plus mutants; the ELF strip is a size measure only (header comment) |
+| T-17-01-2 | mitigated | the fetch script and the gate execute no corpus content (the env-gated phase 5 terragrunt oracle, outside both, runs terragrunt on corpus copies): the script never cds into a corpus; g() isolation (:101-112); `init --template=` (:205); cases 6-7 plus mutants; the ELF strip is a size measure only (header comment) |
 | T-17-01-9 | mitigated | absolute and escaping links fail the fetch (:136-161, case 8); compare-ref digest uses `find -P`, hashes `-type f` only and records `%l` (scripts/compare-ref.sh:77-94); link-shape row |
 | T-17-01-10 | mitigated | GIT_CONFIG_NOSYSTEM, GIT_CONFIG_GLOBAL=/dev/null, GIT_LFS_SKIP_SMUDGE=1, `protocol.allow=never` with only https allowed (file only in manifest mode); filter= attributes reported (0 on all three) |
 | T-17-01-3 | mitigated | strip uses `find -P -type f` with .git pruned (:171-184); temp dir plus `mv -T`; cases 1-3 |

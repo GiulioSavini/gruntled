@@ -879,6 +879,14 @@ bash scripts/corpus-gate.sh              # offline, serial, about 50 minutes
 
 `ci.yml` does not run the corpus suite.
 
+Within `scripts/fetch-corpora.sh`, the gate and corpus.yml, nothing from a corpus is
+executed: the gate's shards are anchored (`^TestCorpus…$`) and run only gruntled and the
+fingerprinted v0.3.0 binary on corpus copies. The env-gated phase 5 terragrunt oracle is
+the exception, and it is outside all three. It lives in `cmd/gruntled/corpus_graph_test.go`
+and is enabled by `GRUNTLED_TERRAGRUNT_BIN`. It runs the pinned terragrunt
+(`run --all … -- version`) on corpus copies, and terragrunt can run hooks a corpus
+defines.
+
 ### The independent model and its exclusions
 
 The model (`cmd/gruntled/corpus_model_test.go`) is computed from source text. It finds:
