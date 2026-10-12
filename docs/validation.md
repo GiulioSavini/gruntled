@@ -870,8 +870,14 @@ bash scripts/corpus-gate.sh              # offline, serial, about 50 minutes
 - builds v0.3.0 from the pinned tag commit;
 - runs 31 shards one at a time, under a memory floor of 1500 MB and an address-space cap.
 
-`.github/workflows/corpus.yml` runs the same two scripts on demand and weekly. `ci.yml`
-does not run them.
+`.github/workflows/corpus.yml` runs on demand and weekly. Its steps are:
+1. `go mod download` and `go mod verify`, with the network, because the gate itself
+   builds and tests offline and setup-go keeps no cache;
+2. lifting AppArmor's restriction on unprivileged user namespaces;
+3. `scripts/fetch-corpora.sh`;
+4. `scripts/corpus-gate.sh` with `CORPUS_GATE_NONET=1`.
+
+`ci.yml` does not run the corpus suite.
 
 ### The independent model and its exclusions
 

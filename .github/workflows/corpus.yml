@@ -1,7 +1,8 @@
 name: corpus
 
 # The REL-03 corpus suite (phase 17): on demand and weekly, never on push.
-# It fetches the three pinned corpora (the only networked step), then runs
+# It downloads the Go modules (verified against go.sum) and fetches the
+# three pinned corpora (the only networked steps), then runs
 # scripts/corpus-gate.sh, which re-executes itself in an empty network
 # namespace; CORPUS_GATE_NONET=1 makes a runner that cannot isolate fail
 # instead of running with network. The required gate is the local recorded
@@ -32,6 +33,14 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
+      - name: download modules
+        # The gate builds and tests offline (GOPROXY=off, -mod=readonly) and
+        # setup-go keeps no cache, so fill the module cache here, with the
+        # network, and check every module against go.sum. go.mod and go.sum
+        # are the same at v0.3.0 and HEAD, so this covers both builds.
+        run: |
+          go mod download
+          go mod verify
       - name: fetch corpora
         run: |
           set -o pipefail
