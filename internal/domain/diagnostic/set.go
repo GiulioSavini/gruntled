@@ -71,37 +71,3 @@ func (s Set) Equal(o Set) bool {
 	}
 	return true
 }
-
-// Diff compares prev and next by Key: added holds the diagnostics present
-// in next but not prev, removed holds those present in prev but not next.
-// Both results keep next's (respectively prev's) canonical order. Because
-// Key excludes Severity, a diagnostic whose only change between prev and
-// next is its Severity appears in neither added nor removed: it is the
-// same finding, not a new one. Because Key includes Unit, a diagnostic
-// whose Unit changes between prev and next appears as one addition and one
-// removal.
-func Diff(prev, next Set) (added, removed Set) {
-	prevKeys := make(map[Key]struct{}, len(prev.items))
-	for _, d := range prev.items {
-		prevKeys[d.Key()] = struct{}{}
-	}
-	nextKeys := make(map[Key]struct{}, len(next.items))
-	for _, d := range next.items {
-		nextKeys[d.Key()] = struct{}{}
-	}
-
-	var addedItems []Diagnostic
-	for _, d := range next.items {
-		if _, ok := prevKeys[d.Key()]; !ok {
-			addedItems = append(addedItems, d)
-		}
-	}
-	var removedItems []Diagnostic
-	for _, d := range prev.items {
-		if _, ok := nextKeys[d.Key()]; !ok {
-			removedItems = append(removedItems, d)
-		}
-	}
-
-	return Set{items: addedItems}, Set{items: removedItems}
-}

@@ -117,60 +117,6 @@ func TestNewSetKeepsBothUnitsWhenOnlyUnitDiffers(t *testing.T) {
 	}
 }
 
-func TestDiffOnlyUnitChangeIsOneAddedOneRemoved(t *testing.T) {
-	dA := mustDiagnosticForUnit(t, diagnostic.CodeUnknownOutput, diagnostic.SeverityError, "live/a", "a.hcl", 1, 1, "m")
-	dB := mustDiagnosticForUnit(t, diagnostic.CodeUnknownOutput, diagnostic.SeverityError, "live/b", "a.hcl", 1, 1, "m")
-
-	prev := diagnostic.NewSet(dA)
-	next := diagnostic.NewSet(dB)
-
-	added, removed := diagnostic.Diff(prev, next)
-	if added.Len() != 1 || added.All()[0] != dB {
-		t.Errorf("Diff added = %+v, want [dB]", added.All())
-	}
-	if removed.Len() != 1 || removed.All()[0] != dA {
-		t.Errorf("Diff removed = %+v, want [dA]", removed.All())
-	}
-}
-
-func TestDiffIgnoresSeverityOnlyChange(t *testing.T) {
-	errD := mustDiagnostic(t, diagnostic.CodeUnknownOutput, diagnostic.SeverityError, "a.hcl", 1, 1, "m")
-	warnD := mustDiagnostic(t, diagnostic.CodeUnknownOutput, diagnostic.SeverityWarning, "a.hcl", 1, 1, "m")
-
-	prev := diagnostic.NewSet(errD)
-	next := diagnostic.NewSet(warnD)
-
-	added, removed := diagnostic.Diff(prev, next)
-	if added.Len() != 0 {
-		t.Errorf("Diff added = %+v, want empty (severity-only change is not a new finding)", added.All())
-	}
-	if removed.Len() != 0 {
-		t.Errorf("Diff removed = %+v, want empty (severity-only change is not a new finding)", removed.All())
-	}
-}
-
-func TestDiff(t *testing.T) {
-	a := mustDiagnostic(t, diagnostic.CodeUnknownOutput, diagnostic.SeverityError, "a.hcl", 1, 1, "a")
-	b := mustDiagnostic(t, diagnostic.CodeUnknownOutput, diagnostic.SeverityError, "a.hcl", 2, 1, "b")
-	c := mustDiagnostic(t, diagnostic.CodeUnknownOutput, diagnostic.SeverityError, "a.hcl", 3, 1, "c")
-
-	prev := diagnostic.NewSet(a, b)
-	next := diagnostic.NewSet(b, c)
-
-	added, removed := diagnostic.Diff(prev, next)
-	if added.Len() != 1 || added.All()[0] != c {
-		t.Errorf("Diff added = %+v, want [c]", added.All())
-	}
-	if removed.Len() != 1 || removed.All()[0] != a {
-		t.Errorf("Diff removed = %+v, want [a]", removed.All())
-	}
-
-	sameAdded, sameRemoved := diagnostic.Diff(prev, prev)
-	if sameAdded.Len() != 0 || sameRemoved.Len() != 0 {
-		t.Errorf("Diff(s, s) = (%+v, %+v), want two empty sets", sameAdded.All(), sameRemoved.All())
-	}
-}
-
 func TestHasErrors(t *testing.T) {
 	warn := mustDiagnostic(t, diagnostic.CodeUnknownOutput, diagnostic.SeverityWarning, "a.hcl", 1, 1, "w")
 	errD := mustDiagnostic(t, diagnostic.CodeUnknownOutput, diagnostic.SeverityError, "b.hcl", 1, 1, "e")

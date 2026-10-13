@@ -41,7 +41,7 @@ func IgnoredEntry(rel string, typ fs.FileMode) bool {
 		if i >= 0 {
 			comp = rel[:i]
 		}
-		if ignoredDirs[comp] {
+		if IgnoredDir(comp) {
 			return true
 		}
 		if i < 0 {

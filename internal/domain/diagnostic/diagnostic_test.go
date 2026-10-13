@@ -17,33 +17,26 @@ func mustPosition(t *testing.T, file string, line, column int) repograph.Positio
 	return p
 }
 
-func TestParseCode(t *testing.T) {
-	valid := []string{"GRT001", "GRT100"}
-	for _, s := range valid {
-		c, err := diagnostic.ParseCode(s)
-		if err != nil {
-			t.Errorf("ParseCode(%q): unexpected error: %v", s, err)
-			continue
-		}
-		if !c.Valid() {
-			t.Errorf("ParseCode(%q).Valid() = false, want true", s)
-		}
-	}
-
-	invalid := []string{"GRT1", "grt001", "GRT0012", "XYZ001", "GRT00a"}
-	for _, s := range invalid {
-		if _, err := diagnostic.ParseCode(s); err == nil {
-			t.Errorf("ParseCode(%q): expected error, got nil", s)
-		}
-	}
-}
-
 func TestCodeValid(t *testing.T) {
 	if !diagnostic.CodeUnknownOutput.Valid() {
 		t.Errorf("CodeUnknownOutput.Valid() = false, want true")
 	}
 	if diagnostic.Code("bogus").Valid() {
 		t.Errorf("Code(\"bogus\").Valid() = true, want false")
+	}
+
+	valid := []string{"GRT001", "GRT100"}
+	for _, s := range valid {
+		if !diagnostic.Code(s).Valid() {
+			t.Errorf("Code(%q).Valid() = false, want true", s)
+		}
+	}
+
+	invalid := []string{"GRT1", "grt001", "GRT0012", "XYZ001", "GRT00a"}
+	for _, s := range invalid {
+		if diagnostic.Code(s).Valid() {
+			t.Errorf("Code(%q).Valid() = true, want false", s)
+		}
 	}
 }
 

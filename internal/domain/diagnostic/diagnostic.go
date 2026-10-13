@@ -33,16 +33,6 @@ const (
 	CodeSyntaxError Code = "GRT100"
 )
 
-// ParseCode validates s and returns it as a Code. s is valid iff it is
-// exactly "GRT" followed by 3 ASCII digits.
-func ParseCode(s string) (Code, error) {
-	c := Code(s)
-	if !c.Valid() {
-		return "", errors.New("diagnostic: invalid code " + strconv.Quote(s) + ": must be \"GRT\" followed by exactly 3 digits")
-	}
-	return c, nil
-}
-
 // Valid reports whether c is exactly "GRT" followed by 3 ASCII digits.
 func (c Code) Valid() bool {
 	s := string(c)
