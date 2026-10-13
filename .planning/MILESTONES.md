@@ -1,5 +1,45 @@
 # Milestones
 
+## v0.4 — Blast-aware Diagnostics (shipped 2026-10-13)
+
+**Phases:** 13-17 (23 plans, 41 tasks)
+**Archive:** `milestones/v0.4-ROADMAP.md`, `milestones/v0.4-REQUIREMENTS.md`, `milestones/v0.4-MILESTONE-AUDIT.md`
+
+Used the difference against a baseline, not only the current tree: the daemon answers blast on
+every save, impact follows the graph past one hop and through type changes, and a removed output
+that is still referenced becomes an error that names its consumers.
+
+**Key accomplishments:**
+- `GRT004` replaces `GRT001` at every reference to an output a change removed, through one shared
+  blast core (`Between`) reused by `check`, `report`, `blast` and the daemon; `check` stays
+  byte-identical to v0.3.0
+- Transitive Impacted follows dependents past one hop, with a distance, one connecting path and
+  `--depth`
+- Type-level surface facts: new required variables and variable/output type or `sensitive` changes
+  put instantiating units in Impacted, never Broken; a 64 MiB blast-response size bound and
+  terminal/bidi escaping cover every new surface
+- The daemon answers `report --blast` against its in-memory baseline over IPC v2, and `rebase
+  [--expect N]` moves that baseline, which holds only `checking.Report`, never a loader or parse cache
+- A real corpus mutation proof (REL-03): zero noise on three real corpora, 100% catch of the
+  injected mutation set (4,345 mutations), network-isolated against a frozen, fingerprinted v0.3.0
+  reference binary; an independent cross-phase security and integration review across all 5 phases
+  closed with zero open BLOCKER/MEDIUM findings
+- Process: milestone-level audit ran the integration check and a 3-source Nyquist/requirements
+  cross-reference as independent parallel agents, confirming phase 17's own cross-phase review
+  rather than re-deriving it from scratch
+
+**Known limitations (accepted, documented in README/PROJECT.md):** `report`/`rebase` unsupported
+over AF_UNIX on windows; the include-target conservative rule hides all 8 known broken references
+on the denis256 secondary corpus (0/8 recall, 0 false positives); `GRT005`/`GRT006` deferred
+(overlap `terragrunt hcl validate --inputs`).
+
+**Release follow-up for Giulio (not a milestone blocker):** a v0.3.1 hand backport of the
+`HasForExpr` guard into v0.3.0 `terragrunt/eval.go` (`literalBool`, `evalPath`, `literalString`),
+plus the 15-00 cherry-picks `c1440d7`, `dfe565b`, `3279bec`. Tagging `v0.4.0` is also his decision
+— no GSD workflow creates it (`git.create_tag: false`).
+
+---
+
 ## v0.3 — Watch & Blast (shipped 2026-10-10)
 
 **Phases:** 8-12 (24 plans, phase 12 = audit gap closure)

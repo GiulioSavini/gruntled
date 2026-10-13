@@ -2,26 +2,28 @@
 
 > *Terragrunt, but gruntled.*
 
-## Current State: v0.3 shipped 2026-10-10 (v0.3.0 released)
+## Current State: v0.4 shipped 2026-10-13 (tag v0.4.0 pending — Giulio's decision)
 
-`gruntled check` reports `GRT001`, `GRT002`, `GRT003` and `GRT100` in text, JSON or SARIF;
-`gruntled graph --json` prints the repository graph. `gruntled watch` keeps an in-memory index
-current on every save (fsnotify, or stat polling with `--poll` and on windows) and writes a
-one-line status file outside the repository; `gruntled report` returns the daemon's diagnostics,
-byte-identical to `check`; `gruntled blast --base <dir>` separates Broken from Impacted units.
-Installable from tagged GitHub releases, as a pre-commit hook, or via the CI recipes in `docs/ci.md`.
+`gruntled check` reports `GRT001`-`GRT004` and `GRT100` in text, JSON or SARIF; `GRT004` replaces
+`GRT001` at every reference to an output the change removed. `gruntled graph --json` prints the
+repository graph. `gruntled watch` keeps an in-memory index current on every save (fsnotify, or
+stat polling with `--poll` and on windows) and writes a one-line status file outside the
+repository. `gruntled blast --base <dir>` separates Broken from Impacted, Impacted now following
+dependents past one hop (with distance, a connecting path and `--depth`) and through type-level
+surface changes (new required variable, variable/output type, `sensitive`). The daemon answers
+`report --blast` against its in-memory baseline over IPC v2, and `rebase` moves that baseline.
+100% mutation catch and zero noise proven on three real corpora, network-isolated against a
+frozen v0.3.0 binary. Installable from tagged GitHub releases, as a pre-commit hook, or via the
+CI recipes in `docs/ci.md`.
 
-## Current Milestone: v0.4 Blast-aware Diagnostics
+## Next Milestone: not started
 
-**Goal:** Use the difference against a baseline, not only the current tree: the daemon answers
-blast on every save, impact follows the graph past one hop and through type changes, and a
-removed output that is still referenced becomes an error that names its consumers.
-
-**Target features:**
-- `GRT004`: output present in the baseline, removed from the module, still referenced downstream
-- `report --blast` from the daemon's in-memory baseline, plus a `rebase` command to move it
-- Transitive Impacted, with the path that connects each unit to the change
-- Type-level surface changes (new required variable, variable or output type changed)
+Candidates (see `milestones/v0.4-REQUIREMENTS.md`, Deferred): `GRT005`/`GRT006` (MORE-04/05,
+overlap `terragrunt hcl validate --inputs`, include-merge false-positive risk), `report`/`rebase`
+over AF_UNIX on windows (needs a scoped `net` exception to the six-target proof), `watch --base
+<dir>`, `blast --format sarif`, per-hop `file:line`, reference-gated propagation. Plus a release
+decision for Giulio: v0.3.1 hand backport of the `HasForExpr` guard into v0.3.0
+`terragrunt/eval.go`. Start with `/gsd-new-milestone`.
 
 ## What This Is
 
@@ -70,19 +72,21 @@ is built on top of that one answer being correct and trustworthy.
 - ✓ DAEMON-06 six-target no-net/no-exec proof with watcher and socket linked — v0.3
 - ✓ BLAST-01 `gruntled blast --base`: disjoint sorted Broken/Impacted, text and json, "no baseline" label — v0.3
 - ✓ BLAST-02 one-hop Impacted on `variable`/`output` name changes; pre-existing findings never Broken — v0.3
+- ✓ MORE-03/MORE-07 `GRT004` replaces `GRT001` at every reference to a removed output, through one shared blast core (`Between`) reused by `check`/`report`/`blast`/the daemon — v0.4
+- ✓ BLAST-03/04/05 transitive Impacted follows dependents past one hop, with distance, one connecting path and `--depth` — v0.4
+- ✓ BLAST-06..10 type-level surface facts: new required variable, variable/output type or `sensitive` changed puts instantiating units in Impacted, never Broken — v0.4
+- ✓ BLAST-11/SEC-01 64 MiB blast-response size bound; text/JSON escaping on every new surface — v0.4
+- ✓ DAEMON-07..10 daemon answers `report --blast` against its in-memory baseline over IPC v2; `rebase [--expect N]` moves the baseline; baseline holds only `checking.Report` — v0.4
+- ✓ REL-03 byte-identical `check`, empty noise on reformat-only mutations, 100% mutation catch on three real corpora, independent cross-phase security/integration review — v0.4
 
 ### Active
 
-**v0.4 Blast-aware Diagnostics** (REQ-IDs in `REQUIREMENTS.md`)
+(None yet — run `/gsd-new-milestone` to define the next milestone's requirements.)
 
-- [ ] `GRT004`: output removed from a module but still referenced downstream (MORE-03)
-- [ ] `report --blast` from the daemon's in-memory baseline, `rebase` command
-- [ ] Transitive Impacted with connecting path
-- [ ] Type-level surface changes in blast
-
-**Deferred:** `GRT005` (MORE-04) and `GRT006` (MORE-05) overlap `terragrunt hcl validate --inputs`
-and carry include-merge false-positive risk; `report` over AF_UNIX on windows needs a scoped `net`
-exception to the six-target proof.
+**Deferred from v0.4** (see `milestones/v0.4-REQUIREMENTS.md`): `GRT005` (MORE-04) and `GRT006`
+(MORE-05) overlap `terragrunt hcl validate --inputs` and carry include-merge false-positive risk;
+`report`/`rebase` over AF_UNIX on windows needs a scoped `net` exception to the six-target proof;
+`watch --base <dir>`, `blast --format sarif`, per-hop `file:line`, reference-gated propagation.
 
 ### Out of Scope
 
@@ -107,13 +111,18 @@ exception to the six-target proof.
 
 ## Context
 
-**Shipped state (v0.3, 2026-10-10):** ~37.9k lines of Go (~25.9k of them tests). Go 1.27,
-`hashicorp/hcl/v2`, `fsnotify` (not on windows), stdlib `flag`, raw-syscall AF_UNIX (no `net`).
-CI: architecture rules and the six-target no-net/no-exec proof, `go test -race` on linux plus
-test jobs on macOS and Windows, staticcheck, govulncheck, SARIF schema/upload proofs, release
-packaging dry run and `recipe-check`; tag-triggered `release.yml`.
+**Shipped state (v0.4, 2026-10-13):** ~56.5k lines of Go (~42.4k of them tests). Go 1.27,
+`hashicorp/hcl/v2` + `ext/typeexpr`, `fsnotify` (not on windows), stdlib `flag`, raw-syscall
+AF_UNIX (no `net`), IPC protocol v2. CI: architecture rules and the six-target no-net/no-exec
+proof, `go test -race` on linux plus test jobs on macOS and Windows, staticcheck, govulncheck,
+SARIF schema/upload proofs, release packaging dry run and `recipe-check`; tag-triggered
+`release.yml`; `corpus.yml` (workflow_dispatch + weekly, network-isolated) proves the mutation
+set on three real corpora against a frozen v0.3.0 reference binary.
 Known limitations (documented): darwin native watcher late by ≤30 s after a dangling symlink
-(fsnotify#787), 64 MiB report response cap, Windows runtime dir relies on `%LocalAppData%` ACLs.
+(fsnotify#787), 64 MiB report/blast response cap, Windows runtime dir relies on `%LocalAppData%`
+ACLs, `report`/`rebase` unsupported over AF_UNIX on windows, the include-target conservative rule
+hides all 8 known broken references on the denis256 secondary corpus (0/8 recall, 0 false
+positives — the primary v2 candidate).
 Work is run by a four-agent team (orchestrator, planner, executor, sec) on GSD Core, talking on
 `.claude/agentbus` with a local GUI.
 
@@ -221,6 +230,12 @@ error — this needs an explicit, tested decision.
 | Escape control/bidi runes in every text and JSON output | Repository names could drive the user's terminal | ✓ Good (phase 12) |
 | Cross-phase milestone audit with an independent sec agent before closing | Per-phase verifications all passed while a BLOCKER and a MEDIUM existed between phases | ✓ Good (v0.3) |
 | stdlib flag instead of cobra for v0.1 | One subcommand. cobra/pflag link `net`, `net/url` and `net/netip` plus `text/template`, while the stdlib keeps `binary-no-net-no-exec` a one-line CI proof. Revisit when v2 adds several subcommands | ✓ Locked (Phase 3) |
+| `GRT004` exists only in the shared blast core (`Between`), never in `check`/`report` | It reclassifies `GRT001`, never adds a finding; one seam avoids duplicate/divergent reclassification logic across surfaces | ✓ Good (v0.4, confirmed by milestone integration check) |
+| IPC protocol bumped to v2; a version mismatch is an explicit error, never an empty answer | A silent "nothing impacted" from a stale client/daemon pair would be worse than refusing | ✓ Good (v0.4) |
+| Daemon baseline holds only `checking.Report`, never a loader/`fs.FS`/parse cache | Keeps daemon memory bounded and the report op response blast-byte-free; measured at 65/500/5,000 synthrepo units | ✓ Good (v0.4) |
+| Mutation proof runs against a frozen, fingerprinted v0.3.0 reference binary, network-isolated (`unshare -rn`) | A reference binary that silently drifted from v0.3.0, or a gate that ran with network, would invalidate the whole proof | ✓ Good (v0.4, REL-03 31/31) |
+| No git tag created by any GSD workflow (`git.create_tag: false`) | Tagging a release is Giulio's decision, not an automated one | ✓ Good (v0.4, no tag at HEAD) |
+| Five phases kept for v0.4 although `coarse` granularity suggests 2-4 | The type-fact and daemon phases are separately research-flagged, and the proof phase must follow both | ✓ Good (v0.4 shipped with 5 phases, 0 critical gaps) |
 
 ## Success Criteria for v0.1
 
@@ -266,4 +281,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-10 after starting v0.4 milestone*
+*Last updated: 2026-10-13 after v0.4 milestone*
