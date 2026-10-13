@@ -113,6 +113,83 @@
 
 ---
 
+## Milestone: v0.4 — Blast-aware Diagnostics
+
+**Shipped:** 2026-10-13 (phases 13-16 execution 2026-10-10 to 2026-10-12; phase 17 paused mid-execution
+2026-10-12, resumed and closed 2026-10-13; audit and close same day)
+**Phases:** 5 (13-17) | **Plans:** 23 | **Commits:** 217 since v0.3.0 | **Sessions:** 3+
+
+### What Was Built
+- `GRT004` replaces `GRT001` at every reference to an output a change removed, through one shared
+  blast core (`Between`) reused by `check`/`report`/`blast`/the daemon
+- Transitive Impacted follows dependents past one hop, with distance, one connecting path and `--depth`
+- Type-level surface facts: new required variables, variable/output type or `sensitive` changes land
+  in Impacted, never Broken; a 64 MiB blast-response size bound and escaping on every new surface
+- Daemon answers `report --blast` against its in-memory baseline over IPC v2; `rebase [--expect N]`
+  moves the baseline, which holds only `checking.Report`
+- A real corpus mutation proof (REL-03): byte-identical `check`, empty noise on reformat-only
+  mutations, 100% catch of the injected mutation set on three real corpora, network-isolated against
+  a frozen, fingerprinted v0.3.0 reference binary — plus an independent cross-phase security and
+  integration review with zero open BLOCKER/MEDIUM findings
+
+### What Worked
+- The corpus mutation proof's reference binary pinned by content (fingerprinted sha matching the
+  v0.3.0 tag), not just a version string, and the gate re-exec'd into a network namespace
+  (`unshare -rn`) to make "network-isolated" a verified property instead of a claim
+- Explicit `.continue-here.md` pause notes (exact commit SHAs, exact CI/workflow run IDs, a numbered
+  "Next" list) let a cold resume after a multi-day pause (phase 17, 2026-10-12 → 2026-10-13) pick up
+  with zero re-derivation from git log alone
+- Nyquist validation as a genuine post-execution audit: every task's automated command was
+  cross-checked against its SUMMARY evidence rather than trusting pre-execution `nyquist_compliant:
+  true` frontmatter — confirmed 0 gaps across all 17 tasks
+- The milestone-level integration check and 3-source requirements cross-reference ran as two
+  independent parallel agents and converged on the same verdict (17/17 satisfied, no wiring gaps) as
+  phase 17's own internal review — redundant verification as confirmation, not rework
+- Running the final gate one step at a time with `free -m` and `timeout` under 8 GB WSL caught a real
+  failure (the flaky test below) without ever risking an OOM
+
+### What Was Inefficient
+- Local toolchain drift: `~/.local/go` is 1.24.2 and the scripts set `GOTOOLCHAIN=local`, so
+  `compare-ref.sh` and friends refused to build the go1.27 module until the cached go1.27.0 toolchain
+  was manually prepended to `PATH` — rediscovered mid-gate instead of being documented once
+- `gsd-tools milestone complete` / the state writer again clobbered hand-maintained STATE.md
+  frontmatter (dropped `current_phase`/`current_phase_name`/`state_head`, wrote a full sentence into
+  the `status` enum field instead of a short value) — repaired by hand, continuing the v0.2/v0.3
+  pattern of this tool needing a manual follow-up every time
+- A pre-existing flaky test (`TestIncrementalEqualsFull`, from phase 12-05 in v0.3) only surfaced
+  during the phase 17 final gate because `-short`'s reduced random sampling sometimes drew zero
+  symlinked-include cases; CI never runs `-short`, so it had been invisible since v0.3 shipped
+- The 17-05 plan's cached final-gate script (noted in the pause note as copied to
+  `~/.cache/gruntled-phase4/resume/final-gate.sh`) had been lost by resume time, so the gate was
+  re-run step-by-step from the plan's `<verify>` block instead of a saved script
+
+### Patterns Established
+- A mutation/corpus proof pins its reference binary by content fingerprint, not version string, and
+  proves network isolation rather than asserting it
+- Pause notes name exact commit SHAs and CI run IDs plus a numbered resume list, never just a prose summary
+- Milestone-level audits re-verify specific wiring seams (actual call sites) instead of re-running
+  whole phase suites, and run the integration check and the Nyquist/requirements cross-reference as
+  independent parallel passes
+
+### Key Lessons
+1. Record the exact toolchain PATH fix in a script or dev doc, not an agent's scratch notes — it will
+   be rediscovered the same way every session otherwise.
+2. Budget a manual STATE.md frontmatter repair after every `gsd-tools milestone complete` / state-advance
+   call; it has clobbered hand-maintained fields in v0.2, v0.3 and v0.4 alike.
+3. A flaky test guarded only by CI's exact invocation (e.g. no `-short`) is a landmine for any
+   local or `-short` gate; audit non-vacuity assertions against the real sample size, not just CI's path.
+4. Don't rely on a cached resume script surviving between sessions — the plan's own `<verify>` block
+   is the durable source of truth.
+
+### Cost Observations
+- Model mix: Opus for orchestrator/executor/verifier/sec agents, Sonnet for the integration-checker
+  and the Nyquist/requirements cross-reference fork
+- Sessions: at least 3 across 2026-10-10 to 2026-10-13, including one multi-day pause inside phase 17
+- Notable: the milestone-level audit (integration-checker + 3-source cross-reference, run in parallel)
+  completed in under two minutes wall-clock and found zero new gaps beyond phase 17's own review
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -121,6 +198,7 @@
 |-----------|----------|--------|------------|
 | v0.2 | n/a | 3 | Proofs moved into CI jobs; terragrunt binary used as oracle for new diagnostics |
 | v0.3 | 2+ | 5 | Agent team on GSD Core; sec plan review + cross-phase audit; gap-closure phase |
+| v0.4 | 3+ | 5 | Mutation proof network-isolated against a fingerprinted reference binary; parallel integration + Nyquist cross-reference at milestone audit |
 
 ### Cumulative Quality
 
@@ -128,8 +206,11 @@
 |-----------|-------|----------|-------------------|
 | v0.2 | ~17.9k LOC of Go tests | not measured | 0 new runtime dependencies |
 | v0.3 | ~25.9k LOC of Go tests | not measured | fsnotify (non-windows) only |
+| v0.4 | ~42.4k LOC of Go tests | not measured | `ext/typeexpr` (already transitive via `hcl/v2`) only |
 
 ### Top Lessons (Verified Across Milestones)
 
 1. Corpus validation against a real oracle finds what fixtures miss (v0.1 denis256 recall fix, v0.2 empty `config_path`).
 2. Independent cross-phase review finds what per-phase verification misses (v0.3 dir-ignore BLOCKER, symlink alias MEDIUM).
+3. `gsd-tools milestone complete` / state-advance tooling reliably clobbers hand-maintained STATE.md fields — budget a manual repair every milestone (v0.2, v0.3, v0.4).
+4. A test's non-vacuity guard is only as strong as its actual sample size: `-short`'s reduced sampling can make a real-world case statistically invisible even though CI's full run always covers it (v0.4 `TestIncrementalEqualsFull`).
