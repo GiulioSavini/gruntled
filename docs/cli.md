@@ -200,8 +200,9 @@ usage: gruntled watch [--poll] [--poll-interval d] [--debounce d] [--status-file
 Watch the Terragrunt repository at path (default "."): index it fully, then
 reindex only the changed files after each save, until interrupted
 (SIGINT/SIGTERM). After every index a one-line status is written
-atomically to a status file outside the repository; the diagnostics that
-changed are printed to stdout in the same text format as check.
+atomically to a status file outside the repository; whenever the diagnostics
+change, the full current set is printed to stdout in the same text format as
+check.
 Flags may appear before or after path; "--" ends flag parsing.
 
 Flags:
