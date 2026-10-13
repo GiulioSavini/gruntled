@@ -1,11 +1,12 @@
 ---
 phase: 17
 slug: corpus-mutation-proof-cross-phase-audit
-status: draft
+status: validated
 nyquist_compliant: true
-wave_0_complete: false
+wave_0_complete: true
 created: 2026-10-12
 revised: 2026-10-12 (sec plan review #412-#423: HIGH 1, MEDIUM 5, LOW 4, INFO 1)
+validated: 2026-10-13 (post-execution audit, no gaps)
 ---
 
 # Phase 17: Validation Strategy
@@ -65,24 +66,24 @@ Environment for every local command:
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 17-00-01 | 00 | 1 | (audit bookkeeping) | doc check | verify-summary loop over 13-16 SUMMARYs + requirements-claim loop (see plan) | ✅ SUMMARY files | ⬜ pending |
-| 17-00-02 | 00 | 1 | (audit bookkeeping) | validate-phase | `grep '^status: validated'` on 15/16-VALIDATION.md + per-row commands | ✅ VALIDATION files | ⬜ pending |
-| 17-00-03 | 00 | 1 | (tech debt) | comment-only diff + tests | `go test -count=1 -short ./internal/infrastructure/watch/ && go test -count=1 -short -run TestRebase ./cmd/gruntled/` + windows CI run ids | ✅ run.go, rebase_test.go | ⬜ pending |
-| 17-01-01 | 01 | 1 | REL-03 | shell self-test | `bash scripts/test-fetch-corpora.sh` | ❌ W0 (fetch-corpora.sh, test-fetch-corpora.sh) | ⬜ pending |
-| 17-01-02 | 01 | 1 | REL-03 (SC1a) | byte gate | `bash scripts/compare-ref.sh v0.3.0` (244) / clean-fixture (248) / corpora (256) | ✅ compare-ref.sh (extended) | ⬜ pending |
-| 17-01-03 | 01 | 1 | REL-03 (SC1b) | gated e2e | `go test -p=1 -count=1 -run TestCorpusBlastSelf -timeout 15m ./cmd/gruntled/` | ❌ W0 (corpus_blast_test.go) | ⬜ pending |
-| 17-02-01 | 02 | 2 | REL-03 (oracle) | gated model check | `go test -p=1 -count=1 -run 'TestCorpusBlastModel/<corpus>' -timeout 15m ./cmd/gruntled/` | ❌ W0 (corpus_model_test.go) | ⬜ pending |
-| 17-02-02 | 02 | 2 | REL-03 (harness) | always-on self-test | `go test -count=1 -run TestCorpusHarnessSelfTest ./cmd/gruntled/` | ❌ W0 (corpus_edit_test.go, corpus_harness_test.go) | ⬜ pending |
-| 17-02-03 | 02 | 2 | REL-03 (SC2) | gated transforms | `go test -p=1 -count=1 -run 'TestCorpusReformat/<corpus>' -timeout 90m ./cmd/gruntled/` | ❌ W0 (corpus_reformat_test.go) | ⬜ pending |
-| 17-03-01 | 03 | 3 | REL-03 (SC3 M1, M2) | gated mutation + dual oracle | `go test -p=1 -count=1 -run 'TestCorpusMutation17/<corpus>/M[12]' -timeout 90m ./cmd/gruntled/` | ❌ W0 (corpus_mutation_test.go) | ⬜ pending |
-| 17-03-02 | 03 | 3 | REL-03 (SC3 M3-M7, M9) | gated mutation | `go test -p=1 -count=1 -run 'TestCorpusMutation17/<corpus>/M<k>' -timeout 90m ./cmd/gruntled/` | ❌ W0 | ⬜ pending |
-| 17-03-03 | 03 | 3 | REL-03 (SC3 M8, gate) | serial gate | `bash scripts/corpus-gate.sh` → `corpus-gate: N/N` | ❌ W0 (corpus-gate.sh) | ⬜ pending |
-| 17-04-01 | 04 | 4 | REL-03 (daemon path) | gated daemon e2e | `go test -p=1 -count=1 -run 'TestCorpusDaemonSample/<corpus>' -timeout 90m ./cmd/gruntled/` | ❌ W0 (corpus_daemon_test.go) | ⬜ pending |
-| 17-04-02 | 04 | 4 | REL-03 (record) | doc pin | `go test -count=1 -short -run TestValidationDocPins ./cmd/gruntled/` | ✅ validation_doc_test.go (extended) | ⬜ pending |
-| 17-04-03 | 04 | 4 | REL-03 (CI) | doc pin | `go test -count=1 -run TestCIDoc ./cmd/gruntled/` + `! grep GRUNTLED_CORPUS .github/workflows/ci.yml` | ❌ W0 (corpus.yml) | ⬜ pending |
-| 17-05-01 | 05 | 5 | REL-03 (SC4) | review (checkpoint) | 17-SECURITY.md + 17-INTEGRATION.md exist with per-row verdicts | ❌ W0 (17-INTEGRATION.md) | ⬜ pending |
-| 17-05-02 | 05 | 5 | REL-03 (SC4) | red→green per finding | `go vet ./... && go test -count=1 -short ./internal/... ./cmd/gruntled/` | n/a | ⬜ pending |
-| 17-05-03 | 05 | 5 | REL-03 (SC4) | final gate | architecture + arch self-tests + doc pins + eval-site grep (4) + compare-ref 256/256 + compat-v1 + mod verify + no tag at HEAD | ✅ scripts | ⬜ pending |
+| 17-00-01 | 00 | 1 | (audit bookkeeping) | doc check | verify-summary loop over 13-16 SUMMARYs + requirements-claim loop (see plan) | ✅ SUMMARY files | ✅ green |
+| 17-00-02 | 00 | 1 | (audit bookkeeping) | validate-phase | `grep '^status: validated'` on 15/16-VALIDATION.md + per-row commands | ✅ VALIDATION files | ✅ green |
+| 17-00-03 | 00 | 1 | (tech debt) | comment-only diff + tests | `go test -count=1 -short ./internal/infrastructure/watch/ && go test -count=1 -short -run TestRebase ./cmd/gruntled/` + windows CI run ids | ✅ run.go, rebase_test.go | ✅ green |
+| 17-01-01 | 01 | 1 | REL-03 | shell self-test | `bash scripts/test-fetch-corpora.sh` | ✅ fetch-corpora.sh, test-fetch-corpora.sh | ✅ green |
+| 17-01-02 | 01 | 1 | REL-03 (SC1a) | byte gate | `bash scripts/compare-ref.sh v0.3.0` (244) / clean-fixture (248) / corpora (256) | ✅ compare-ref.sh (extended) | ✅ green (256/256) |
+| 17-01-03 | 01 | 1 | REL-03 (SC1b) | gated e2e | `go test -p=1 -count=1 -run TestCorpusBlastSelf -timeout 15m ./cmd/gruntled/` | ✅ corpus_blast_test.go | ✅ green |
+| 17-02-01 | 02 | 2 | REL-03 (oracle) | gated model check | `go test -p=1 -count=1 -run 'TestCorpusBlastModel/<corpus>' -timeout 15m ./cmd/gruntled/` | ✅ corpus_model_test.go | ✅ green |
+| 17-02-02 | 02 | 2 | REL-03 (harness) | always-on self-test | `go test -count=1 -run TestCorpusHarnessSelfTest ./cmd/gruntled/` | ✅ corpus_edit_test.go, corpus_harness_test.go | ✅ green |
+| 17-02-03 | 02 | 2 | REL-03 (SC2) | gated transforms | `go test -p=1 -count=1 -run 'TestCorpusReformat/<corpus>' -timeout 90m ./cmd/gruntled/` | ✅ corpus_reformat_test.go | ✅ green |
+| 17-03-01 | 03 | 3 | REL-03 (SC3 M1, M2) | gated mutation + dual oracle | `go test -p=1 -count=1 -run 'TestCorpusMutation17/<corpus>/M[12]' -timeout 90m ./cmd/gruntled/` | ✅ corpus_mutation_test.go | ✅ green |
+| 17-03-02 | 03 | 3 | REL-03 (SC3 M3-M7, M9) | gated mutation | `go test -p=1 -count=1 -run 'TestCorpusMutation17/<corpus>/M<k>' -timeout 90m ./cmd/gruntled/` | ✅ corpus_mutation_test.go | ✅ green (4,345 mutations caught) |
+| 17-03-03 | 03 | 3 | REL-03 (SC3 M8, gate) | serial gate | `bash scripts/corpus-gate.sh` → `corpus-gate: N/N` | ✅ corpus-gate.sh | ✅ green (31/31, network-isolated) |
+| 17-04-01 | 04 | 4 | REL-03 (daemon path) | gated daemon e2e | `go test -p=1 -count=1 -run 'TestCorpusDaemonSample/<corpus>' -timeout 90m ./cmd/gruntled/` | ✅ corpus_daemon_test.go | ✅ green |
+| 17-04-02 | 04 | 4 | REL-03 (record) | doc pin | `go test -count=1 -short -run TestValidationDocPins ./cmd/gruntled/` | ✅ validation_doc_test.go (extended) | ✅ green |
+| 17-04-03 | 04 | 4 | REL-03 (CI) | doc pin | `go test -count=1 -run TestCIDoc ./cmd/gruntled/` + `! grep GRUNTLED_CORPUS .github/workflows/ci.yml` | ✅ corpus.yml | ✅ green |
+| 17-05-01 | 05 | 5 | REL-03 (SC4) | review (checkpoint) | 17-SECURITY.md + 17-INTEGRATION.md exist with per-row verdicts | ✅ 17-INTEGRATION.md, 17-SECURITY.md | ✅ green (SECURED) |
+| 17-05-02 | 05 | 5 | REL-03 (SC4) | red→green per finding | `go vet ./... && go test -count=1 -short ./internal/... ./cmd/gruntled/` | n/a | ✅ green (flake fixed 78aa8b5) |
+| 17-05-03 | 05 | 5 | REL-03 (SC4) | final gate | architecture + arch self-tests + doc pins + eval-site grep (4) + compare-ref 256/256 + compat-v1 + mod verify + no tag at HEAD | ✅ scripts | ✅ green (17-05-SUMMARY, CI 38264926783 + 568e260) |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -146,4 +147,16 @@ before 17-01 Task 2.
 - [x] Feedback latency < 30s (quick command)
 - [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending (plan review by sec, then execution).
+**Approval:** confirmed — plan review by sec (SECURED), execution complete, post-execution Nyquist audit 2026-10-13 found no gaps.
+
+---
+
+## Validation Audit 2026-10-13
+
+| Metric | Count |
+|--------|-------|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
+
+All 17 Per-Task Map rows cross-checked against their plan's SUMMARY: each has a real automated command with real green evidence, matching gsd-verifier's independent PASSED verdict in 17-VERIFICATION.md. No gsd-nyquist-auditor spawn needed.
