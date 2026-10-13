@@ -175,9 +175,18 @@ func (r *Reader) ReadSurface(ctx context.Context, module repograph.RepoPath) (po
 		body, pdiags := parseModuleFile(name, rel, src)
 		if pdiags.HasErrors() {
 			syntaxErr = true
-			if d, ok, derr := hclconv.FirstSyntaxError(file, src, pdiags); derr == nil && ok {
-				diags = append(diags, d)
+			d, ok, derr := hclconv.FirstSyntaxError(file, src, pdiags)
+			if derr != nil {
+				return ports.SurfaceResult{}, derr
 			}
+			if !ok {
+				// pdiags.HasErrors() is true, so FirstSyntaxError always
+				// finds an error-severity diagnostic; this branch exists so
+				// a future change to that contract fails closed here
+				// instead of silently discarding the file's GRT100.
+				return ports.SurfaceResult{}, errors.New("tfsurface: internal error: syntax error diagnostics present but none found")
+			}
+			diags = append(diags, d)
 			continue // never analyze the partial body
 		}
 
