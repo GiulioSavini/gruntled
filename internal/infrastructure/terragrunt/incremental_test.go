@@ -387,6 +387,14 @@ func TestIncrementalEqualsFull(t *testing.T) {
 	rapid.Check(t, func(rt *rapid.T) {
 		m := newIncModel()
 		m.seed()
+		// Every case starts from a unit (c) whose include resolves through
+		// a symlink (common.hcl -> b/common.hcl), loaded once, so the
+		// random operations act on a linked include from the first step
+		// and linkedIncludes > 0 holds by construction. Left to the draws,
+		// the 20 cases of -short sometimes created no linked include.
+		m.link("common.hcl", "b/common.hcl")
+		m.write("c/terragrunt.hcl", unitContent(4, "c", "a"))
+		m.reindex(rt)
 		rt.Repeat(map[string]func(*rapid.T){
 			"create": func(rt *rapid.T) {
 				m.guarded(func() {
