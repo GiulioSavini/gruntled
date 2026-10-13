@@ -10,11 +10,11 @@ everything is wired together, and tells you when a `dependency.X.outputs.Y`
 reference points at an output that does not exist — before you run anything
 slow.
 
-**v0.2 is an early release.** `gruntled check` works end to end, reports
-`GRT001`, `GRT002`, `GRT003` and `GRT100`, and has been validated on a real
-public corpus (see
-[`docs/validation.md`](docs/validation.md)). See [Status](#status) below for
-its known limitations before you rely on it.
+**v0.4 shipped.** `gruntled check` reports `GRT001`-`GRT004` and `GRT100`;
+`gruntled watch` keeps a live index; `gruntled blast` separates what you
+broke from what you impacted. 100% mutation catch, zero false positives on
+three real public corpora (see [`docs/validation.md`](docs/validation.md)).
+See [Status](#status) below for known limitations before you rely on it.
 
 ## The problem
 
@@ -104,17 +104,17 @@ than staying quiet.
 
 ## Status
 
-v0.1 is being built as a falsifiable experiment, in four phases (see
-[`.planning/ROADMAP.md`](.planning/ROADMAP.md)). All four phases are
-complete and verified.
+v0.4 shipped 2026-10-13. Four milestones complete and verified (see
+[`.planning/MILESTONES.md`](.planning/MILESTONES.md)).
 
 **Works today, tested:**
 - `gruntled check [--format text|json|sarif] [path]`, end to end: it opens the
   repository read-only, builds the graph, and reports `GRT001` (a
   `dependency.X.outputs.Y` naming an output the target module does not
   declare), `GRT002` (a literal `config_path` pointing at a directory with no
-  unit), `GRT003` (a dependency cycle) and `GRT100` (HCL that does not parse),
-  with the exit codes below.
+  unit), `GRT003` (a dependency cycle), `GRT004` (a reference to an output a
+  change removed) and `GRT100` (HCL that does not parse), with the exit
+  codes below.
 - The `mock_outputs` rule for `GRT001`: mocks never suppress or downgrade
   the diagnostic; when a mock would silently stand in for the missing output
   at `apply`, the message says so.
@@ -142,9 +142,10 @@ repositories with dynamic include paths some units stay unchecked: on the
 secondary corpus `denis256/terragrunt-tests`, 54 of 1146 units are skipped this
 way. All 8 known broken references there are still reported.
 
-**New in v0.3:** `gruntled watch` (incremental daemon with a status file),
-`gruntled report` (prints what the running daemon last published) and
-`gruntled blast` (Broken vs Impacted against a baseline tree). See
+`gruntled watch` (incremental daemon with a status file), `gruntled report`
+(prints what the running daemon last published) and `gruntled blast`
+(Broken vs Impacted against a baseline tree, following dependents through
+type-level surface changes) are all shipped. See
 [Watch, report and blast](#watch-report-and-blast).
 
 **Later:** diagnostics `GRT005`-`GRT006`.
