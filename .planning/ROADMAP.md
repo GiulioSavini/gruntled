@@ -48,7 +48,7 @@ See `milestones/v0.3-ROADMAP.md`.
 - [x] **Phase 14: Transitive Impact with Paths** - Impacted follows dependents past one hop, with a distance, one connecting path and `--depth` (completed 2026-10-10)
 - [x] **Phase 15: Type-Level Surface Facts** - New required variables and variable/output type or `sensitive` changes put instantiating units in Impacted, never in Broken (completed 2026-10-11)
 - [x] **Phase 16: Daemon Baseline, `report --blast` & `rebase`** - The daemon answers blast against its in-memory baseline over IPC v2, and the baseline moves only on `rebase` (completed 2026-10-12)
-- [ ] **Phase 17: Corpus Mutation Proof & Cross-Phase Audit** - No noise and 100% mutation catch on the three corpora, plus an independent audit across phase boundaries
+- [x] **Phase 17: Corpus Mutation Proof & Cross-Phase Audit** - No noise and 100% mutation catch on the three corpora, plus an independent audit across phase boundaries (completed 2026-10-13)
 
 ## Phase Details
 
@@ -145,7 +145,13 @@ Plans:
   3. Every mutation in the set is caught: referenced output removed (`GRT004` at every site and no `GRT001`), unreferenced output removed, required variable added, default removed, variable type changed, output type declared and changed, `sensitive` flipped, and propagation to depth 2 or more
   4. An independent security review across the blast core, the socket ops and output escaping leaves no open BLOCKER or MEDIUM (any found is closed in this phase), the six-target no-net/no-exec proof and the doc-sync pins pass on the final tree, and the docs match the shipped behaviour of `GRT004`, `--depth`, `report --blast` and `rebase`
 
-**Plans**: TBD
+Plans:
+- [x] 17-00-PLAN.md — audit bookkeeping (13-16 SUMMARY/VALIDATION verify-summary pass) and tech debt (watch/rebase comment-only diff)
+- [x] 17-01-PLAN.md — fetch-corpora self-test, compare-ref v0.3.0 byte gate (256/256), TestCorpusBlastSelf non-vacuity
+- [x] 17-02-PLAN.md — independent textual oracle (TestCorpusBlastModel), harness self-test, TestCorpusReformat (SC2)
+- [x] 17-03-PLAN.md — TestCorpusMutation17 mutation set (SC3, 4,345 mutations caught), corpus-gate.sh serial gate (31/31, network-isolated)
+- [x] 17-04-PLAN.md — daemon-path corpus sample, doc-sync pins, CI isolation (corpus.yml vs ci.yml)
+- [x] 17-05-PLAN.md — cross-phase review (gruntled-sec SECURED, gsd-integration-checker), BLOCKER/MEDIUM closure, final gate (SC4)
 
 ## Progress
 
@@ -163,4 +169,4 @@ Plans:
 | 14. Transitive Impact with Paths | v0.4 | 3/3 | Complete    | 2026-10-10 |
 | 15. Type-Level Surface Facts | v0.4 | 6/6 | Complete    | 2026-10-11 |
 | 16. Daemon Baseline, `report --blast` & `rebase` | v0.4 | 5/5 | Complete    | 2026-10-12 |
-| 17. Corpus Mutation Proof & Cross-Phase Audit | v0.4 | 0/TBD | Not started | - |
+| 17. Corpus Mutation Proof & Cross-Phase Audit | v0.4 | 6/6 | Complete    | 2026-10-13 |

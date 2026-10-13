@@ -66,13 +66,13 @@
     {
       "number": "17",
       "name": "Corpus Mutation Proof & Cross-Phase Audit",
-      "status": "pending"
+      "status": "complete"
     }
   ],
   "next": {
-    "command": "/gsd:progress --next",
-    "label": "Advance to the next step (plan phase 17)",
-    "reason": "Phase 17 of 5 — needs a plan"
+    "command": "/gsd:audit-milestone v0.4",
+    "label": "Audit milestone v0.4 before archiving",
+    "reason": "All 5 v0.4 phases (13-17) complete"
   },
-  "updated_at": "2026-10-12T09:25:09.321Z"
+  "updated_at": "2026-10-13T07:50:00.000Z"
 }

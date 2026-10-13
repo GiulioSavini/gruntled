@@ -4,18 +4,18 @@ milestone: v0.4
 milestone_name: Blast-aware Diagnostics
 current_phase: 17
 current_phase_name: Corpus Mutation Proof & Cross-Phase Audit
-status: planning
-stopped_at: Phase 16 complete, ready to plan Phase 17
-last_updated: "2026-10-12T09:25:09.314Z"
-last_activity: 2026-10-12
-last_activity_desc: Phase 16 complete, transitioned to Phase 17
-state_head: 0f9f95b1cf2c19a32bc8f0ffaa10fa820012f9c5
+status: complete
+stopped_at: Phase 17 complete, milestone v0.4 ready for audit
+last_updated: "2026-10-13T07:50:00.000Z"
+last_activity: 2026-10-13
+last_activity_desc: Phase 17 complete, all 5 v0.4 phases done, ready for /gsd-audit-milestone v0.4
+state_head: ac22f33
 progress:
   total_phases: 5
-  completed_phases: 12
-  total_plans: 17
-  completed_plans: 17
-  percent: 92
+  completed_phases: 13
+  total_plans: 23
+  completed_plans: 23
+  percent: 100
 ---
 
 # Project State
@@ -29,17 +29,17 @@ See: .planning/PROJECT.md (updated 2026-10-10)
 
 ## Current Position
 
-Phase: 17 of 17 (Corpus Mutation Proof & Cross-Phase Audit)
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-10-12 — Phase 16 complete, transitioned to Phase 17
+Phase: 17 of 17 (Corpus Mutation Proof & Cross-Phase Audit) — complete
+Plan: All 6 plans complete (17-00..17-05)
+Status: Milestone v0.4 ready for /gsd-audit-milestone
+Last activity: 2026-10-13 — Phase 17 complete, all 5 v0.4 phases done
 
-Progress: [█████████░] 92%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity (v0.4):**
-- Total plans completed: 0
+- Total plans completed: 23
 - Average duration: -
 - Total execution time: 0 hours
 
@@ -68,9 +68,9 @@ None yet.
 
 ### Blockers/Concerns
 
-- Phase 15 needs phase research before planning: `typeexpr` over `.tf.json` and legacy bare `list`/`map`, Terraform 1.15 output `type` release note and OpenTofu parity, `override.tf` and `.tf` + `.tofu` duplicates.
-- Phase 16 needs phase research before planning: first mutating socket op and locking, windows asymmetry, 64 MiB cap with a pre-rendered blast view, memory at thousands of units (figures so far are derived, not measured).
-- Phase 14 planning: choose the default text hop cap after measuring the 65-unit iso20022 corpus.
+None — all five v0.4 phases (13-17) complete, verified, secured and validated. Release follow-up
+for Giulio (not a blocker, a decision for him): v0.3.1 hand backport of the `HasForExpr` guard into
+v0.3.0 `terragrunt/eval.go`, plus the 15-00 cherry-picks — see 17-05-SUMMARY.md.
 
 ## Deferred Items
 
@@ -84,10 +84,10 @@ Items acknowledged and deferred, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-10 13:26
-Stopped at: Phase 16 complete, ready to plan Phase 17
+Last session: 2026-10-13 07:50
+Stopped at: Phase 17 complete, milestone v0.4 ready for audit
 Resume file: None
 
 ## Operator Next Steps
 
-- Plan Phase 13 with /gsd-plan-phase 13 (phases 15 and 16 need phase research first)
+- `/gsd-audit-milestone v0.4`, then `/gsd-complete-milestone v0.4` (`git.create_tag=false`; tagging v0.4.0 is Giulio's decision)

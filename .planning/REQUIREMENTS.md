@@ -46,7 +46,7 @@ Milestone v0.4 Blast-aware Diagnostics. Each maps to one roadmap phase.
 
 ### Proof
 
-- [ ] **REL-03**: On each corpus: `check` is byte-identical to v0.3.0; `blast --base <same tree>` has empty Broken and Impacted; reformat-only mutations (whitespace, comments, attribute reorder, `optional()` default, `.tf`↔`.tf.json`, output moved to another file, `deprecated` added) give empty Impacted; the mutation set {referenced output removed → `GRT004` at every site and no `GRT001`, unreferenced output removed, required variable added, default removed, variable type changed, output type declared and changed, `sensitive` flipped, propagation to depth ≥ 2} is caught 100%. The six-target no-net/no-exec proof runs in the first plan that imports `ext/typeexpr`.
+- [x] **REL-03**: On each corpus: `check` is byte-identical to v0.3.0; `blast --base <same tree>` has empty Broken and Impacted; reformat-only mutations (whitespace, comments, attribute reorder, `optional()` default, `.tf`↔`.tf.json`, output moved to another file, `deprecated` added) give empty Impacted; the mutation set {referenced output removed → `GRT004` at every site and no `GRT001`, unreferenced output removed, required variable added, default removed, variable type changed, output type declared and changed, `sensitive` flipped, propagation to depth ≥ 2} is caught 100%. The six-target no-net/no-exec proof runs in the first plan that imports `ext/typeexpr`.
 
 ## Future Requirements
 
@@ -94,7 +94,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DAEMON-08 | Phase 16 | Complete |
 | DAEMON-09 | Phase 16 | Complete |
 | DAEMON-10 | Phase 16 | Complete |
-| REL-03 | Phase 17 | Pending |
+| REL-03 | Phase 17 | Complete |
 
 **Coverage:**
 - v0.4 requirements: 17 total
