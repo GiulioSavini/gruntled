@@ -477,7 +477,7 @@ the six release targets `linux/amd64`, `linux/arm64`, `darwin/amd64`,
 (linux, darwin) or `.zip` (windows), writes `checksums.txt` and checks that
 the host binary's `--version` prints the injected version.
 
-Three maintenance scripts are not part of CI and are run by hand:
+Five maintenance scripts are not part of `ci.yml` and are run by hand:
 `scripts/compare-ref.sh <ref>` byte-compares `check` and `graph` output with
 the binary built from a git ref, `scripts/blast-snapshots.sh <ref> <dir>`
 regenerates the pre-Phase-14 blast snapshots, and
@@ -493,6 +493,11 @@ the protocol mismatch with real daemons both ways: a v0.3.0 daemon refuses
 this `report`, `report --blast` and `rebase`, and this daemon refuses the
 v0.3.0 `report`, each with exit 3 and the "restart the daemon" message. It
 stops every daemon it started, also on `^C`, and fails if one is left running.
+
+`scripts/test-fetch-corpora.sh` is the self-test for `scripts/fetch-corpora.sh`
+(the one-time, network-using corpus fetch that `corpus.yml` runs in CI): it
+checks the stripping, filtering and symlink-escape handling fetch-corpora.sh
+relies on. Run it by hand after changing `fetch-corpora.sh`.
 
 ## CI
 
