@@ -84,15 +84,20 @@ Exit codes:
 any arguments after it are ignored:
 
 ```
-gruntled v0.2.0 (abc1234)
+gruntled v0.4.0 (1a2b3c4d5e6f)
+gruntled v0.4.0 (none)
+gruntled dev (none)
 ```
 
-Release builds set both values at link time with
-`-ldflags "-X main.version=<tag> -X main.commit=<short sha>"`. A binary built
-without those flags, including one from `go build` or
-`go install github.com/GiulioSavini/gruntled/cmd/gruntled@vX.Y.Z`, prints
-`gruntled dev (none)`. The same version string is the SARIF
-`tool.driver.version`.
+The first line is a release binary: release builds set both values at link
+time with `-ldflags "-X main.version=<tag> -X main.commit=<12-hex sha>"`, and
+those values always win. The second is a binary from
+`go install github.com/GiulioSavini/gruntled/cmd/gruntled@v0.4.0`: the version
+comes from the Go module information and the commit placeholder is `none`. The
+third is a plain `go build` of a checkout, or any build whose module version is
+`(devel)`, a pseudo-version, carries `+dirty`, or has VCS stamping. The same
+version string is the SARIF `tool.driver.version` and the `version` the watch
+daemon advertises to `report`.
 
 `gruntled graph` builds the repository graph without running any analyzer
 and prints it as one JSON document. `--json` is required: without it the

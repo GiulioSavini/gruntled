@@ -4,16 +4,19 @@ This page shows how to run `gruntled check` on your own Terragrunt repository:
 how to install it, what the exit codes mean for a CI job, a pre-commit hook,
 GitHub Actions workflows (plain and with code scanning) and a GitLab CI job.
 
-In the examples `v0.2.0` stands for the release you want. Pin a real tag from
+In the examples `v0.4.0` stands for the release you want. Pin a real tag from
 the [releases page](https://github.com/GiulioSavini/gruntled/releases) and
-bump it on purpose, like any other tool version.
+bump it on purpose, like any other tool version. The pinned version in this
+page, in the README and in the pre-commit snippet is the content of the
+repository's `VERSION` file, checked by a test; it is bumped in the commit that
+is tagged, so the pins and the tag never disagree.
 
 ## 1. Install
 
 ### With Go
 
 ```
-go install github.com/GiulioSavini/gruntled/cmd/gruntled@v0.2.0
+go install github.com/GiulioSavini/gruntled/cmd/gruntled@v0.4.0
 ```
 
 This needs Go at least as new as the `go` line in gruntled's `go.mod`
@@ -21,9 +24,10 @@ This needs Go at least as new as the `go` line in gruntled's `go.mod`
 automatically if network access is allowed (the default `GOTOOLCHAIN=auto`).
 The binary lands in `$(go env GOPATH)/bin`.
 
-A binary built this way prints `gruntled dev (none)` for `gruntled --version`:
-the version string is injected only into release binaries. The code is the
-one at the tag you installed; only the label is missing.
+A binary built this way prints `gruntled v0.4.0 (none)` for `gruntled --version`:
+the tag comes from the Go module information; the commit is `none` because a
+module-cache build carries none. A plain `go build` of a checkout prints
+`gruntled dev (none)`.
 
 ### Release binaries
 
@@ -39,7 +43,7 @@ Each release has one archive per target plus a `checksums.txt`:
 | windows | arm64 | `gruntled_<tag>_windows_arm64.zip` |
 
 `<tag>` is the full tag with its leading `v`, for example
-`gruntled_v0.2.0_linux_amd64.tar.gz`. Each archive holds the binary
+`gruntled_v0.4.0_linux_amd64.tar.gz`. Each archive holds the binary
 (`gruntled`, or `gruntled.exe` on windows) and `LICENSE`, with no directory
 prefix. The binaries are static (`CGO_ENABLED=0`) and print
 `gruntled <tag> (<commit>)` for `--version`.
@@ -47,7 +51,7 @@ prefix. The binaries are static (`CGO_ENABLED=0`) and print
 Download and verify, then unpack:
 
 ```
-tag=v0.2.0
+tag=v0.4.0
 base=https://github.com/GiulioSavini/gruntled/releases/download/$tag
 curl -fsSLO "$base/gruntled_${tag}_linux_amd64.tar.gz"
 curl -fsSLO "$base/checksums.txt"
@@ -81,12 +85,12 @@ Add this to your repository's `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/GiulioSavini/gruntled
-    rev: v0.2.0
+    rev: v0.4.0
     hooks:
       - id: gruntled-check
 ```
 
-Replace `v0.2.0` with a real release tag (`pre-commit autoupdate` also works).
+Replace `v0.4.0` with a real release tag (`pre-commit autoupdate` also works).
 
 The hook runs `gruntled check` on the repository root, once per commit.
 
@@ -135,7 +139,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: stable
-      - run: go install github.com/GiulioSavini/gruntled/cmd/gruntled@v0.2.0
+      - run: go install github.com/GiulioSavini/gruntled/cmd/gruntled@v0.4.0
       - run: gruntled check .
 ```
 
@@ -163,7 +167,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: stable
-      - run: go install github.com/GiulioSavini/gruntled/cmd/gruntled@v0.2.0
+      - run: go install github.com/GiulioSavini/gruntled/cmd/gruntled@v0.4.0
       - run: gruntled check --format sarif . > gruntled.sarif
       - if: ${{ !cancelled() }}
         uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
@@ -200,7 +204,7 @@ Notes:
 gruntled:
   image: golang:1.27
   script:
-    - go install github.com/GiulioSavini/gruntled/cmd/gruntled@v0.2.0
+    - go install github.com/GiulioSavini/gruntled/cmd/gruntled@v0.4.0
     - $(go env GOPATH)/bin/gruntled check .
 ```
 

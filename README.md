@@ -150,6 +150,16 @@ type-level surface changes) are all shipped. See
 
 **Later:** diagnostics `GRT005`-`GRT006`.
 
+## Install
+
+```
+go install github.com/GiulioSavini/gruntled/cmd/gruntled@v0.4.0
+```
+
+Release archives for linux, darwin and windows (amd64 and arm64), with
+`checksums.txt`, are on the [releases page](https://github.com/GiulioSavini/gruntled/releases);
+[`docs/ci.md`](docs/ci.md) shows the verified download, the pre-commit hook and the CI recipes.
+
 ### Usage
 
 ```console
