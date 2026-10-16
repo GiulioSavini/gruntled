@@ -61,7 +61,7 @@ Research: `.planning/research/SUMMARY.md` (STACK, FEATURES, ARCHITECTURE, PITFAL
 ### Proof & Release Readiness (REL)
 
 - [ ] **REL-04**: The corpus gate (`corpus-gate.sh`, network-isolated, against the frozen v0.3.0 reference), `compare-ref.sh` and `compat-v1.sh` pass on v0.5 HEAD with `check` byte-identical and zero reformat noise; results recorded in `docs/validation.md`.
-- [ ] **REL-05**: An independent cross-phase security and integration audit (sec agent) across phases 18-23 closes with zero open BLOCKER/HIGH/MEDIUM findings, with the six-target architecture proof (including the new DLL allowlist rule) green.
+- [ ] **REL-05**: An independent cross-phase security and integration audit (sec agent) across phases 18-24 closes with zero open BLOCKER/HIGH/MEDIUM findings, with the six-target architecture proof (including the new DLL allowlist rule) green.
 - [ ] **REL-06**: `scripts/release-check.sh` preflight (CHANGELOG section, VERSION equals intended tag, doc pins consistent, README status, archives + checksums + image + formula render, completions/man fresh, no tag created) and `docs/RELEASING.md` for v0.5.0; tagging remains Giulio's decision.
 
 ## v2 Requirements
@@ -91,46 +91,46 @@ Deferred. Tracked, not in the current roadmap.
 
 ## Traceability
 
-Which phases cover which requirements. Filled by the roadmapper.
+Which phases cover which requirements. Filled by the roadmapper on 2026-10-16.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INST-01 | — | Pending |
-| INST-02 | — | Pending |
-| INST-03 | — | Pending |
-| INST-04 | — | Pending |
-| INST-05 | — | Pending |
-| INST-06 | — | Pending |
-| INST-07 | — | Pending |
-| HYG-01 | — | Pending |
-| HYG-02 | — | Pending |
-| HYG-03 | — | Pending |
-| HYG-04 | — | Pending |
-| HYG-05 | — | Pending |
-| HYG-06 | — | Pending |
-| UX-01 | — | Pending |
-| UX-02 | — | Pending |
-| UX-03 | — | Pending |
-| UX-04 | — | Pending |
-| UX-05 | — | Pending |
-| UX-06 | — | Pending |
-| UX-07 | — | Pending |
-| DAEMON-11 | — | Pending |
-| DAEMON-12 | — | Pending |
-| DAEMON-13 | — | Pending |
-| DAEMON-14 | — | Pending |
-| DOCS-01 | — | Pending |
-| DOCS-02 | — | Pending |
-| DOCS-03 | — | Pending |
-| REL-04 | — | Pending |
-| REL-05 | — | Pending |
-| REL-06 | — | Pending |
+| INST-01 | Phase 18 | Pending |
+| INST-02 | Phase 18 | Pending |
+| INST-03 | Phase 23 | Pending |
+| INST-04 | Phase 23 | Pending |
+| INST-05 | Phase 23 | Pending |
+| INST-06 | Phase 23 | Pending |
+| INST-07 | Phase 23 | Pending |
+| HYG-01 | Phase 24 | Pending |
+| HYG-02 | Phase 24 | Pending |
+| HYG-03 | Phase 18 | Pending |
+| HYG-04 | Phase 24 | Pending |
+| HYG-05 | Phase 24 | Pending |
+| HYG-06 | Phase 24 | Pending |
+| UX-01 | Phase 19 | Pending |
+| UX-02 | Phase 19 | Pending |
+| UX-03 | Phase 19 | Pending |
+| UX-04 | Phase 22 | Pending |
+| UX-05 | Phase 22 | Pending |
+| UX-06 | Phase 19 | Pending |
+| UX-07 | Phase 22 | Pending |
+| DAEMON-11 | Phase 20 | Pending |
+| DAEMON-12 | Phase 20 | Pending |
+| DAEMON-13 | Phase 21 | Pending |
+| DAEMON-14 | Phase 20 | Pending |
+| DOCS-01 | Phase 24 | Pending |
+| DOCS-02 | Phase 24 | Pending |
+| DOCS-03 | Phase 24 | Pending |
+| REL-04 | Phase 25 | Pending |
+| REL-05 | Phase 25 | Pending |
+| REL-06 | Phase 25 | Pending |
 
 **Coverage:**
 - v1 requirements: 30 total
-- Mapped to phases: 0
-- Unmapped: 30 ⚠️ (filled by roadmap)
+- Mapped to phases: 30 (Phase 18: 3, Phase 19: 4, Phase 20: 3, Phase 21: 1, Phase 22: 3, Phase 23: 5, Phase 24: 8, Phase 25: 3)
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-10-16*
-*Last updated: 2026-10-16 after initial definition*
+*Last updated: 2026-10-16 after roadmap creation (traceability filled)*

@@ -237,6 +237,7 @@ error — this needs an explicit, tested decision.
 | Mutation proof runs against a frozen, fingerprinted v0.3.0 reference binary, network-isolated (`unshare -rn`) | A reference binary that silently drifted from v0.3.0, or a gate that ran with network, would invalidate the whole proof | ✓ Good (v0.4, REL-03 31/31) |
 | No git tag created by any GSD workflow (`git.create_tag: false`) | Tagging a release is Giulio's decision, not an automated one | ✓ Good (v0.4, no tag at HEAD) |
 | Five phases kept for v0.4 although `coarse` granularity suggests 2-4 | The type-fact and daemon phases are separately research-flagged, and the proof phase must follow both | ✓ Good (v0.4 shipped with 5 phases, 0 critical gaps) |
+| Eight phases kept for v0.5 although `coarse` granularity suggests 2-4 | The Windows pipe phase is the only one touching the architecture proof and must stay isolated; completions goldens must be written once after the final flag set; the independent audit stays last | — Pending |
 
 ## Success Criteria for v0.1
 
