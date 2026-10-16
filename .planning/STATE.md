@@ -1,17 +1,16 @@
 ---
-gsd_state_version: 1.0
-milestone: v0.4
-milestone_name: Blast-aware Diagnostics
-status: complete
-stopped_at: Milestone v0.4 archived, no tag (Giulio's decision)
-last_updated: "2026-10-13T08:10:00.000Z"
-last_activity: 2026-10-13 — v0.4 milestone archived, PROJECT.md evolved
+gsd_state_version: "1.0"
+milestone: v0.5
+milestone_name: Adoption & Completeness
+status: planning
+last_updated: "2026-10-16T19:22:48.538Z"
+last_activity: 2026-10-16
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 23
-  completed_plans: 23
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-10-13)
 
 ## Current Position
 
-Milestone v0.4: complete, archived to `.planning/milestones/v0.4-*`
-Next: run `/gsd-new-milestone` to define the next milestone
-
-Progress: [██████████] 100%
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-10-16 — Milestone v0.5 started
 
 ## Performance Metrics
 

@@ -1,7 +1,7 @@
 {
   "contract": "1.0.0",
   "flavor": "core",
-  "milestone": "v0.4 — Blast-aware Diagnostics",
+  "milestone": "v0.5",
   "phases": [
     {
       "number": "5",
@@ -70,9 +70,9 @@
     }
   ],
   "next": {
-    "command": "/gsd:audit-milestone v0.4",
-    "label": "Audit milestone v0.4 before archiving",
-    "reason": "All 5 v0.4 phases (13-17) complete"
+    "command": "/gsd:discuss-phase",
+    "label": "Discuss the first phase",
+    "reason": "Project initialized — plan your first phase"
   },
-  "updated_at": "2026-10-13T07:50:00.000Z"
+  "updated_at": "2026-10-16T19:22:48.542Z"
 }

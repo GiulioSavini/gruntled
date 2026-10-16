@@ -2,7 +2,7 @@
 
 > *Terragrunt, but gruntled.*
 
-## Current State: v0.4 shipped 2026-10-13 (tag v0.4.0 pending — Giulio's decision)
+## Current State: v0.4 shipped 2026-10-13 (tag v0.4.0 pending — Giulio's decision); v0.5 in planning
 
 `gruntled check` reports `GRT001`-`GRT004` and `GRT100` in text, JSON or SARIF; `GRT004` replaces
 `GRT001` at every reference to an output the change removed. `gruntled graph --json` prints the
@@ -16,14 +16,16 @@ surface changes (new required variable, variable/output type, `sensitive`). The 
 frozen v0.3.0 binary. Installable from tagged GitHub releases, as a pre-commit hook, or via the
 CI recipes in `docs/ci.md`.
 
-## Next Milestone: not started
+## Current Milestone: v0.5 Adoption & Completeness
 
-Candidates (see `milestones/v0.4-REQUIREMENTS.md`, Deferred): `GRT005`/`GRT006` (MORE-04/05,
-overlap `terragrunt hcl validate --inputs`, include-merge false-positive risk), `report`/`rebase`
-over AF_UNIX on windows (needs a scoped `net` exception to the six-target proof), `watch --base
-<dir>`, `blast --format sarif`, per-hop `file:line`, reference-gated propagation. Plus a release
-decision for Giulio: v0.3.1 hand backport of the `HasForExpr` guard into v0.3.0
-`terragrunt/eval.go`. Start with `/gsd-new-milestone`.
+**Goal:** Make gruntled a complete, 360-degree project that anyone can install, run, trust and contribute to on every supported platform — without weakening the zero-false-positive, no-net/no-exec guarantees.
+
+**Target features:**
+- Installation parity: a verified install script, a Homebrew tap, a container image on GHCR built by the release workflow, and a `--version` that is correct for `go install` users; CI recipes pinned from one source of truth, never stale
+- Project hygiene for contributors and users: CONTRIBUTING, SECURITY (disclosure policy), CHANGELOG, issue/PR templates, CODEOWNERS, automated dependency updates
+- CLI usability: shell completions and man pages generated without cobra, `--no-color`/`--quiet` ergonomics with TTY detection, `blast --format sarif` (closing the GRT004-has-no-SARIF-rule gap)
+- Daemon completeness: status-file liveness so a dead daemon is never mistaken for a live one, `watch --base <dir>` for a dirty-start baseline, `report`/`rebase` live queries on windows over a named pipe without `net`, and editor/shell integration recipes for the status file
+- Proof and release readiness: the corpus gate re-run on v0.5, docs verified against the binary, an independent cross-phase audit, and a v0.5.0 release checklist (tagging stays Giulio's decision)
 
 ## What This Is
 
@@ -81,12 +83,11 @@ is built on top of that one answer being correct and trustworthy.
 
 ### Active
 
-(None yet — run `/gsd-new-milestone` to define the next milestone's requirements.)
+v0.5 Adoption & Completeness — see `.planning/REQUIREMENTS.md` for the REQ-IDs (INST-*, HYG-*, UX-*, DAEMON-*, REL-*).
 
-**Deferred from v0.4** (see `milestones/v0.4-REQUIREMENTS.md`): `GRT005` (MORE-04) and `GRT006`
+**Still deferred** (see `milestones/v0.4-REQUIREMENTS.md`): `GRT005` (MORE-04) and `GRT006`
 (MORE-05) overlap `terragrunt hcl validate --inputs` and carry include-merge false-positive risk;
-`report`/`rebase` over AF_UNIX on windows needs a scoped `net` exception to the six-target proof;
-`watch --base <dir>`, `blast --format sarif`, per-hop `file:line`, reference-gated propagation.
+per-hop `file:line`, reference-gated propagation.
 
 ### Out of Scope
 
@@ -281,4 +282,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-13 after v0.4 milestone*
+*Last updated: 2026-10-16 after starting milestone v0.5*
