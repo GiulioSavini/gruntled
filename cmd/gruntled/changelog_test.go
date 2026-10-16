@@ -7,8 +7,14 @@ package main
 // can show each rule fires on a synthetic drift (sec #488).
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -272,4 +278,125 @@ func TestChangelogNegative(t *testing.T) {
 			}
 		})
 	}
+}
+
+// runReleaseNotes runs scripts/release-notes.sh with the given argv in dir and
+// returns stdout, stderr and the exit code. Every argument reaches the script
+// literally (argv via os/exec, no shell in between).
+func runReleaseNotes(t *testing.T, dir string, args ...string) (stdout, stderr string, code int) {
+	t.Helper()
+	script, err := filepath.Abs(filepath.Join("..", "..", "scripts", "release-notes.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("bash", append([]string{script}, args...)...)
+	cmd.Dir = dir
+	var out, errb bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &out, &errb
+	err = cmd.Run()
+	code = 0
+	if err != nil {
+		var ee *exec.ExitError
+		if !errors.As(err, &ee) {
+			t.Fatalf("release-notes.sh: %v", err)
+		}
+		code = ee.ExitCode()
+	}
+	return out.String(), errb.String(), code
+}
+
+func TestReleaseNotesScript(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("release-notes.sh runs where release.yml runs (bash)")
+	}
+	repo, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	version := strings.TrimSpace(readRepoFile(t, "VERSION"))
+
+	t.Run("real changelog, VERSION tag", func(t *testing.T) {
+		out, errs, code := runReleaseNotes(t, repo, version)
+		if code != 0 || out == "" {
+			t.Fatalf("exit %d, stdout %q, stderr %q", code, out, errs)
+		}
+		if !strings.Contains(out, "### ") {
+			t.Errorf("notes have no group heading:\n%s", out)
+		}
+		for _, bad := range []string{"## [", "[0.3.0]:", "## [0.3.0] - "} {
+			if strings.Contains(out, bad) {
+				t.Errorf("notes leak %q:\n%s", bad, out)
+			}
+		}
+	})
+
+	synthetic := "# Changelog\n\n## [Unreleased]\n\n- soon\n\n## [1.2.3] - 2026-01-02\n\n### Added\n- x\n\n\n## [1.2.3-rc.1] - 2026-01-01\n- rc\n## [1.2.2] - 2025-12-31\n\n- old\n\n[Unreleased]: https://github.com/GiulioSavini/gruntled/compare/v1.2.3...HEAD\n[1.2.3]: https://github.com/GiulioSavini/gruntled/compare/v1.2.2...v1.2.3\n"
+	dir := t.TempDir()
+	cl := filepath.Join(dir, "cl.md")
+	if err := os.WriteFile(cl, []byte(synthetic), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	empty := filepath.Join(dir, "empty.md")
+	if err := os.WriteFile(empty, []byte("# Changelog\n\n## [Unreleased]\n\n## [1.2.3] - 2026-01-02\n## [1.2.2] - 2025-12-31\n\n- old\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Only the last section: the body ends at the first reference line.
+	last := filepath.Join(dir, "last.md")
+	if err := os.WriteFile(last, []byte("# Changelog\n\n## [0.1.0] - 2026-01-02\n\n- first\n\n[0.1.0]: https://github.com/GiulioSavini/gruntled/releases/tag/v0.1.0\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, c := range []struct {
+		name          string
+		args          []string
+		code          int
+		stdout, inErr string
+	}{
+		{"explicit changelog path", []string{"v1.2.3", cl}, 0, "### Added\n- x\n", ""},
+		{"prerelease is its own section", []string{"v1.2.3-rc.1", cl}, 0, "- rc\n", ""},
+		{"last section stops at the references", []string{"v0.1.0", last}, 0, "- first\n", ""},
+		{"absent section", []string{"v9.9.9", cl}, 1, "", "release-notes: no section [9.9.9] in " + cl},
+		{"unreleased is not a release", []string{"vUnreleased", cl}, 2, "", "release-notes: tag 'vUnreleased' does not match vX.Y.Z[-suffix]"},
+		{"empty body", []string{"v1.2.3", empty}, 1, "", "release-notes: no section [1.2.3] in " + empty},
+		{"no args", nil, 2, "", "usage:"},
+		{"three args", []string{"v1.2.3", cl, "x"}, 2, "", "usage:"},
+		{"missing changelog file", []string{"v1.2.3", filepath.Join(dir, "nope.md")}, 1, "", "release-notes: cannot read"},
+		{"real changelog, no section", []string{"v0.0.0-nosuch", filepath.Join(repo, "CHANGELOG.md")}, 1, "", "release-notes: no section [0.0.0-nosuch]"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, errs, code := runReleaseNotes(t, dir, c.args...)
+			if code != c.code {
+				t.Errorf("exit %d, want %d (stdout %q, stderr %q)", code, c.code, out, errs)
+			}
+			if out != c.stdout {
+				t.Errorf("stdout %q, want %q", out, c.stdout)
+			}
+			if !strings.Contains(errs, c.inErr) {
+				t.Errorf("stderr %q, want it to contain %q", errs, c.inErr)
+			}
+		})
+	}
+
+	// Malformed tags: exit 2 before the changelog is even opened, and the
+	// tag text is echoed back verbatim.
+	t.Run("malformed tag", func(t *testing.T) {
+		for _, tag := range []string{
+			"1.2.3", // no v
+			"v1.2",
+			"v1.2.3 OR 1=1",
+			"v1.2.3*",
+			"v1.2.3$(touch x)", // proves the script never evals its argument (argv is literal via os/exec)
+			"v1.2.3\n",
+			"",
+		} {
+			out, errs, code := runReleaseNotes(t, dir, tag, cl)
+			want := "release-notes: tag '" + tag + "' does not match vX.Y.Z[-suffix]"
+			if code != 2 || out != "" || !strings.Contains(errs, want) {
+				t.Errorf("tag %q: exit %d, stdout %q, stderr %q (want exit 2 and %q)", tag, code, out, errs, want)
+			}
+		}
+		if _, err := os.Stat(filepath.Join(dir, "x")); !os.IsNotExist(err) {
+			t.Errorf("a file x appeared in the cwd: %v", err)
+		}
+	})
 }
