@@ -54,7 +54,9 @@ var (
 )
 
 // versionInfo returns the version and commit every output site prints.
-func versionInfo() (version, commit string) {
+// The results are unnamed on purpose: naming them version/commit would
+// shadow the ldflags vars and feed resolveVersion empty strings.
+func versionInfo() (string, string) {
 	bi, ok := readBuildInfo()
 	return resolveVersion(version, commit, bi, ok)
 }

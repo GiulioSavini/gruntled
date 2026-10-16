@@ -21,7 +21,8 @@ func renderReport(format string, rep checking.Report) (out, summary []byte, err 
 	case "json":
 		err = presenter.JSON(&buf, rep.Graph, rep.Diagnostics)
 	case "sarif":
-		err = presenter.SARIF(&buf, rep.Graph, rep.Diagnostics, presenter.ToolInfo{Version: version})
+		v, _ := versionInfo()
+		err = presenter.SARIF(&buf, rep.Graph, rep.Diagnostics, presenter.ToolInfo{Version: v})
 	case "text":
 		err = presenter.Text(&buf, rep.Diagnostics)
 		if err == nil {

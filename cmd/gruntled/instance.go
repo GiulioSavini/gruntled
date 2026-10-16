@@ -119,7 +119,7 @@ func acquireInstance(root, statusPath string, deps watchDeps, stdout, stderr io.
 	inst = &instance{
 		stderr: stderr,
 		lock:   lock,
-		info:   ipc.Info{PID: os.Getpid(), Version: version, Root: root, StatusPath: statusPath},
+		info:   daemonInfo(root, statusPath),
 	}
 	if useSocket {
 		ln, err := ipc.Listen(sock)
@@ -219,4 +219,11 @@ func (in *instance) close() {
 		_ = os.Remove(in.dump)
 	}
 	_ = in.lock.Release()
+}
+
+// daemonInfo is what the daemon advertises to report and rebase clients;
+// its version comes from versionInfo like --version and SARIF.
+func daemonInfo(root, statusPath string) ipc.Info {
+	v, _ := versionInfo()
+	return ipc.Info{PID: os.Getpid(), Version: v, Root: root, StatusPath: statusPath}
 }

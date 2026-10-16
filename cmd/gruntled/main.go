@@ -40,7 +40,10 @@ const (
 //	go build -ldflags "-X main.version=v0.2.0 -X main.commit=abc1234" ./cmd/gruntled
 //
 // They must stay package-level string vars with constant initialisers, or
-// -X silently does nothing.
+// -X silently does nothing. ldflags always win; when they are absent
+// version.go falls back to the tag of a clean go-install build, and to
+// "dev (none)" for everything else. Output sites call versionInfo(), never
+// these vars.
 var (
 	version = "dev"
 	commit  = "none"
@@ -148,7 +151,8 @@ func runCtx(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		fmt.Fprint(stderr, topUsage)
 		return exitOK
 	case "-version", "--version":
-		fmt.Fprintf(stdout, "gruntled %s (%s)\n", version, commit)
+		v, c := versionInfo()
+		fmt.Fprintf(stdout, "gruntled %s (%s)\n", v, c)
 		return exitOK
 	case "check":
 		return runCheck(args[1:], stdout, stderr)
