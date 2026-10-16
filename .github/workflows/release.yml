@@ -36,10 +36,20 @@ jobs:
         with:
           go-version-file: go.mod
       - name: guard
-        # Tag must be vX.Y.Z or vX.Y.Z-suffix and point at a commit on master.
+        # Tag must be vX.Y.Z or vX.Y.Z-suffix, equal the VERSION file (the
+        # single version source the docs are pinned to), and point at a
+        # commit on master. The tag is read only from $GITHUB_REF_NAME.
+        # LC_ALL=C keeps the [[ =~ ]] bracket ranges ASCII.
+        env:
+          LC_ALL: C
         run: |
           if ! [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
             echo "tag '$GITHUB_REF_NAME' does not match vX.Y.Z[-suffix]"
+            exit 1
+          fi
+          want=$(tr -d '[:space:]' < VERSION)
+          if [ "$want" != "$GITHUB_REF_NAME" ]; then
+            echo "VERSION is '$want' but the tag is '$GITHUB_REF_NAME'; bump VERSION in the tagged commit"
             exit 1
           fi
           git fetch origin master
