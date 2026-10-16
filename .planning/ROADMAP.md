@@ -88,7 +88,10 @@ See `milestones/v0.4-ROADMAP.md`.
   3. `CHANGELOG.md` follows Keep a Changelog 1.1.0, has v0.1.0..v0.4.0 backfilled from `MILESTONES.md` plus an `Unreleased` section, and `release.yml` uses the section matching the tag as the release notes and fails for a tag with no section (proven by a CI dry run with a negative case)
   4. `check` text, JSON and SARIF stay byte-identical to the v0.4 goldens and the six-target no-net/no-exec proof passes with the build-info reader linked; the "`go install` prints `dev (none)`" limitation is deleted from `docs/cli.md` and `docs/ci.md`
 
-**Plans**: TBD
+**Plans**: 3 plans
+- [ ] 18-01-PLAN.md — version resolver (`versionInfo()` from ldflags or clean go-install build info; `--version`, SARIF, `ipc.Info`) (wave 1)
+- [ ] 18-02-PLAN.md — `VERSION` single source, doc-pin test with negative case, docs bumped to v0.4.0, release guard VERSION == tag (wave 1, parallel with 18-01)
+- [ ] 18-03-PLAN.md — `CHANGELOG.md` backfilled v0.1.0..v0.4.0, `scripts/release-notes.sh`, release notes from the CHANGELOG with a CI dry run and negative case (wave 2)
 
 ### Phase 19: CLI Surface
 
