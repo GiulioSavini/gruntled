@@ -104,6 +104,7 @@ func checkChangelog(text, version string) []string {
 				s.name, s.date = m[1], m[2]
 				if _, err := time.Parse("2006-01-02", m[2]); err != nil {
 					failf("line %d: date does not parse: %q", i+1, l)
+					s.date = "" // reported once; the MILESTONES rule skips it
 				}
 			} else {
 				failf("line %d: malformed version heading %q (want \"## [X.Y.Z] - YYYY-MM-DD\")", i+1, l)
@@ -170,8 +171,16 @@ func checkChangelog(text, version string) []string {
 			failf("dates not non-increasing: [%s] %s above [%s] %s", a.name, a.date, b.name, b.date)
 		}
 	}
-	if len(versions) > 0 && versions[0].name != want {
-		failf("newest section is [%s], VERSION is %s", versions[0].name, want)
+	// The newest release is the semver maximum (the order rule above reports
+	// a misplaced section on its own); it must be the VERSION file.
+	newest := ""
+	for _, s := range versions {
+		if newest == "" || semverLess(newest, s.name) {
+			newest = s.name
+		}
+	}
+	if newest != "" && newest != want {
+		failf("newest section is [%s], VERSION is %s", newest, want)
 	}
 	if len(versions) == 0 {
 		failf("no released section")
