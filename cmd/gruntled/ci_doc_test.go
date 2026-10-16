@@ -8,6 +8,7 @@ package main
 
 import (
 	"os"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -306,12 +307,83 @@ func TestCIDoc(t *testing.T) {
 		}
 	})
 
+	t.Run("release notes", func(t *testing.T) {
+		// HYG-03: the notes are the CHANGELOG section for the tag, extracted
+		// right after the guard (a missing section fails in seconds, before
+		// the proofs) and published with --notes-file, never --generate-notes.
+		rel := readRepoFile(t, ".github/workflows/release.yml")
+		job := workflowJob(rel, "release")
+		notes := workflowStep(job, "notes")
+		if notes == "" {
+			t.Fatal("release.yml: job release has no step notes")
+		}
+		for _, s := range []string{
+			"set -o pipefail",
+			`bash scripts/release-notes.sh "$GITHUB_REF_NAME" > "$RUNNER_TEMP/notes.md"`,
+			`test -s "$RUNNER_TEMP/notes.md"`,
+		} {
+			if !strings.Contains(notes, s) {
+				t.Errorf("release.yml notes step: missing %q", s)
+			}
+		}
+		if strings.Contains(notes, "${{") {
+			t.Errorf("release.yml notes step must read the tag only from $GITHUB_REF_NAME")
+		}
+		publish := workflowStep(job, "publish")
+		for _, s := range []string{`--notes-file "$RUNNER_TEMP/notes.md"`, "--verify-tag"} {
+			if !strings.Contains(publish, s) {
+				t.Errorf("release.yml publish step: missing %q", s)
+			}
+		}
+		if strings.Contains(publish, "--generate-notes") {
+			t.Errorf("release.yml publish step must not use --generate-notes")
+		}
+	})
+
+	t.Run("release-notes dry run", func(t *testing.T) {
+		// The ci.yml check job proves the extraction for VERSION and the
+		// negative case on every push and PR; it creates no tag or release.
+		// sec #485: the negative accepts exit 1 only, with the exact message.
+		job := workflowJob(wf, "check")
+		step := workflowStep(job, "release-notes dry run")
+		if step == "" {
+			t.Fatal("ci.yml job check: step \"release-notes dry run\" not found")
+		}
+		for _, s := range []string{
+			`tag=$(tr -d '[:space:]' < VERSION)`,
+			`bash scripts/release-notes.sh "$tag" > "$RUNNER_TEMP/notes.md"`,
+			`test -s "$RUNNER_TEMP/notes.md"`,
+			"set +e",
+			`bash scripts/release-notes.sh v0.0.0-nosuch > "$RUNNER_TEMP/nosuch.out" 2> "$RUNNER_TEMP/nosuch.err"`,
+			"rc=$?",
+			"set -e",
+			`if [ "$rc" -ne 1 ]; then`,
+			`echo "release-notes.sh must exit 1 for a tag with no section, got $rc"`,
+			`grep -F 'release-notes: no section [0.0.0-nosuch]' "$RUNNER_TEMP/nosuch.err"`,
+			"exit 1",
+		} {
+			if !strings.Contains(step, s) {
+				t.Errorf("ci.yml release-notes dry run step: missing %q", s)
+			}
+		}
+		for _, bad := range []string{"gh release", "git tag", "secrets.", "${{"} {
+			if strings.Contains(step, bad) {
+				t.Errorf("ci.yml release-notes dry run step: must not contain %q", bad)
+			}
+		}
+		names := stepNames(job)
+		ib, id := slices.Index(names, "release-build"), slices.Index(names, "release-notes dry run")
+		if ib < 0 || id < 0 || ib > id {
+			t.Errorf("ci.yml check steps %q: release-notes dry run must follow release-build", names)
+		}
+	})
+
 	t.Run("release step order", func(t *testing.T) {
 		rel := readRepoFile(t, ".github/workflows/release.yml")
 		got := stepNames(workflowJob(rel, "release"))
-		want := []string{"guard", "proofs", "build", "smoke", "publish"}
-		// Ordered subsequence: later plans may insert steps (18-03: notes
-		// after guard) but never reorder or drop these.
+		want := []string{"guard", "notes", "proofs", "build", "smoke", "publish"}
+		// Ordered subsequence: later plans may insert steps but never
+		// reorder or drop these; notes sits right after guard (18-03).
 		j := 0
 		for _, g := range got {
 			if j < len(want) && g == want[j] {
