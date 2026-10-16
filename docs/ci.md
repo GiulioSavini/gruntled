@@ -9,7 +9,8 @@ the [releases page](https://github.com/GiulioSavini/gruntled/releases) and
 bump it on purpose, like any other tool version. The pinned version in this
 page, in the README and in the pre-commit snippet is the content of the
 repository's `VERSION` file, checked by a test; it is bumped in the commit that
-is tagged, so the pins and the tag never disagree.
+is tagged, so the pins and the tag never disagree. Each release's notes are
+the matching section of [`CHANGELOG.md`](../CHANGELOG.md).
 
 ## 1. Install
 

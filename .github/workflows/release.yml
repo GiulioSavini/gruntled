@@ -1,6 +1,7 @@
 name: release
 
-# Publishes the 6 release archives + checksums.txt for a pushed tag vX.Y.Z[-pre].
+# Publishes the 6 release archives + checksums.txt for a pushed tag vX.Y.Z[-pre],
+# with the matching CHANGELOG.md section as the release notes.
 #
 # "Requires green CI" cannot be expressed with needs: (it does not span
 # workflows), so the proofs the binaries depend on are re-run here on the
@@ -57,6 +58,16 @@ jobs:
             echo "tag '$GITHUB_REF_NAME' ($GITHUB_SHA) is not on master"
             exit 1
           fi
+      - name: notes
+        # The release notes are the CHANGELOG section for this tag. No
+        # section, no release: fail here, before the proofs and the build.
+        # The tag reaches the script only as the quoted $GITHUB_REF_NAME.
+        run: |
+          set -o pipefail
+          bash scripts/release-notes.sh "$GITHUB_REF_NAME" > "$RUNNER_TEMP/notes.md"
+          test -s "$RUNNER_TEMP/notes.md"
+          echo "release notes:"
+          cat "$RUNNER_TEMP/notes.md"
       - name: proofs
         # Re-run because needs: cannot span workflows. check-architecture.sh
         # Step 9 covers all 6 release targets, so the no-net/no-exec proof
@@ -94,4 +105,4 @@ jobs:
           if [[ "$GITHUB_REF_NAME" == *-* ]]; then
             pre=(--prerelease)
           fi
-          gh release create "$GITHUB_REF_NAME" --generate-notes --verify-tag "${pre[@]}" "$RUNNER_TEMP"/dist/*
+          gh release create "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md" --verify-tag "${pre[@]}" "$RUNNER_TEMP"/dist/*

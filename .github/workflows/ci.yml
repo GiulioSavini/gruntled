@@ -90,6 +90,26 @@ jobs:
         # archives, checksums, host --version smoke), so the release path
         # never fails for the first time at tag time.
         run: bash scripts/build-release.sh v0.0.0-ci "$(git rev-parse --short=12 HEAD)" "$RUNNER_TEMP/dist"
+      - name: release-notes dry run
+        # The release workflow publishes the CHANGELOG section for the tag.
+        # Prove on every run that the section for VERSION extracts, and that
+        # a tag without a section exits exactly 1 with the no-section message
+        # (sec #485), without creating any tag or release.
+        run: |
+          tag=$(tr -d '[:space:]' < VERSION)
+          bash scripts/release-notes.sh "$tag" > "$RUNNER_TEMP/notes.md"
+          test -s "$RUNNER_TEMP/notes.md"
+          set +e
+          bash scripts/release-notes.sh v0.0.0-nosuch > "$RUNNER_TEMP/nosuch.out" 2> "$RUNNER_TEMP/nosuch.err"
+          rc=$?
+          set -e
+          if [ "$rc" -ne 1 ]; then
+            echo "release-notes.sh must exit 1 for a tag with no section, got $rc"
+            cat "$RUNNER_TEMP/nosuch.err"
+            exit 1
+          fi
+          test ! -s "$RUNNER_TEMP/nosuch.out"
+          grep -F 'release-notes: no section [0.0.0-nosuch]' "$RUNNER_TEMP/nosuch.err"
 
   architecture:
     runs-on: ubuntu-latest
