@@ -1,7 +1,12 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"runtime/debug"
 	"strings"
 	"testing"
@@ -87,5 +92,126 @@ func TestResolveVersionIsPure(t *testing.T) {
 	}
 	if bi.Main.Version != "v0.4.0" || len(bi.Settings) != 1 {
 		t.Errorf("build info mutated: %+v", bi)
+	}
+}
+
+// setBuildInfo swaps the build-info reader for one test.
+func setBuildInfo(t *testing.T, bi *debug.BuildInfo, ok bool) {
+	t.Helper()
+	old := readBuildInfo
+	readBuildInfo = func() (*debug.BuildInfo, bool) { return bi, ok }
+	t.Cleanup(func() { readBuildInfo = old })
+}
+
+// sarifToolVersion decodes runs[0].tool.driver.version from a SARIF log.
+func sarifToolVersion(t *testing.T, data []byte) string {
+	t.Helper()
+	var log struct {
+		Runs []struct {
+			Tool struct {
+				Driver struct {
+					Version string `json:"version"`
+				} `json:"driver"`
+			} `json:"tool"`
+		} `json:"runs"`
+	}
+	if err := json.Unmarshal(data, &log); err != nil {
+		t.Fatal(err)
+	}
+	if len(log.Runs) != 1 {
+		t.Fatalf("%d runs, want 1", len(log.Runs))
+	}
+	return log.Runs[0].Tool.Driver.Version
+}
+
+// TestVersionInfoFeedsAllSites: with ldflags at dev and a clean go-install
+// build info, --version, the SARIF tool version (through check and through
+// renderReport) and the daemon's ipc.Info all carry the tag.
+func TestVersionInfoFeedsAllSites(t *testing.T) {
+	setVersion(t, "dev", "none")
+	setBuildInfo(t, info("v7.7.7"), true)
+
+	var stdout, stderr bytes.Buffer
+	if code := run([]string{"--version"}, &stdout, &stderr); code != exitOK {
+		t.Fatalf("exit %d, want %d", code, exitOK)
+	}
+	if got := stdout.String(); got != "gruntled v7.7.7 (none)\n" {
+		t.Errorf("--version %q, want %q", got, "gruntled v7.7.7 (none)\n")
+	}
+	if stderr.Len() != 0 {
+		t.Errorf("stderr %q, want empty", stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if code := run([]string{"check", "--format", "sarif", "testdata/sarif-fixture"}, &stdout, &stderr); code != exitFindings {
+		t.Fatalf("check exit %d, want %d; stderr %s", code, exitFindings, stderr.String())
+	}
+	if got := sarifToolVersion(t, stdout.Bytes()); got != "v7.7.7" {
+		t.Errorf("check sarif tool.driver.version %q, want v7.7.7", got)
+	}
+
+	out, _, err := renderReport("sarif", freshReport(t, "testdata/clean-fixture"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := sarifToolVersion(t, out); got != "v7.7.7" {
+		t.Errorf("renderReport sarif tool.driver.version %q, want v7.7.7", got)
+	}
+
+	if got := daemonInfo("r", "s"); got.Version != "v7.7.7" || got.Root != "r" || got.StatusPath != "s" || got.PID != os.Getpid() {
+		t.Errorf("daemonInfo = %+v, want Version v7.7.7, Root r, StatusPath s, PID %d", got, os.Getpid())
+	}
+}
+
+// TestVersionBuildInfoNoLeak is the golden-safety row: a checkout-style
+// build info (pseudo-version plus vcs.revision) never reaches the output.
+func TestVersionBuildInfoNoLeak(t *testing.T) {
+	setVersion(t, "dev", "none")
+	setBuildInfo(t, info("v0.3.1-0.20261016194242-18a1ba5e3a35",
+		"vcs", "git", "vcs.revision", "18a1ba5e3a35a4fbac7061ecf77163f599de686d",
+		"vcs.time", "2026-10-16T19:42:42Z", "vcs.modified", "true"), true)
+
+	var stdout, stderr bytes.Buffer
+	if code := run([]string{"--version"}, &stdout, &stderr); code != exitOK {
+		t.Fatalf("exit %d, want %d", code, exitOK)
+	}
+	if got := stdout.String(); got != "gruntled dev (none)\n" {
+		t.Errorf("--version %q, want %q", got, "gruntled dev (none)\n")
+	}
+
+	stdout.Reset()
+	if code := run([]string{"check", "--format", "sarif", "testdata/sarif-fixture"}, &stdout, &stderr); code != exitFindings {
+		t.Fatalf("check exit %d, want %d; stderr %s", code, exitFindings, stderr.String())
+	}
+	if got := sarifToolVersion(t, stdout.Bytes()); got != "dev" {
+		t.Errorf("sarif tool.driver.version %q, want dev", got)
+	}
+	if got := daemonInfo("r", "s").Version; got != "dev" {
+		t.Errorf("daemonInfo version %q, want dev", got)
+	}
+}
+
+// TestVersionPlainBuild builds the real binary with no ldflags: the
+// toolchain stamps a pseudo-version plus vcs.* (or "(devel)" without git),
+// and both must print dev (none).
+func TestVersionPlainBuild(t *testing.T) {
+	if testing.Short() {
+		t.Skip("builds the binary")
+	}
+	bin := filepath.Join(t.TempDir(), "g")
+	if runtime.GOOS == "windows" {
+		bin += ".exe"
+	}
+	build := exec.Command("go", "build", "-o", bin, ".")
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("go build: %v\n%s", err, out)
+	}
+	out, err := exec.Command(bin, "--version").Output()
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if got, want := string(out), "gruntled dev (none)\n"; got != want {
+		t.Errorf("got %q, want %q", got, want)
 	}
 }

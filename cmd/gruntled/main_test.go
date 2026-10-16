@@ -142,12 +142,15 @@ func TestRunStdoutWriteFailure(t *testing.T) {
 	}
 }
 
-// setVersion overrides the build-time version vars for one test.
+// setVersion overrides the build-time version vars for one test and pins
+// the build-info reader to "none", so the dev (none) rows do not depend on
+// how this test binary was built (D-18-04).
 func setVersion(t *testing.T, v, c string) {
 	t.Helper()
 	oldV, oldC := version, commit
 	version, commit = v, c
 	t.Cleanup(func() { version, commit = oldV, oldC })
+	setBuildInfo(t, nil, false)
 }
 
 func TestVersion(t *testing.T) {
