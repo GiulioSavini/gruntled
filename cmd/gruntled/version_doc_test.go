@@ -256,10 +256,10 @@ func TestVersionPinsNegative(t *testing.T) {
 	t.Run("docs/cli.md and README install tokens drift (sec #510)", func(t *testing.T) {
 		m := clone()
 		m["docs/cli.md"] = strings.Replace(m["docs/cli.md"], "gruntled "+v+" (1a2b3c4d5e6f)", "gruntled v0.0.1 (1a2b3c4d5e6f)", 1)
-		hasAll(t, checkVersionPins(v, m), 1, "docs/cli.md:87:", "v0.0.1")
+		hasAll(t, checkVersionPins(v, m), 1, "docs/cli.md:90:", "v0.0.1")
 		m = clone()
 		m["docs/cli.md"] = strings.Replace(m["docs/cli.md"], "cmd/gruntled@"+v+"`", "cmd/gruntled@v0.0.1`", 1)
-		hasAll(t, checkVersionPins(v, m), 1, "docs/cli.md:95:", "v0.0.1")
+		hasAll(t, checkVersionPins(v, m), 1, "docs/cli.md:98:", "v0.0.1")
 		m = clone()
 		m["README.md"] = strings.Replace(m["README.md"], "cmd/gruntled@"+v, "cmd/gruntled@v0.0.1", 1)
 		if f := checkVersionPins(v, m); len(f) < 2 {
