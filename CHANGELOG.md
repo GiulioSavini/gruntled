@@ -10,6 +10,7 @@ as the release notes (and fails when it is missing).
 ## [Unreleased]
 
 ### Added
+- `gruntled help [command]` prints the top-level or the named command's usage
 - `VERSION` file as the single version source; `docs/ci.md`, the README install
   snippet and the pre-commit `rev` are checked against it by a test;
   `release.yml` refuses a tag that differs from it
@@ -17,6 +18,8 @@ as the release notes (and fails when it is missing).
   notes and fails when the section is missing
 
 ### Changed
+- `-h` and `--help` print the usage on stdout and exit 0, at top level and
+  for every command (usage errors still print it on stderr and exit 2)
 - `gruntled --version`, the SARIF `tool.driver.version` and the daemon's
   advertised version resolve the tag of a
   `go install github.com/GiulioSavini/gruntled/cmd/gruntled@vX.Y.Z` build
