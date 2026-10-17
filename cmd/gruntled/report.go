@@ -62,7 +62,7 @@ func runReport(args []string, stdout, stderr io.Writer) int {
 // no directory, file, socket or process is ever created.
 func runReportWith(args []string, stdout, stderr io.Writer, deps reportDeps) int {
 	var o *reportOpts
-	dir, code, done := parseArgs("report", reportUsage, args, stderr, func(fs *flag.FlagSet) {
+	dir, code, done := parseArgs("report", reportUsage, args, stdout, stderr, func(fs *flag.FlagSet) {
 		o = defineReportFlags(fs)
 	})
 	if done {

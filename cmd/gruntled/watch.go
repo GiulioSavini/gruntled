@@ -100,7 +100,7 @@ func runWatch(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 
 func runWatchWith(ctx context.Context, args []string, stdout, stderr io.Writer, deps watchDeps) int {
 	var o *watchOpts
-	dir, code, done := parseArgs("watch", watchUsage, args, stderr, func(fs *flag.FlagSet) {
+	dir, code, done := parseArgs("watch", watchUsage, args, stdout, stderr, func(fs *flag.FlagSet) {
 		o = defineWatchFlags(fs)
 	})
 	if done {

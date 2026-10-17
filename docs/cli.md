@@ -13,6 +13,7 @@ gruntled blast [--base dir] [--format text|json] [path]
 gruntled watch [--poll] [--poll-interval d] [--debounce d] [--status-file p] [--print-status-path] [path]
 gruntled report [--blast] [--format text|json|sarif] [path]
 gruntled rebase [--expect N] [path]
+gruntled help [command]
 gruntled --version
 ```
 
@@ -43,6 +44,8 @@ gruntled rebase --expect 7 live/
 - `gruntled -h` lists the commands. `gruntled check -h`, `gruntled graph -h`,
   `gruntled blast -h`, `gruntled watch -h`, `gruntled report -h` and
   `gruntled rebase -h` print the usage texts below and exit 0.
+  `gruntled help [command]`, `-h` and `--help` print the usage on stdout and
+  exit 0; usage errors print it on stderr and exit 2.
 
 ```
 usage: gruntled <command> [arguments]

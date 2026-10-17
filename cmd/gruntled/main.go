@@ -129,9 +129,11 @@ func runCtx(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return exitUsage
 	}
 	switch args[0] {
-	case "-h", "-help", "--help", "help":
-		fmt.Fprint(stderr, topUsage)
+	case "-h", "-help", "--help":
+		fmt.Fprint(stdout, topUsage)
 		return exitOK
+	case "help":
+		return runHelp(args[1:], stdout, stderr)
 	case "-version", "--version":
 		v, c := versionInfo()
 		fmt.Fprintf(stdout, "gruntled %s (%s)\n", v, c)
@@ -145,22 +147,47 @@ func runCtx(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	return exitUsage
 }
 
+// runHelp prints the top-level usage, or the usage of the one named
+// command, on stdout. An unknown name or more than one argument is a usage
+// error on stderr.
+func runHelp(args []string, stdout, stderr io.Writer) int {
+	switch len(args) {
+	case 0:
+		fmt.Fprint(stdout, topUsage)
+		return exitOK
+	case 1:
+		if c, ok := lookupCommand(args[0]); ok {
+			fmt.Fprint(stdout, c.usage)
+			return exitOK
+		}
+		fmt.Fprintf(stderr, "gruntled: unknown command %q\n", args[0])
+	default:
+		fmt.Fprintln(stderr, "gruntled: help takes at most one command")
+	}
+	fmt.Fprint(stderr, topUsage)
+	return exitUsage
+}
+
 // parseArgs parses flags defined by define and at most one positional path.
 // The stdlib flag package stops at the first positional argument, so it
 // parses again after each one; an explicit "--" ends flag parsing. When done
-// is true the caller returns code immediately.
-func parseArgs(name, usage string, args []string, stderr io.Writer, define func(*flag.FlagSet)) (dir string, code int, done bool) {
+// is true the caller returns code immediately. -h/--help print usage on
+// stdout (exit 0); a parse error prints the flag package's one-line message
+// and then usage on stderr (exit 2).
+func parseArgs(name, usage string, args []string, stdout, stderr io.Writer, define func(*flag.FlagSet)) (dir string, code int, done bool) {
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	fs.Usage = func() { fmt.Fprint(stderr, usage) }
+	fs.Usage = func() {}
 	define(fs)
 
 	var paths []string
 	for rest := args; ; {
 		if err := fs.Parse(rest); err != nil {
 			if errors.Is(err, flag.ErrHelp) {
+				fmt.Fprint(stdout, usage)
 				return "", exitOK, true
 			}
+			fmt.Fprint(stderr, usage)
 			return "", exitUsage, true
 		}
 		if fs.NArg() == 0 {
@@ -209,7 +236,7 @@ func writeOut(stdout, stderr io.Writer, buf *bytes.Buffer) bool {
 
 func runCheck(args []string, stdout, stderr io.Writer) int {
 	var o *checkOpts
-	dir, code, done := parseArgs("check", checkUsage, args, stderr, func(fs *flag.FlagSet) {
+	dir, code, done := parseArgs("check", checkUsage, args, stdout, stderr, func(fs *flag.FlagSet) {
 		o = defineCheckFlags(fs)
 	})
 	if done {
@@ -256,7 +283,7 @@ func runCheck(args []string, stdout, stderr io.Writer) int {
 
 func runGraph(args []string, stdout, stderr io.Writer) int {
 	var o *graphOpts
-	dir, code, done := parseArgs("graph", graphUsage, args, stderr, func(fs *flag.FlagSet) {
+	dir, code, done := parseArgs("graph", graphUsage, args, stdout, stderr, func(fs *flag.FlagSet) {
 		o = defineGraphFlags(fs)
 	})
 	if done {
@@ -294,7 +321,7 @@ func runGraph(args []string, stdout, stderr io.Writer) int {
 
 func runBlast(args []string, stdout, stderr io.Writer) int {
 	var o *blastOpts
-	dir, code, done := parseArgs("blast", blastUsage, args, stderr, func(fs *flag.FlagSet) {
+	dir, code, done := parseArgs("blast", blastUsage, args, stdout, stderr, func(fs *flag.FlagSet) {
 		o = defineBlastFlags(fs)
 	})
 	if done {

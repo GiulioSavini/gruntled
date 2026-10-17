@@ -49,7 +49,7 @@ func runRebase(args []string, stdout, stderr io.Writer) int {
 // ever created.
 func runRebaseWith(args []string, stdout, stderr io.Writer, deps reportDeps) int {
 	var o *rebaseOpts
-	dir, code, done := parseArgs("rebase", rebaseUsage, args, stderr, func(fs *flag.FlagSet) {
+	dir, code, done := parseArgs("rebase", rebaseUsage, args, stdout, stderr, func(fs *flag.FlagSet) {
 		o = defineRebaseFlags(fs)
 	})
 	if done {
