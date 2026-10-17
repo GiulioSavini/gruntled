@@ -80,18 +80,42 @@ func checkVersionPins(version string, files map[string]string) []string {
 			}
 		}
 	}
-	if text, ok := files["docs/ci.md"]; ok {
+	for _, f := range []string{"docs/ci.md", "docs/cli.md", "README.md"} {
+		text, ok := files[f]
+		if !ok {
+			continue
+		}
+		if f == "README.md" {
+			text = readmeInstall(text)
+		}
 		for i, line := range strings.Split(text, "\n") {
 			for _, tok := range anyVersionToken.FindAllString(line, -1) {
 				if tok == version || allowedForeignToken(line, tok) {
 					continue
 				}
-				fails = append(fails, "docs/ci.md:"+itoa(i+1)+": token "+tok+" differs from VERSION "+version+" in: "+strings.TrimSpace(line))
+				fails = append(fails, f+":"+itoa(i+1)+": token "+tok+" differs from VERSION "+version+" in: "+strings.TrimSpace(line))
 			}
 		}
 	}
 	sort.Strings(fails)
 	return fails
+}
+
+// readmeInstall returns README.md with every line outside the "## Install"
+// section blanked (line numbers preserved): the rest of the README names
+// foreign tokens (staticcheck, compat-v1.sh defaults) that are not pins.
+func readmeInstall(text string) string {
+	lines := strings.Split(text, "\n")
+	in := false
+	for i, l := range lines {
+		if strings.HasPrefix(l, "## ") {
+			in = l == "## Install"
+		}
+		if !in {
+			lines[i] = ""
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 func itoa(n int) string {
@@ -183,7 +207,7 @@ func TestVersionPinsNegative(t *testing.T) {
 	t.Run("drift in README", func(t *testing.T) {
 		m := clone()
 		m["README.md"] = strings.Replace(m["README.md"], "cmd/gruntled@"+v, "cmd/gruntled@v9.9.9", 1)
-		hasAll(t, checkVersionPins(v, m), 1, "README.md", "v9.9.9")
+		hasAll(t, checkVersionPins(v, m), 2, "README.md", "v9.9.9") // pin row + all-tokens rule
 	})
 	t.Run("pattern deleted", func(t *testing.T) {
 		m := clone()
@@ -228,5 +252,18 @@ func TestVersionPinsNegative(t *testing.T) {
 		m = clone()
 		m["docs/ci.md"] = strings.Replace(m["docs/ci.md"], "# v7.0.1", "# v7.0.2", 1)
 		hasAll(t, checkVersionPins(v, m), 1, "token v7.0.2")
+	})
+	t.Run("docs/cli.md and README install tokens drift (sec #510)", func(t *testing.T) {
+		m := clone()
+		m["docs/cli.md"] = strings.Replace(m["docs/cli.md"], "gruntled "+v+" (1a2b3c4d5e6f)", "gruntled v0.0.1 (1a2b3c4d5e6f)", 1)
+		hasAll(t, checkVersionPins(v, m), 1, "docs/cli.md:87:", "v0.0.1")
+		m = clone()
+		m["docs/cli.md"] = strings.Replace(m["docs/cli.md"], "cmd/gruntled@"+v+"`", "cmd/gruntled@v0.0.1`", 1)
+		hasAll(t, checkVersionPins(v, m), 1, "docs/cli.md:95:", "v0.0.1")
+		m = clone()
+		m["README.md"] = strings.Replace(m["README.md"], "cmd/gruntled@"+v, "cmd/gruntled@v0.0.1", 1)
+		if f := checkVersionPins(v, m); len(f) < 2 {
+			t.Fatalf("want README pin and token failures, got %v", f)
+		}
 	})
 }
