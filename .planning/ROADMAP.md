@@ -59,7 +59,7 @@ See `milestones/v0.4-ROADMAP.md`.
 
 **Milestone Goal:** Make gruntled a complete, 360-degree project that anyone can install, run, trust and contribute to on linux, macOS and windows, without weakening the zero-false-positive, deterministic, read-only, no-net/no-exec guarantees.
 
-- [ ] **Phase 18: Truth Foundations** - `--version` is correct for `go install` users, one `VERSION` pins every doc and recipe, and a CHANGELOG drives the release notes
+- [x] **Phase 18: Truth Foundations** - `--version` is correct for `go install` users, one `VERSION` pins every doc and recipe, and a CHANGELOG drives the release notes (completed 2026-10-17)
 - [ ] **Phase 19: CLI Surface** - One command registry drives help; `--color`/`--no-color`, `--quiet` and `blast --format sarif` land without moving a `check` byte
 - [ ] **Phase 20: Daemon Completeness** - A dead daemon is never mistaken for a live one, `watch --base` seeds a dirty-start baseline, and editor/shell recipes are tested
 - [ ] **Phase 21: Windows Named Pipe** - Live `report`, `report --blast` and `rebase` on windows over an owner-only named pipe, with no `net` and a new DLL allowlist proof rule
@@ -88,10 +88,10 @@ See `milestones/v0.4-ROADMAP.md`.
   3. `CHANGELOG.md` follows Keep a Changelog 1.1.0, has v0.1.0..v0.4.0 backfilled from `MILESTONES.md` plus an `Unreleased` section, and `release.yml` uses the section matching the tag as the release notes and fails for a tag with no section (proven by a CI dry run with a negative case)
   4. `check` text, JSON and SARIF stay byte-identical to the v0.4 goldens and the six-target no-net/no-exec proof passes with the build-info reader linked; the "`go install` prints `dev (none)`" limitation is deleted from `docs/cli.md` and `docs/ci.md`
 
-**Plans**: 3 plans
-- [ ] 18-01-PLAN.md — version resolver (`versionInfo()` from ldflags or clean go-install build info; `--version`, SARIF, `ipc.Info`) (wave 1)
-- [ ] 18-02-PLAN.md — `VERSION` single source, doc-pin test with negative case, docs bumped to v0.4.0, release guard VERSION == tag (wave 1, parallel with 18-01)
-- [ ] 18-03-PLAN.md — `CHANGELOG.md` backfilled v0.1.0..v0.4.0, `scripts/release-notes.sh`, release notes from the CHANGELOG with a CI dry run and negative case (wave 2)
+**Plans**: 3/3 plans complete
+- [x] 18-01-PLAN.md — version resolver (`versionInfo()` from ldflags or clean go-install build info; `--version`, SARIF, `ipc.Info`) (wave 1)
+- [x] 18-02-PLAN.md — `VERSION` single source, doc-pin test with negative case, docs bumped to v0.4.0, release guard VERSION == tag (wave 1, parallel with 18-01)
+- [x] 18-03-PLAN.md — `CHANGELOG.md` backfilled v0.1.0..v0.4.0, `scripts/release-notes.sh`, release notes from the CHANGELOG with a CI dry run and negative case (wave 2)
 
 ### Phase 19: CLI Surface
 
@@ -210,7 +210,7 @@ See `milestones/v0.4-ROADMAP.md`.
 | 15. Type-Level Surface Facts | v0.4 | 6/6 | Complete    | 2026-10-11 |
 | 16. Daemon Baseline, `report --blast` & `rebase` | v0.4 | 5/5 | Complete    | 2026-10-12 |
 | 17. Corpus Mutation Proof & Cross-Phase Audit | v0.4 | 6/6 | Complete    | 2026-10-13 |
-| 18. Truth Foundations | v0.5 | 0/TBD | Not started | - |
+| 18. Truth Foundations | v0.5 | 3/3 | Complete    | 2026-10-17 |
 | 19. CLI Surface | v0.5 | 0/TBD | Not started | - |
 | 20. Daemon Completeness | v0.5 | 0/TBD | Not started | - |
 | 21. Windows Named Pipe | v0.5 | 0/TBD | Not started | - |

@@ -18,8 +18,8 @@ Research: `.planning/research/SUMMARY.md` (STACK, FEATURES, ARCHITECTURE, PITFAL
 
 ### Installation & Version Truth (INST)
 
-- [ ] **INST-01**: `gruntled --version` prints the real tag for a `go install github.com/GiulioSavini/gruntled/cmd/gruntled@vX.Y.Z` build (ldflags win; `debug.ReadBuildInfo` `Main.Version` accepted only when it is a clean release semver of this module with no `vcs.revision`; `(devel)`, `+dirty` and pseudo-versions keep `dev (none)`); the same resolved string feeds SARIF `tool.driver.version` and `ipc.Info`; the commit field for `go install` builds has a documented placeholder. (T1)
-- [ ] **INST-02**: One version source of truth (`VERSION` file or latest CHANGELOG entry) from which `docs/ci.md`, README install snippets, the pre-commit `rev`, install-script and image/formula snippets are checked by a doc-pin test that fails on drift; `docs/ci.md` no longer pins v0.2.0. A release guard checks `VERSION` equals the tag. (T4)
+- [x] **INST-01**: `gruntled --version` prints the real tag for a `go install github.com/GiulioSavini/gruntled/cmd/gruntled@vX.Y.Z` build (ldflags win; `debug.ReadBuildInfo` `Main.Version` accepted only when it is a clean release semver of this module with no `vcs.revision`; `(devel)`, `+dirty` and pseudo-versions keep `dev (none)`); the same resolved string feeds SARIF `tool.driver.version` and `ipc.Info`; the commit field for `go install` builds has a documented placeholder. (T1)
+- [x] **INST-02**: One version source of truth (`VERSION` file or latest CHANGELOG entry) from which `docs/ci.md`, README install snippets, the pre-commit `rev`, install-script and image/formula snippets are checked by a doc-pin test that fails on drift; `docs/ci.md` no longer pins v0.2.0. A release guard checks `VERSION` equals the tag. (T4)
 - [ ] **INST-03**: A POSIX `install.sh` (everything inside `main()`, curl or wget, `sha256sum` or `shasum -a 256`, OS/arch detection incl. darwin arm64 and Rosetta, installs to `~/.local/bin` or `$BINDIR` by atomic rename, explicit version or `releases/latest` redirect, no sudo, `GRUNTLED_BASE_URL` override) shipped as a release asset with that release's SHA-256s embedded; fails closed on mismatch or truncation; tested in CI under dash and busybox against a local file server with truncation and tamper negatives; shellcheck-clean. (T2)
 - [ ] **INST-04**: A `FROM scratch` container image on GHCR (`ghcr.io/giuliosavini/gruntled:vX.Y.Z` and `latest`, linux amd64+arm64 manifest, non-root `USER`, `ENTRYPOINT ["/gruntled"]`) built in a separate `packages: write` job of `release.yml` from the released linux archives (no recompile), proven in CI by a dry run and by a `--read-only --network none` run whose `check` bytes equal the host binary's; docs show how to mount the repository root and pin by digest. (T3)
 - [ ] **INST-05**: A Homebrew formula (`gruntled.rb`: 4 URLs + 4 sha256 from `checksums.txt`, `test do` runs `--version`, completions via `generate_completions_from_executable`) rendered by `scripts/render-formula.sh` and attached as a release asset; `release.yml` updates the tap repository only when Giulio has created it and provided a tap-scoped token (skipped otherwise, never failing the release); a Scoop manifest is rendered by the same script. winget deferred. (T5, T6)
@@ -30,7 +30,7 @@ Research: `.planning/research/SUMMARY.md` (STACK, FEATURES, ARCHITECTURE, PITFAL
 
 - [ ] **HYG-01**: `SECURITY.md` with supported versions (latest minor), private vulnerability reporting as the only channel (no email, no SLA), and the threat-model scope (what is in: terminal-escape injection, path escape from the analysed tree, socket/pipe permissions, parser resource exhaustion, response size bound; what is out: findings gruntled chooses not to report). (T7)
 - [ ] **HYG-02**: `CONTRIBUTING.md` and `CODE_OF_CONDUCT.md` stating the non-negotiables (no `net`/`os/exec`/cobra, layering, zero-false-positive bar for new diagnostics, determinism, tests first, how to run `check-architecture.sh` and the corpus gate), Apache-2.0 inbound=outbound, no CLA. (T8)
-- [ ] **HYG-03**: `CHANGELOG.md` in Keep a Changelog 1.1.0 format, backfilled v0.1.0..v0.4.0 from `MILESTONES.md`, with an `Unreleased` section; `release.yml` uses the matching section as release notes (`--notes-file`) and fails if the section is missing. (T9)
+- [x] **HYG-03**: `CHANGELOG.md` in Keep a Changelog 1.1.0 format, backfilled v0.1.0..v0.4.0 from `MILESTONES.md`, with an `Unreleased` section; `release.yml` uses the matching section as release notes (`--notes-file`) and fails if the section is missing. (T9)
 - [ ] **HYG-04**: Issue forms (bug, **false-positive report** asking for the minimal tree or `graph --json`, `--version`, OS, and stating false positives are release blockers; feature request), `config.yml` with `blank_issues_enabled: false` and a security contact link, and a PR template checklist (tests, determinism, no deps that link `net`, docs updated). (T10)
 - [ ] **HYG-05**: `.github/dependabot.yml` for `gomod` and `github-actions` (weekly, grouped, cooldown, `go` directive bumps excluded), shipped together with a `TestCIDoc` that derives action pins from the workflow files instead of hard-coding them, a lint that every `uses:` is a 40-hex SHA with a version comment, and `actionlint` + `zizmor` in CI; `hcl/v2`, `go-cty` and `fsnotify` bumps are documented as corpus-gate-required. (T11)
 - [ ] **HYG-06**: `CODEOWNERS` with the single owner, and `docs/RELEASING.md` listing the repository settings that cannot be automated (branch protection without required code-owner review, private vulnerability reporting, immutable releases, GHCR package visibility, tap token expiry). (T12, D8)
@@ -95,8 +95,8 @@ Which phases cover which requirements. Filled by the roadmapper on 2026-10-16.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INST-01 | Phase 18 | Pending |
-| INST-02 | Phase 18 | Pending |
+| INST-01 | Phase 18 | Complete |
+| INST-02 | Phase 18 | Complete |
 | INST-03 | Phase 23 | Pending |
 | INST-04 | Phase 23 | Pending |
 | INST-05 | Phase 23 | Pending |
@@ -104,7 +104,7 @@ Which phases cover which requirements. Filled by the roadmapper on 2026-10-16.
 | INST-07 | Phase 23 | Pending |
 | HYG-01 | Phase 24 | Pending |
 | HYG-02 | Phase 24 | Pending |
-| HYG-03 | Phase 18 | Pending |
+| HYG-03 | Phase 18 | Complete |
 | HYG-04 | Phase 24 | Pending |
 | HYG-05 | Phase 24 | Pending |
 | HYG-06 | Phase 24 | Pending |

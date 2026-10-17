@@ -1,7 +1,7 @@
 {
   "contract": "1.0.0",
   "flavor": "core",
-  "milestone": "v0.5",
+  "milestone": "v0.5 — Adoption & Completeness",
   "phases": [
     {
       "number": "5",
@@ -67,12 +67,52 @@
       "number": "17",
       "name": "Corpus Mutation Proof & Cross-Phase Audit",
       "status": "complete"
+    },
+    {
+      "number": "18",
+      "name": "Truth Foundations",
+      "status": "complete"
+    },
+    {
+      "number": "19",
+      "name": "CLI Surface",
+      "status": "pending"
+    },
+    {
+      "number": "20",
+      "name": "Daemon Completeness",
+      "status": "pending"
+    },
+    {
+      "number": "21",
+      "name": "Windows Named Pipe",
+      "status": "pending"
+    },
+    {
+      "number": "22",
+      "name": "Completions, Man Page & Doctor",
+      "status": "pending"
+    },
+    {
+      "number": "23",
+      "name": "Release Pipeline & Install Channels",
+      "status": "pending"
+    },
+    {
+      "number": "24",
+      "name": "Hygiene & Adoption Docs",
+      "status": "pending"
+    },
+    {
+      "number": "25",
+      "name": "Proof & Release Readiness",
+      "status": "pending"
     }
   ],
   "next": {
-    "command": "/gsd:discuss-phase",
-    "label": "Discuss the first phase",
-    "reason": "Project initialized — plan your first phase"
+    "command": "/gsd-progress --next",
+    "label": "Advance to the next step (plan phase 19)",
+    "reason": "Phase 2 of 8 — needs a plan"
   },
-  "updated_at": "2026-10-16T19:22:48.542Z"
+  "updated_at": "2026-10-17T08:05:23.988Z"
 }
