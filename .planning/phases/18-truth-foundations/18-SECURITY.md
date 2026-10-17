@@ -92,7 +92,6 @@ Verdict **SECURED (0 blocking)**: 0 BLOCKER, 0 HIGH, 0 MEDIUM, 1 LOW, 1 INFO.
 
 ## Follow-up
 
-- #510 LOW: fixed in the `test(18-02): cover docs/cli.md and README version tokens` commit
-  (see 18-01/18-03 SUMMARY handoff on the bus); the all-tokens loop now covers `docs/cli.md`
+- #510 LOW: fixed in `636d601` (`test(18-02): cover docs/cli.md and README version tokens`); the all-tokens loop now covers `docs/cli.md`
   and the README Install block, with a negative drifting `docs/cli.md:87` only.
 - #511 INFO: accepted; CI race job covers `cmd/gruntled`.
