@@ -1,19 +1,20 @@
 # top-level help lists watch
 exec gruntled-exit 0 help
-stderr '^  watch   '
+stdout '^  watch   '
+! stderr .
 
 # watch help: exit 0, flags and exit codes, no daemon started
 exec gruntled-exit 0 watch -h
-stderr '^usage: gruntled watch '
-stderr '--poll '
-stderr '--poll-interval '
-stderr '--debounce '
-stderr '--status-file '
-stderr '--print-status-path'
-stderr '^  0  '
-stderr '^  2  usage error'
-stderr '^  3  '
-! stdout .
+stdout '^usage: gruntled watch '
+stdout '--poll '
+stdout '--poll-interval '
+stdout '--debounce '
+stdout '--status-file '
+stdout '--print-status-path'
+stdout '^  0  '
+stdout '^  2  usage error'
+stdout '^  3  '
+! stderr .
 
 # unknown flag: exit 2 with usage
 exec gruntled-exit 2 watch --bogus

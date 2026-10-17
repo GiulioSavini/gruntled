@@ -1,17 +1,18 @@
 # top-level help lists rebase
 exec gruntled-exit 0 help
-stderr '^  rebase  '
-stderr '"gruntled rebase -h"'
+stdout '^  rebase  '
+stdout '"gruntled rebase -h"'
+! stderr .
 
 # rebase help: exit 0, flag and exit codes
 exec gruntled-exit 0 rebase -h
-stderr '^usage: gruntled rebase \[--expect N\] \[path\]$'
-stderr '--expect N'
-stderr '^  0  baseline moved'
-stderr '^  2  usage error'
-stderr '^  3  no daemon'
-! stderr '^  1  '
-! stdout .
+stdout '^usage: gruntled rebase \[--expect N\] \[path\]$'
+stdout '--expect N'
+stdout '^  0  baseline moved'
+stdout '^  2  usage error'
+stdout '^  3  no daemon'
+! stdout '^  1  '
+! stderr .
 
 # invalid --expect: exit 2 with usage
 exec gruntled-exit 2 rebase --expect ''
