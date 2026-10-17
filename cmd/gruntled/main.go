@@ -49,24 +49,6 @@ var (
 	commit  = "none"
 )
 
-const topUsage = `usage: gruntled <command> [arguments]
-
-Commands:
-  check   check a Terragrunt repository for broken dependency output references
-  graph   print the repository graph as JSON (--json)
-  blast   report which units a change breaks (Broken) or puts at risk (Impacted) against --base
-  watch   reindex on every save and keep a one-line status file outside the repository
-  report  print the running watch daemon's result, like check, or its blast view (--blast)
-  rebase  move the running watch daemon's blast baseline to its last result
-
-Flags:
-  --version   print the version and commit, then exit
-
-Run "gruntled check -h", "gruntled graph -h", "gruntled blast -h",
-"gruntled watch -h", "gruntled report -h" or "gruntled rebase -h" for
-details.
-`
-
 const blastUsage = `usage: gruntled blast [--base dir] [--format text|json] [--depth N] [path]
 
 Compare the Terragrunt repository at path (default ".") with the baseline
@@ -154,23 +136,13 @@ func runCtx(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		v, c := versionInfo()
 		fmt.Fprintf(stdout, "gruntled %s (%s)\n", v, c)
 		return exitOK
-	case "check":
-		return runCheck(args[1:], stdout, stderr)
-	case "graph":
-		return runGraph(args[1:], stdout, stderr)
-	case "blast":
-		return runBlast(args[1:], stdout, stderr)
-	case "watch":
-		return runWatch(ctx, args[1:], stdout, stderr)
-	case "report":
-		return runReport(args[1:], stdout, stderr)
-	case "rebase":
-		return runRebase(args[1:], stdout, stderr)
-	default:
-		fmt.Fprintf(stderr, "gruntled: unknown command %q\n", args[0])
-		fmt.Fprint(stderr, topUsage)
-		return exitUsage
 	}
+	if c, ok := lookupCommand(args[0]); ok {
+		return c.run(ctx, args[1:], stdout, stderr)
+	}
+	fmt.Fprintf(stderr, "gruntled: unknown command %q\n", args[0])
+	fmt.Fprint(stderr, topUsage)
+	return exitUsage
 }
 
 // parseArgs parses flags defined by define and at most one positional path.
@@ -236,17 +208,16 @@ func writeOut(stdout, stderr io.Writer, buf *bytes.Buffer) bool {
 }
 
 func runCheck(args []string, stdout, stderr io.Writer) int {
-	var format *string
+	var o *checkOpts
 	dir, code, done := parseArgs("check", checkUsage, args, stderr, func(fs *flag.FlagSet) {
-		format = fs.String("format", "text", "output format: text, json or sarif")
+		o = defineCheckFlags(fs)
 	})
 	if done {
 		return code
 	}
-	switch *format {
-	case "text", "json", "sarif":
-	default:
-		fmt.Fprintf(stderr, "gruntled: invalid --format %q (want text, json or sarif)\n", *format)
+	format := o.format
+	if !enumValid(formatsCheck, *format) {
+		fmt.Fprint(stderr, enumError("format", *format, formatsCheck))
 		fmt.Fprint(stderr, checkUsage)
 		return exitUsage
 	}
@@ -284,14 +255,14 @@ func runCheck(args []string, stdout, stderr io.Writer) int {
 }
 
 func runGraph(args []string, stdout, stderr io.Writer) int {
-	var asJSON *bool
+	var o *graphOpts
 	dir, code, done := parseArgs("graph", graphUsage, args, stderr, func(fs *flag.FlagSet) {
-		asJSON = fs.Bool("json", false, "print the graph as JSON (required)")
+		o = defineGraphFlags(fs)
 	})
 	if done {
 		return code
 	}
-	if !*asJSON {
+	if !*o.json {
 		fmt.Fprintln(stderr, "gruntled: graph: --json is required; text output is reserved")
 		fmt.Fprint(stderr, graphUsage)
 		return exitUsage
@@ -322,16 +293,14 @@ func runGraph(args []string, stdout, stderr io.Writer) int {
 }
 
 func runBlast(args []string, stdout, stderr io.Writer) int {
-	var base, format *string
-	depth := &depthFlag{}
+	var o *blastOpts
 	dir, code, done := parseArgs("blast", blastUsage, args, stderr, func(fs *flag.FlagSet) {
-		base = fs.String("base", "", "baseline tree to compare against")
-		format = fs.String("format", "text", "output format: text or json")
-		fs.Var(depth, "depth", "list Impacted units up to distance N")
+		o = defineBlastFlags(fs)
 	})
 	if done {
 		return code
 	}
+	base, format, depth := o.base, o.format, o.depth
 	maxDepth := 0
 	if depth.set {
 		n, ok := parseDepth(depth.value)
@@ -342,10 +311,8 @@ func runBlast(args []string, stdout, stderr io.Writer) int {
 		}
 		maxDepth = n
 	}
-	switch *format {
-	case "text", "json":
-	default:
-		fmt.Fprintf(stderr, "gruntled: invalid --format %q (want text or json)\n", *format)
+	if !enumValid(formatsBlast, *format) {
+		fmt.Fprint(stderr, enumError("format", *format, formatsBlast))
 		fmt.Fprint(stderr, blastUsage)
 		return exitUsage
 	}

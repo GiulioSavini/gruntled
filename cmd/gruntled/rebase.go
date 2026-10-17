@@ -48,13 +48,14 @@ func runRebase(args []string, stdout, stderr io.Writer) int {
 // reads the runtime directory: no directory, file, socket or process is
 // ever created.
 func runRebaseWith(args []string, stdout, stderr io.Writer, deps reportDeps) int {
-	expect := &depthFlag{}
+	var o *rebaseOpts
 	dir, code, done := parseArgs("rebase", rebaseUsage, args, stderr, func(fs *flag.FlagSet) {
-		fs.Var(expect, "expect", "rebase only if the daemon is at generation N")
+		o = defineRebaseFlags(fs)
 	})
 	if done {
 		return code
 	}
+	expect := o.expect
 	var want *uint64
 	if expect.set {
 		n, ok := parseGeneration(expect.value)

@@ -61,21 +61,16 @@ func runReport(args []string, stdout, stderr io.Writer) int {
 // runReportWith prints the daemon's last published result. It only reads:
 // no directory, file, socket or process is ever created.
 func runReportWith(args []string, stdout, stderr io.Writer, deps reportDeps) int {
-	var format *string
-	var blast *bool
-	depth := &depthFlag{}
+	var o *reportOpts
 	dir, code, done := parseArgs("report", reportUsage, args, stderr, func(fs *flag.FlagSet) {
-		format = fs.String("format", "text", "output format: text, json or sarif")
-		blast = fs.Bool("blast", false, "print the daemon's blast view")
-		fs.Var(depth, "depth", "not supported by report")
+		o = defineReportFlags(fs)
 	})
 	if done {
 		return code
 	}
-	switch *format {
-	case "text", "json", "sarif":
-	default:
-		fmt.Fprintf(stderr, "gruntled: invalid --format %q (want text, json or sarif)\n", *format)
+	format, blast, depth := o.format, o.blast, o.depth
+	if !enumValid(formatsCheck, *format) {
+		fmt.Fprint(stderr, enumError("format", *format, formatsCheck))
 		fmt.Fprint(stderr, reportUsage)
 		return exitUsage
 	}
