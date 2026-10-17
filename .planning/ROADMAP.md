@@ -105,7 +105,10 @@ See `milestones/v0.4-ROADMAP.md`.
   4. `gruntled blast --base <dir> --format sarif` prints a document the existing SARIF schema and upload proofs accept: Broken findings (GRT001..GRT004, GRT100) are results from a blast-only rule table that has GRT004 at index 4, Impacted units appear only as deterministic notifications or run properties and never as results, no `--base` path appears in the document, URIs are relative to the analysed tree and exit codes are unchanged; `check --format sarif` still has exactly 4 rules (regression test) and the "GRT004 has no SARIF rule" limitation is deleted from the docs
   5. The six-target proof passes with terminal detection linked (`x/sys/unix` ioctl on unix, `GetConsoleMode` through std `syscall` on windows; never `x/term`, never `ModeCharDevice` alone)
 
-**Plans**: TBD
+**Plans**: 0/3 plans complete
+- [ ] 19-01-PLAN.md — command/flag registry `commands.go` (byte-identical `topUsage`, `help [cmd]`/`-h`/`--help` on stdout, VisitAll drift test with negatives) (wave 1, pure refactor)
+- [ ] 19-02-PLAN.md — `--color`/`--no-color`/`--quiet`, pure `colorEnabled`, `infrastructure/tty` (ioctl / GetConsoleMode), edge-only `presenter.Colorize` with `StripSGR` property test, `binary-text-template` self-test (wave 2)
+- [ ] 19-03-PLAN.md — `blast --format sarif`: `BlastDetailed`, blast-only rule table with GRT004 at index 4, Impacted as notifications, fixture pair, CI schema/upload proofs, docs limitation removed (wave 3; shares main.go/commands.go/docs with 19-02)
 
 ### Phase 20: Daemon Completeness
 
