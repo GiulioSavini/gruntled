@@ -115,3 +115,48 @@ func TestEnumError(t *testing.T) {
 		}
 	}
 }
+
+// TestHelpOnStdout: help, -h and --help print the usage on stdout, exit 0,
+// nothing on stderr, at top level and for every command; help with an
+// unknown or extra argument and every usage error stay on stderr, exit 2.
+func TestHelpOnStdout(t *testing.T) {
+	for _, args := range [][]string{{"help"}, {"-h"}, {"--help"}} {
+		stdout, stderr, code := runCLI(t, args...)
+		if code != exitOK || stdout != topUsage || stderr != "" {
+			t.Errorf("%v: exit %d, stderr %q, stdout:\n%s", args, code, stderr, stdout)
+		}
+	}
+	for _, c := range commands {
+		for _, args := range [][]string{
+			{"help", c.name},
+			{c.name, "-h"},
+			{c.name, "--help"},
+			{c.name, "--help", "."},
+		} {
+			stdout, stderr, code := runCLI(t, args...)
+			if code != exitOK || stdout != c.usage || stderr != "" {
+				t.Errorf("%v: exit %d, stderr %q, stdout:\n%s", args, code, stderr, stdout)
+			}
+		}
+	}
+	stdout, stderr, code := runCLI(t, "help", "nosuch")
+	if code != exitUsage || stdout != "" || !strings.Contains(stderr, `gruntled: unknown command "nosuch"`) || !strings.Contains(stderr, topUsage) {
+		t.Errorf("help nosuch: exit %d, stdout %q, stderr:\n%s", code, stdout, stderr)
+	}
+	stdout, stderr, code = runCLI(t, "help", "check", "extra")
+	if code != exitUsage || stdout != "" || !strings.Contains(stderr, "gruntled: help takes at most one command") || !strings.Contains(stderr, topUsage) {
+		t.Errorf("help check extra: exit %d, stdout %q, stderr:\n%s", code, stdout, stderr)
+	}
+	stdout, stderr, code = runCLI(t)
+	if code != exitUsage || stdout != "" || stderr != topUsage {
+		t.Errorf("no args: exit %d, stdout %q, stderr:\n%s", code, stdout, stderr)
+	}
+	stdout, stderr, code = runCLI(t, "check", "--bogus")
+	if code != exitUsage || stdout != "" || !strings.Contains(stderr, "flag provided but not defined: -bogus") || !strings.HasSuffix(stderr, checkUsage) {
+		t.Errorf("check --bogus: exit %d, stdout %q, stderr:\n%s", code, stdout, stderr)
+	}
+	stdout, stderr, code = runCLI(t, "check", "--format", "yaml")
+	if code != exitUsage || stdout != "" || stderr != enumError("format", "yaml", formatsCheck)+checkUsage {
+		t.Errorf("check --format yaml: exit %d, stdout %q, stderr:\n%s", code, stdout, stderr)
+	}
+}

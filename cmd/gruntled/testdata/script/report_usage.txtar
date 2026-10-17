@@ -1,19 +1,20 @@
 # top-level help lists report
 exec gruntled-exit 0 help
-stderr '^  report  '
+stdout '^  report  '
+! stderr .
 
 # report help: exit 0, flags and exit codes
 exec gruntled-exit 0 report -h
-stderr '^usage: gruntled report '
-stderr '--format text\|json\|sarif'
-stderr '--blast'
-stderr 'in Broken with --blast'
-stderr 'over the 64 MiB cap or unavailable'
-stderr '^  0  '
-stderr '^  1  '
-stderr '^  2  usage error'
-stderr '^  3  no daemon'
-! stdout .
+stdout '^usage: gruntled report '
+stdout '--format text\|json\|sarif'
+stdout '--blast'
+stdout 'in Broken with --blast'
+stdout 'over the 64 MiB cap or unavailable'
+stdout '^  0  '
+stdout '^  1  '
+stdout '^  2  usage error'
+stdout '^  3  no daemon'
+! stderr .
 
 # unknown flag: exit 2 with usage
 exec gruntled-exit 2 report --bogus

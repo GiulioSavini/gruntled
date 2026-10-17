@@ -109,7 +109,7 @@ func TestRuleRegistryDoc(t *testing.T) {
 		t.Errorf("Blast text example lacks the transitive line %q", blastTextTransitive)
 	}
 
-	_, usage, code := runCLI(t, "blast", "-h")
+	usage, _, code := runCLI(t, "blast", "-h")
 	if code != exitOK {
 		t.Fatalf("blast -h: exit %d", code)
 	}

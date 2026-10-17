@@ -5,39 +5,44 @@ stderr 'usage: gruntled <command>'
 
 # top-level help: exit 0, lists both commands
 exec gruntled-exit 0 -h
-stderr 'usage: gruntled <command>'
-stderr '^  check   '
-stderr '^  graph   print the repository graph as JSON \(--json\)$'
-stderr '^  blast   '
-stderr '^  rebase  '
-stderr '"gruntled rebase -h"'
-stderr '^  --version   print the version and commit, then exit$'
+stdout 'usage: gruntled <command>'
+stdout '^  check   '
+stdout '^  graph   print the repository graph as JSON \(--json\)$'
+stdout '^  blast   '
+stdout '^  rebase  '
+stdout '"gruntled rebase -h"'
+stdout '^  --version   print the version and commit, then exit$'
+! stderr .
 exec gruntled-exit 0 --help
+stdout 'usage: gruntled <command>'
+! stderr .
 exec gruntled-exit 0 help
+stdout 'usage: gruntled <command>'
+! stderr .
 
 # check help: exit 0 with the exit-code table
 exec gruntled-exit 0 check -h
-stderr '^usage: gruntled check \[--format text\|json\|sarif\] \[path\]$'
-stderr '3  analysis could not run'
-! stdout .
+stdout '^usage: gruntled check \[--format text\|json\|sarif\] \[path\]$'
+stdout '3  analysis could not run'
+! stderr .
 
 # graph help: exit 0 with the exit-code table
 exec gruntled-exit 0 graph -h
-stderr '^usage: gruntled graph --json \[path\]$'
-stderr '^  0  graph printed, even with unknown units$'
-stderr '^  2  usage error'
-stderr '^  3  analysis could not run'
-! stderr '^  1  '
-! stdout .
+stdout '^usage: gruntled graph --json \[path\]$'
+stdout '^  0  graph printed, even with unknown units$'
+stdout '^  2  usage error'
+stdout '^  3  analysis could not run'
+! stdout '^  1  '
+! stderr .
 
 # blast help: exit 0 with the exit-code table
 exec gruntled-exit 0 blast -h
-stderr '^usage: gruntled blast \[--base dir\] \[--format text\|json\] \[--depth N\] \[path\]$'
-stderr '^  0  comparison completed'
-stderr '^  1  comparison completed, at least one error diagnostic in Broken$'
-stderr '^  2  usage error'
-stderr '^  3  comparison could not run'
-! stdout .
+stdout '^usage: gruntled blast \[--base dir\] \[--format text\|json\] \[--depth N\] \[path\]$'
+stdout '^  0  comparison completed'
+stdout '^  1  comparison completed, at least one error diagnostic in Broken$'
+stdout '^  2  usage error'
+stdout '^  3  comparison could not run'
+! stderr .
 
 # unknown command: exit 2
 exec gruntled-exit 2 frobnicate

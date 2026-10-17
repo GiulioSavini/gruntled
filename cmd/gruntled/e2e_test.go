@@ -425,18 +425,18 @@ func TestHelpMatchesDocs(t *testing.T) {
 		{"report", 4},
 		{"rebase", 3},
 	} {
-		_, stderr, code := runCLI(t, c.cmd, "-h")
+		stdout, _, code := runCLI(t, c.cmd, "-h")
 		if code != exitOK {
 			t.Fatalf("%s -h: exit %d, want %d", c.cmd, code, exitOK)
 		}
 		var lines []string
-		for l := range strings.SplitSeq(stderr, "\n") {
+		for l := range strings.SplitSeq(stdout, "\n") {
 			if exitCodeLine.MatchString(l) {
 				lines = append(lines, l)
 			}
 		}
 		if len(lines) != c.want {
-			t.Fatalf("%s -h prints %d exit-code lines, want %d:\n%s", c.cmd, len(lines), c.want, stderr)
+			t.Fatalf("%s -h prints %d exit-code lines, want %d:\n%s", c.cmd, len(lines), c.want, stdout)
 		}
 		for _, l := range lines {
 			if !slices.Contains(docLines, l) {

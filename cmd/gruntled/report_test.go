@@ -19,9 +19,9 @@ import (
 // TestReportUsage: -h exits 0 with the usage text; bad flags, an invalid
 // --format and two paths exit 2 with it; help lists report.
 func TestReportUsage(t *testing.T) {
-	_, stderr, code := runCLI(t, "report", "-h")
-	if code != exitOK || !strings.HasPrefix(stderr, "usage: gruntled report ") {
-		t.Fatalf("report -h: exit %d, stderr:\n%s", code, stderr)
+	stdout, stderr, code := runCLI(t, "report", "-h")
+	if code != exitOK || stderr != "" || !strings.HasPrefix(stdout, "usage: gruntled report ") {
+		t.Fatalf("report -h: exit %d, stderr %q, stdout:\n%s", code, stderr, stdout)
 	}
 	for _, args := range [][]string{
 		{"report", "--bogus"},
@@ -33,9 +33,9 @@ func TestReportUsage(t *testing.T) {
 			t.Errorf("%v: exit %d, stdout %q, stderr:\n%s", args, code, stdout, stderr)
 		}
 	}
-	_, stderr, _ = runCLI(t, "help")
-	if !strings.Contains(stderr, "\n  report  ") || !strings.Contains(stderr, `"gruntled report -h"`) {
-		t.Errorf("top usage does not list report:\n%s", stderr)
+	stdout, _, _ = runCLI(t, "help")
+	if !strings.Contains(stdout, "\n  report  ") || !strings.Contains(stdout, `"gruntled report -h"`) {
+		t.Errorf("top usage does not list report:\n%s", stdout)
 	}
 }
 
